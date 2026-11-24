@@ -2,9 +2,10 @@
 
 - Status: Accepted
 - Date: 2026-10-15
-- Revision: 8, 2026-11-24
+- Revision: 9, 2026-11-24
 - Issue: #13; the camera settings #26, revised in #51; authorship and
-  location #97; more capture settings #214
+  location #97; more capture settings #214; picture style and
+  processing #230
 
 ## Context
 
@@ -61,6 +62,24 @@ In short:
   with what it says wherever they hold the code. The files hold only
   part of each list it gives: a mode that nobody happened to shoot in
   is on no file.
+- Files also record how the camera made its JPEG from the shot. Exif
+  gives six values, each one SHORT: the directions of contrast,
+  saturation and sharpness, the scene capture type, custom rendering
+  and gain control. Plain MakerNote tags record the rest:
+  - the picture style, with its sharpening, contrast and saturation;
+  - how the camera treated the dynamic range and the noise;
+  - which lens corrections it applied;
+  - the scene mode.
+- The makers name these settings differently, and cut their kinds
+  differently. Nikon has Picture Controls, and an Active D-Lighting
+  that is low, normal, high or extra high. Sony has Creative Styles, on
+  its later bodies Creative Looks, and a D-Range Optimizer with levels
+  of its own. Each maker's manual gives its own words.
+- Nikon's Picture Control is a record whose layout changes with its
+  version. ExifTool's published tag documentation gives three layouts,
+  and does not say which version takes which. The measured files show
+  it: each version has one length, and each length agrees with one
+  layout.
 - The authorship texts are plain ASCII on every file counted, and
   cameras fill unset ones with NULs or spaces. A GPS IFD seldom holds a
   position.
@@ -119,9 +138,10 @@ nothing standard records a value. Nothing is deciphered or decrypted.
 
   The documentation's word reaches the codes of the capture
   settings below: focus, stabilization, exposure and drive, flash and
-  image quality. The white balance texts and the shutter, image area
-  and raw size codes keep the stricter rule of a standard or a measured
-  file.
+  image quality. It reaches the codes of the picture style and of the
+  processing settings too. The white balance texts and the shutter,
+  image area and raw size codes keep the stricter rule of a standard or
+  a measured file.
 - **The standard tags come first.** IFD0, the Exif IFD and the raw IFD
   give every field, and an Exif value always wins. On NEF, the
   MakerNote gives the visible image size from CropArea. Only where the
@@ -300,13 +320,125 @@ nothing standard records a value. Nothing is deciphered or decrypted.
     Sony's quality tags, and Nikon's choice between size priority and
     optimal quality. A JPEG whose Quality says `RAW`, which a program
     made from a raw file, gives none.
-- **Neutral words, with each maker's finer kinds folded in**, as the
-  white balance modes are. Each variant's documentation lists the maker
-  settings folded into it. Nikon's dynamic-area sizes are one dynamic
-  mode. Nikon's wide-area and group-area and Sony's zone are one zone
-  mode. A ladder the makers cut differently is the exception: the
-  JPEG quality keeps each maker's step names, as variants of one
-  enum.
+- **The words follow the kind of setting.**
+  - **The capture settings take neutral words, with each maker's finer
+    kinds folded in**, as the white balance modes are. Each variant's
+    documentation lists the maker settings folded into it. Nikon's
+    dynamic-area sizes are one dynamic mode. Nikon's wide-area and
+    group-area and Sony's zone are one zone mode. A ladder the makers
+    cut differently is the exception: the JPEG quality keeps each
+    maker's step names, as variants of one enum.
+  - **The picture style and the processing settings keep each maker's
+    own names and kinds.** Active D-Lighting and the D-Range Optimizer
+    are two settings, each with a type of its own and its maker's
+    steps. Each name is the maker's own word, read in the maker's
+    manual, as a body's name is
+    ([ADR022](adr022-names-as-their-makers-write-them.md)). Where a
+    maker's later bodies have another setting in an earlier one's
+    place, each keeps its own word and type. Sony's Creative Style and
+    Creative Look are such a pair, and so are Nikon's Quick adjust and
+    Quick sharp.
+- **One value for each thing two makers set.** A file has one picture
+  style, so the camera settings give one value for it,
+  `CameraSettings::picture_style`. It is an enum with a variant for
+  each maker's setting, which holds that setting's own type: a
+  `PictureControl`, a `CreativeStyle` or a `CreativeLook`. Five more
+  values have this shape:
+  - `dynamic_range_optimization`: Nikon's Active D-Lighting or Sony's
+    D-Range Optimizer;
+  - `high_dynamic_range`: Nikon's HDR or Sony's Auto HDR;
+  - `vignetting_correction`: Nikon's vignette control or Sony's shading
+    compensation;
+  - `distortion_correction`: Nikon's auto distortion control or Sony's
+    distortion compensation;
+  - `scene`: Nikon's scene mode or Sony's Scene Selection.
+
+  Only the getter and its enum carry a word of raw-files' own. Each
+  value also gives the maker's word for its setting, such as "Active
+  D-Lighting", for a viewer's label.
+- **A plain getter where one maker alone has the setting**: Sony's
+  chromatic aberration compensation and its multi-frame noise
+  reduction.
+- **One getter where both makers use the same words.** Both call them
+  High ISO NR and Long exposure NR. The high ISO steps of both makers
+  are variants of one enum, as the JPEG quality's are.
+- **These values are camera settings**, each a value of the camera
+  settings or a part of the value it belongs to. There is no record of
+  its own for how the camera made its JPEG. The white balance and the
+  color space, which shape the JPEG too, are camera settings already.
+- **A style's name is the file's text**, cleaned as every text:
+  `STANDARD`, `Vivid`, or a name the photographer typed. raw-files
+  reads nothing into it, so it keeps the plain word
+  ([ADR021](adr021-what-the-file-records-and-what-raw-files-reads-into-it.md)).
+  raw-files keeps no list of Picture Control, Creative Style or scene
+  names. Nikon's scene mode is a text given the same way.
+- **Nikon's Picture Control is read at every version the measured
+  files hold**, by its exact version and length. Version 0100 has 58
+  bytes, 0200 has 68, and 0300, 0301, 0302 and 0310 have 108. Each
+  length agrees with one documented layout. A record of another
+  version, or of another length than its version's, gives no picture
+  style. At the 108-byte versions the adjustment kind and Quick sharp
+  are read two bytes before their documented places, where the files
+  hold them. Nikon's NX Studio, run on a frame as a reader to compare
+  with, shows Quick sharp there
+  ([NEF notes §8.11](../formats/nef/makernote-and-metadata.md#811-picture-style-and-processing)).
+- **A Picture Control's value is given as recorded.** A count of steps
+  is the byte less 128, over the divisor recorded beside it, quarter
+  steps included. The byte 0, where the camera chose, is "auto". The
+  byte 255, where the camera marks the value not available, gives
+  `None`.
+- **The standard's six values come from Exif alone**, each from one
+  SHORT, in the standard's words:
+  - the directions of contrast (normal, soft, hard), saturation
+    (normal, low, high) and sharpness (normal, soft, hard);
+  - the scene capture type: standard, landscape, portrait or night
+    scene;
+  - custom rendering, a normal or a custom process;
+  - gain control: none, low or high gain up, low or high gain down.
+
+  A code the standard reserves gives `None`. No MakerNote fills one of
+  the six: the finer values there are the maker's own.
+- **The picture style** comes from three places:
+  - Nikon's Picture Control record, PictureControlData, which the
+    Coolpix bodies write under a second tag;
+  - Sony's CreativeStyle text with its contrast, saturation and
+    sharpness, given when the file records any of the four;
+  - the same four tags as a Creative Look, when the file also records
+    the look's five further values. Their presence marks the look, and
+    the values themselves are not given.
+- **Dynamic range optimization** is Nikon's ActiveD-Lighting or Sony's
+  0xB025. Sony's 0xB04F, which repeats it in three steps, is not read.
+- **High dynamic range** is Nikon's HDRInfo record or the first half of
+  Sony's 0x200A: on or off, with the parts each maker records.
+  - Nikon's are the strength, or the exposure differential and the
+    smoothing, by the record's version.
+  - Sony's is the exposure difference.
+  - The parts are read only where it is on.
+  - Whether Sony's camera made the HDR image, the tag's second half, is
+    not read.
+- **High ISO noise reduction** is Nikon's HighISONoiseReduction or
+  Sony's 0x2009. In a Sony raw file a 0 gives `None`. On the measured
+  shots with both files, the raw file holds 0 where its JPEG holds the
+  step.
+- **Long exposure noise reduction** is Sony's 0x2008, whose low half
+  is the setting. Whether the dark frame was taken, its high half, is
+  not read. Nikon's NoiseReduction text says whether the reduction ran
+  on the picture, not how the camera was set. So its `FPNR` gives on,
+  and its `OFF` gives `None`.
+- **Multi-frame noise reduction** is Sony's 0x200B.
+- **The lens corrections** are the camera's menu settings:
+  - the vignetting correction, Nikon's VignetteControl or Sony's
+    0x2011;
+  - the distortion correction, a byte of Nikon's DistortInfo record at
+    the one version files hold, or Sony's 0x2013;
+  - the chromatic aberration compensation, Sony's 0x2012.
+
+  Sony's come from the MakerNote, which a JPEG holds too, not from the
+  raw SubIFD's codes.
+- **The scene** is Nikon's text, VariProgram or on the Coolpix bodies
+  SceneMode, or Sony's 0xB023. A blank text gives `None`, and so does
+  Sony's 0, which the files hold under the program, priority and manual
+  modes. The auto modes are kinds of the scene for both makers.
 - **The color space** is Exif's whenever Exif records ColorSpace. 1 is
   sRGB, 65535 with InteropIndex `R03` is Adobe RGB, and any other 65535
   is none. So a program's "uncalibrated" is never overruled by a
@@ -490,10 +622,10 @@ Rejected:
   point.
   Two places are two values a caller's built metadata can make
   disagree.
-- **Each maker's own names for the kinds of a setting, or a neutral
-  kind with a second value for the finer one.** A caller would match
-  per maker, and the types would grow with every generation of bodies;
-  a second value is two getters for one setting.
+- **Each maker's own names for the kinds of a capture setting, or a
+  neutral kind with a second value for the finer one.** A caller would
+  match per maker, and the types would grow with every generation of
+  bodies; a second value is two getters for one setting.
 - **Nikon's flash record at the versions frames confirm.** Its layout
   changes over a dozen versions, each needing frames of its own.
 - **The flash from Exif's bits alone.** It gives no compensation and
@@ -512,9 +644,9 @@ Rejected:
 - **Only the capture settings the first list of full metadata named**,
   without the release mode and bracketing. The same frames show them,
   and a second round would cost another shoot.
-- **Every plain capture setting found**, Exif's GainControl and
-  SensitivityType, Nikon's program shift, exposure difference and ISO
-  expansion, Sony's AF tracking among them. The work would double, and
+- **Every plain capture setting found**, Exif's SensitivityType,
+  Nikon's program shift, exposure difference and ISO expansion, Sony's
+  AF tracking among them. The work would double, and
   each is a named gap in the notes, with its count and why it waits.
 - **Only the codes a measured file holds**, as this record had it
   before. Every named code would have met a real file. But the gaps
@@ -523,6 +655,62 @@ Rejected:
   on one file and `None` on the next for two codes of one list.
 - **Every documented code, whatever the files hold.** A record version
   that no file holds would be read at offsets nothing has checked.
+- **A record of its own for how the camera made its JPEG**, with or
+  without the white balance and the color space moved into it. The line
+  between capture and processing is not sharp: long exposure noise
+  reduction changes the raw data, and Active D-Lighting the exposure.
+  And it would be a second rule beside the settings' own.
+- **Neutral words for the processing settings too**, with each maker's
+  kinds folded into one list. Each setting is its maker's own design,
+  and the steps do not correspond: a folded list would declare one
+  maker's step equal to another's.
+- **A getter for each maker's setting**, one for Active D-Lighting and
+  one for the D-Range Optimizer. The getters would grow as makers times
+  settings, each `None` on every other maker's file. A value for each
+  thing grows with the settings alone, and a viewer shows a later
+  maker's value without new code.
+- **Other words for the five values.** `dynamic_range` reads as a
+  measurement of the sensor. `hdr` cannot name both the value and
+  Nikon's own type. "Shading" also means the color shading across a
+  sensor. `scene_mode` is Nikon's own word.
+- **The Picture Control by its version's first two digits, or only at
+  the versions of my own bodies.** A maker's program can be run on
+  those bodies' files alone. The first would read a version at offsets
+  that no file of it confirmed. The second would leave unread the
+  three versions that only public files hold.
+- **The adjustment kind and Quick sharp at their documented places in
+  the 108-byte record.** Those two bytes hold the same values on every
+  measured file, whatever the control.
+- **One getter for Quick adjust and Quick sharp, or one type for the
+  Creative Style and the Creative Look.** Each pair is two settings in
+  the maker's manuals. Quick adjust heightens the whole control, and
+  Quick sharp balances its three sharpening values. A Creative Look's
+  default sharpness is 4, and a Creative Style's 0.
+- **A style's name from a list of raw-files' own.** A name the
+  photographer typed would be lost, and a list of names is another
+  project's table
+  ([ADR013](adr013-clean-room-and-third-party-code.md)). A list can be
+  added beside the text later.
+- **Exif's scene capture type alone, or Nikon's scene from a list of
+  the texts measured.** A shot in an auto mode would have no mode. A
+  list would hold only the scenes that happened to be shot.
+- **Sony's scene code 0 as a scene, or its auto modes as none.** With
+  the first, a Sony file would always have a scene, and a Nikon file
+  under the same modes never. With the second, a Nikon shot in an auto
+  mode would have a value and a Sony one none.
+- **Sony's high ISO noise reduction from a JPEG alone, or as recorded
+  in a raw file.** Some bodies' raw files hold a step, which would be
+  lost. And a raw file's 0 would say off beside a JPEG of the same shot
+  that says normal.
+- **Nikon's `OFF` as long exposure noise reduction off.** It stands on
+  every short exposure of a camera set to on. Read as off only above
+  one second, it would rest on a threshold from the manual, and fail
+  where the camera skipped the reduction.
+- **Sony's lens corrections from the raw SubIFD's codes.** A JPEG has
+  none of them. And they say what a raw developer may apply, with a
+  state of their own for "no parameters" under a setting of auto.
+- **Every plain processing value found.** Most are off on every
+  measured file, and each is a named gap in the notes, with its count.
 
 ## Consequences
 
@@ -547,7 +735,8 @@ Rejected:
   the camera, which Sony records only in tags of its own.
 - Some maker-specific values enter the camera settings: a crop mode as
   the image area, the shutter, the raw size and the JPEG quality's
-  steps. Others,
+  steps. So do each maker's picture style and processing settings.
+  Others,
   such as Sony's model ID and Nikon's shutter count, are not in the
   API, and can be added later without breaking it.
 - DNG files, which use the same standard tags and the same default
@@ -582,6 +771,30 @@ Rejected:
   - a code a measured value contradicts;
   - a documented kind that no neutral word fits;
   - what the documentation leaves unsaid.
+- For the picture style and the five values like it, a caller matches
+  on the value to reach a maker's kinds. To label the value, a caller
+  reads the maker's word for the setting.
+- Each new maker adds a variant and a type to these values. A maker
+  with two settings for one thing gets one as its variant, and a
+  getter of its own for the other.
+- A setting one maker alone has becomes an enum when a second maker
+  has one, which breaks its getter. Until then, Sony's chromatic
+  aberration compensation keeps Sony's word beside two getters that
+  say "correction".
+- A Picture Control of a version no measured file holds gives no
+  picture style, until a file shows which layout it takes.
+- A caller compares a style's name, and Nikon's scene mode, as text,
+  and cannot match on them.
+- A Nikon file never says that long exposure noise reduction was off.
+  A Sony raw file never says that high ISO noise reduction was.
+- Some processing values stay `None`, each a named gap in the notes
+  ([NEF notes §12.5](../formats/nef/makernote-and-metadata.md#125-what-the-view-leaves-out),
+  [ARW notes §14.5](../formats/arw/makernote-and-metadata.md#145-what-the-view-leaves-out)):
+  - Nikon's diffraction compensation, which only an encrypted record
+    holds;
+  - Sony's zone matching, which is 0 on every measured file;
+  - the plain values this record does not list, such as Nikon's
+    multiple exposure and Sony's picture effect.
 - A caller cannot tell an image area or raw size the table of bodies
   gave from one the file recorded. A large raw size then also means a
   body that offers no other.
