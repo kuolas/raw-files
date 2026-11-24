@@ -53,7 +53,8 @@ Linux and Windows alike.
   - the exposure fine-tuning;
   - the release mode, and whether the picture is one of a bracketed
     series;
-  - whether the clock was on daylight saving time, on Nikon files.
+  - whether the clock was on daylight saving time, on Nikon files;
+  - the raw data's bit depth, on raw files.
   - [`CameraSettings`](https://docs.rs/raw-files/latest/raw_files/struct.CameraSettings.html)
     says which a maker's files leave out: Sony's give no shutter, image
     area or raw image size.

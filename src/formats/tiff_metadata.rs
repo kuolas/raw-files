@@ -20,8 +20,8 @@
 //!   Exif records ([`camera_settings`]);
 //! - from IFD0 and the Exif IFD, who made the picture ([`authorship`]);
 //! - from the GPS IFD, where the picture was taken ([`location`]);
-//! - from the IFD of the raw data, the raw size and the image size
-//!   ([`sizes`]).
+//! - from the IFD of the raw data, the raw size, the image size and the
+//!   raw bit depth ([`raw_data`]).
 //!
 //! Each tag's type and count are its rule, in [`rules`], checked before
 //! anything is read ([`Ifd::get`]). Every name and serial number is read by
@@ -168,6 +168,7 @@ mod rules {
     pub(super) const DEFAULT_CROP_SIZE: Rule<[u32; 2]> = Rule::new(tags::DEFAULT_CROP_SIZE, NUMBER);
     pub(super) const DEFAULT_CROP_SIZE_FRACTIONS: Rule<[Rational; 2]> =
         Rule::new(tags::DEFAULT_CROP_SIZE, RATIONAL);
+    pub(super) const BITS_PER_SAMPLE: Held<[u32; 1]> = Held::new(tags::BITS_PER_SAMPLE, SHORT);
 }
 
 /// The longest text, in bytes as stored, that is taken for a value rather
@@ -233,9 +234,10 @@ pub(crate) struct Standard {
 /// the file. The
 /// owner is the Exif CameraOwnerName, a fact of the camera beside its
 /// serial number. The orientation is the preview finder's
-/// ([`tiff_previews::orientation`]). A file without an Exif IFD has no
-/// capture or digitized time, serial number, owner, exposure, lens or
-/// camera settings, and a file without a GPS IFD has no location.
+/// ([`tiff_previews::orientation`]). The raw bit depth is the raw data's
+/// ([`raw_data`]). A file without an Exif IFD has no capture or digitized
+/// time, serial number, owner, exposure, lens or camera settings other than
+/// the raw bit depth, and a file without a GPS IFD has no location.
 ///
 /// # Errors
 ///
@@ -251,7 +253,7 @@ pub(crate) fn read<R: Read + Seek>(src: &mut Source<R>, tree: &Tree) -> Result<S
         ),
         None => (None, None, None, None),
     };
-    let (exposure, camera_settings, lens) = match tree.exif() {
+    let (exposure, mut camera_settings, lens) = match tree.exif() {
         Some(exif) => (
             exposure(src, exif)?,
             camera_settings(src, exif, tree.interop())?,
@@ -263,7 +265,10 @@ pub(crate) fn read<R: Read + Seek>(src: &mut Source<R>, tree: &Tree) -> Result<S
             Lens::default(),
         ),
     };
-    let (raw_size, default_crop) = sizes(src, tree)?;
+    let raw = raw_data(src, tree)?;
+    let raw_size = raw.as_ref().map(|raw| raw.size);
+    let default_crop = raw.as_ref().and_then(|raw| raw.default_crop);
+    camera_settings.raw_bit_depth = raw.as_ref().and_then(|raw| raw.bit_depth);
     let metadata = Metadata {
         camera: Camera {
             recorded_make: text(src, ifd0, rules::MAKE)?,
@@ -799,6 +804,9 @@ fn camera_settings<R: Read + Seek>(
         // Only Nikon's MakerNote records whether daylight saving time was
         // on, with the clock's time zone.
         daylight_saving_time: None,
+        // The IFD of the raw data records it, not the Exif IFD: `read`
+        // fills it.
+        raw_bit_depth: None,
     })
 }
 
@@ -991,9 +999,23 @@ fn color_space<R: Read + Seek>(
     }
 }
 
-/// The raw size and the default crop of the file whose IFDs are `tree`.
-/// Both come from the largest IFD that holds raw data and says how large it
-/// is, and both are `None` when no IFD does.
+/// What the IFD of the raw data records, as [`raw_data`] reads it.
+#[derive(Debug)]
+struct RawData {
+    /// The raw size: the IFD's ImageWidth and ImageLength ([`raw_size`]).
+    size: Size,
+    /// The visible image, when the IFD records a default crop that can be
+    /// trusted ([`default_crop`]).
+    default_crop: Option<Size>,
+    /// The bits each sample holds: the IFD's BitsPerSample, when it is one
+    /// SHORT above zero. Sony's YCbCr medium and small raws record three
+    /// values, one a sample, and have none.
+    bit_depth: Option<u32>,
+}
+
+/// What the raw data of the file whose IFDs are `tree` records
+/// ([`RawData`]). It all comes from the largest IFD that holds raw data
+/// and says how large it is, and it is `None` when no IFD does.
 ///
 /// The IFDs are asked in the tree's order, but the Exif, GPS and
 /// Interoperability IFDs, which never hold an image
@@ -1005,12 +1027,12 @@ fn color_space<R: Read + Seek>(
 /// pixels gives the raw size, the first on a tie. The Coolpix E5700 writes
 /// a 656 by 484 raw image before its 2576 by 1924 one, both full-resolution
 /// (sample 4456). The crop is then that IFD's [`default_crop`], `None` when
-/// it has none.
+/// it has none, and the bit depth its BitsPerSample.
 ///
 /// # Errors
 ///
 /// `Io` when the reader fails.
-fn sizes<R: Read + Seek>(src: &mut Source<R>, tree: &Tree) -> Result<(Option<Size>, Option<Size>)> {
+fn raw_data<R: Read + Seek>(src: &mut Source<R>, tree: &Tree) -> Result<Option<RawData>> {
     let mut largest: Option<(&Ifd, Size)> = None;
     for (link, ifd) in tree.iter() {
         if link.holds_no_image() {
@@ -1027,10 +1049,16 @@ fn sizes<R: Read + Seek>(src: &mut Source<R>, tree: &Tree) -> Result<(Option<Siz
             largest = Some((ifd, raw));
         }
     }
-    let Some((ifd, raw)) = largest else {
-        return Ok((None, None));
+    let Some((ifd, size)) = largest else {
+        return Ok(None);
     };
-    Ok((Some(raw), default_crop(src, ifd, raw)?))
+    Ok(Some(RawData {
+        size,
+        default_crop: default_crop(src, ifd, size)?,
+        bit_depth: ifd
+            .held(rules::BITS_PER_SAMPLE)
+            .and_then(|[bits]| (bits > 0).then_some(bits)),
+    }))
 }
 
 /// The size of the raw data `ifd` describes: its ImageWidth and
@@ -4441,6 +4469,91 @@ mod tests {
             assert_eq!(metadata.raw_size, None, "{width} by {height}");
             assert_eq!(metadata.image_size, None, "{width} by {height}");
         }
+    }
+
+    /// The raw bit depth of a file whose IFD0 holds raw data of size
+    /// [`RAW`] and what `bits` adds; the raw size must be read.
+    fn bit_depth(bits: impl FnOnce(&mut TiffBuilder, IfdId)) -> Option<u32> {
+        let metadata = metadata_of(|builder, ifd| {
+            raw_tags(builder, ifd, RAW.width, RAW.height);
+            bits(builder, ifd);
+        });
+        assert_eq!(metadata.raw_size, Some(RAW));
+        metadata.camera_settings.raw_bit_depth
+    }
+
+    #[test]
+    fn the_raw_bit_depth_is_the_raw_ifds_bits_per_sample() {
+        // The file has no Exif IFD: the depth is the raw data's own.
+        for bits in [8, 12, 14, 16] {
+            let read = bit_depth(|builder, ifd| {
+                builder.short(ifd, BITS_PER_SAMPLE, &[bits]);
+            });
+            assert_eq!(read, Some(u32::from(bits)), "{bits}");
+        }
+    }
+
+    #[test]
+    fn a_bits_per_sample_of_another_shape_or_zero_gives_no_bit_depth() {
+        type Bits = fn(&mut TiffBuilder, IfdId);
+        let cases: [(&str, Bits); 5] = [
+            ("none", |_, _| {}),
+            ("three values, as a YCbCr raw records", |builder, ifd| {
+                builder.short(ifd, BITS_PER_SAMPLE, &[15, 15, 15]);
+            }),
+            ("zero", |builder, ifd| {
+                builder.short(ifd, BITS_PER_SAMPLE, &[0]);
+            }),
+            ("a LONG", |builder, ifd| {
+                builder.long(ifd, BITS_PER_SAMPLE, &[14]);
+            }),
+            ("no values", |builder, ifd| {
+                builder.raw(ifd, BITS_PER_SAMPLE, SHORT, 0, RawValue::Inline([0; 4]));
+            }),
+        ];
+        for (case, bits) in cases {
+            assert_eq!(bit_depth(bits), None, "{case}");
+        }
+    }
+
+    #[test]
+    fn the_bit_depth_is_the_largest_raw_ifds() {
+        // A preview's IFD0, with the 8 bits a JPEG preview declares, then two
+        // raw IFDs of different depths, the larger with 14 bits.
+        let (small, large) = (size(656, 484), size(2576, 1924));
+        for (first, second) in [(small, large), (large, small)] {
+            let metadata = metadata_of(|builder, ifd| {
+                builder
+                    .long(ifd, NEW_SUBFILE_TYPE, &[1])
+                    .short(ifd, BITS_PER_SAMPLE, &[8]);
+                let subs = [builder.ifd(), builder.ifd()];
+                builder.subifds(ifd, &subs);
+                for (sub, size) in subs.into_iter().zip([first, second]) {
+                    let bits = if size == large { 14 } else { 12 };
+                    raw_tags(builder, sub, size.width, size.height);
+                    builder.short(sub, BITS_PER_SAMPLE, &[bits]);
+                }
+            });
+            assert_eq!(metadata.raw_size, Some(large), "{first:?} then {second:?}");
+            assert_eq!(
+                metadata.camera_settings.raw_bit_depth,
+                Some(14),
+                "{first:?} then {second:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_file_without_raw_data_has_no_bit_depth() {
+        // A preview's IFD, with a BitsPerSample of its own.
+        let metadata = metadata_of(|builder, ifd| {
+            builder
+                .long(ifd, NEW_SUBFILE_TYPE, &[1])
+                .short(ifd, BITS_PER_SAMPLE, &[8])
+                .long(ifd, IMAGE_WIDTH, &[640])
+                .long(ifd, IMAGE_LENGTH, &[480]);
+        });
+        assert_eq!(metadata.camera_settings.raw_bit_depth, None);
     }
 
     #[test]

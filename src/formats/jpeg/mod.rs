@@ -45,6 +45,7 @@ use super::makernote::{Picture, Reader};
 use super::tiff_metadata::{self, Standard};
 use super::tiff_previews::{self, Candidate};
 use super::{FormatSpec, JPEG_UNCLAIMED, Parsed, make_starts_with};
+use crate::camera_settings::CameraSettings;
 use crate::container::jpeg::{Frame, Segments, mpf};
 use crate::container::tiff::{Tree, walk};
 use crate::entries::{Directory, Entries, Lookup};
@@ -200,12 +201,12 @@ fn parse<R: Read + Seek>(
 /// The image size is `size`, the frame header's, the picture's own (T.81
 /// B.2.2 and Figure B.3, p. 35), whatever sizes the tree gives. The Exif
 /// pixel dimensions are not read, since an editor may leave them unchanged.
-/// There is no raw size: a JPEG holds no raw data. Both are set before the
-/// MakerNote's values are read, so that its reader takes them for the
-/// JPEG's. With no raw size, CropArea gives no image size, and a crop is
-/// placed on the picture's pixels (ADR014). Whether the Exif IFD holds a
-/// ColorSpace is kept as read, so that the MakerNote's color space never
-/// overrules it.
+/// There is no raw size and no raw bit depth: a JPEG holds no raw data.
+/// Both sizes are set before the MakerNote's values are read, so that its
+/// reader takes them for the JPEG's. With no raw size, CropArea gives no
+/// image size, and a crop is placed on the picture's pixels (ADR014).
+/// Whether the Exif IFD holds a ColorSpace is kept as read, so that the
+/// MakerNote's color space never overrules it.
 ///
 /// The focus points, and the layout placed on the picture, are each kept
 /// only when their frame has the picture's shape, to within one pixel of
@@ -243,6 +244,10 @@ fn metadata<R: Read + Seek>(
         metadata: Metadata {
             raw_size: None,
             image_size: Some(size),
+            camera_settings: CameraSettings {
+                raw_bit_depth: None,
+                ..standard.metadata.camera_settings
+            },
             ..standard.metadata
         },
         from_default_crop: false,
@@ -421,7 +426,8 @@ mod tests {
     use crate::camera_settings::{CameraSettings, ColorSpace, FocusMode, MeteringMode};
     use crate::container::jpeg::segments;
     use crate::container::tiff::tags::{
-        COLOR_SPACE, INTEROP_INDEX, MAKE, MAKER_NOTE, METERING_MODE,
+        BITS_PER_SAMPLE, COLOR_SPACE, IMAGE_LENGTH, IMAGE_WIDTH, INTEROP_INDEX, MAKE, MAKER_NOTE,
+        METERING_MODE, PHOTOMETRIC_INTERPRETATION,
     };
     use crate::entries::Directory;
     use crate::error::ErrorKind;
@@ -631,6 +637,33 @@ mod tests {
                 _ => exif,
             };
             assert_eq!(parsed.metadata.camera_settings, expected, "{make}");
+        }
+    }
+
+    #[test]
+    fn a_jpeg_gives_no_raw_value_whatever_its_exif_tree_holds() {
+        // IFD0 of the Exif segment holds the tags of raw data: a color
+        // filter array of 6000 by 4000 pixels, of 14 bits. A JPEG holds no
+        // raw data, so none of it is read.
+        for order in ORDERS {
+            let mut tiff = TiffBuilder::new(order);
+            let ifd0 = tiff.ifd();
+            tiff.ascii(ifd0, MAKE, "NIKON CORPORATION")
+                .short(ifd0, PHOTOMETRIC_INTERPRETATION, &[32803])
+                .long(ifd0, IMAGE_WIDTH, &[6000])
+                .long(ifd0, IMAGE_LENGTH, &[4000])
+                .short(ifd0, BITS_PER_SAMPLE, &[14]);
+            let mut builder = JpegBuilder::new();
+            builder.exif(&tiff.build().bytes).frame(640, 480, 0xC0);
+            let (bytes, found) = read(&builder);
+            let mut src = Source::new(Cursor::new(bytes)).unwrap();
+            let parsed = parse(&mut src, &found, &Limits::default()).unwrap();
+            assert_eq!(parsed.metadata.raw_size, None, "{order:?}");
+            assert_eq!(
+                parsed.metadata.camera_settings,
+                CameraSettings::default(),
+                "{order:?}"
+            );
         }
     }
 

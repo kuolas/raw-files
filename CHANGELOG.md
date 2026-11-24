@@ -251,6 +251,13 @@ does. An entry that can break a caller opens with **Breaking:**.
   given. Sony files give it from their FlashExposureComp, one
   SRATIONAL, such as `-7/10`. A recorded zero is a compensation of
   zero.
+- `CameraSettings::raw_bit_depth` gives how many bits each sample of the
+  raw data holds, as the file records it, and `with_raw_bit_depth` sets
+  it ([#214](https://github.com/kuolas/raw-files/issues/214)). It is the
+  BitsPerSample of the IFD that gives the raw size, when that is one
+  value: 12 or 14 on most Nikon and Sony raw files. Sony's medium and
+  small raws in YCbCr record three values and give none, and a JPEG
+  gives none.
 
 ### Changed
 

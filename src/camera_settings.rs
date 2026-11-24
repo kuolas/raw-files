@@ -7,8 +7,8 @@
 //! metering mode, the flash, the shutter, the image area, the raw image
 //! size, the color space, the focus mode, the AF-area mode, AF fine-tune,
 //! the stabilization, auto ISO, the exposure fine-tuning, the release
-//! mode, bracketing and whether the clock was on daylight saving time.
-//! [`CameraSettings`] holds them all, and
+//! mode, bracketing, whether the clock was on daylight saving time and
+//! the raw data's bit depth. [`CameraSettings`] holds them all, and
 //! [`Metadata::camera_settings`](crate::Metadata::camera_settings) gives
 //! them for a file. [`WhiteBalance`], [`FineTune`], [`Flash`],
 //! [`AfFineTune`] and [`Stabilization`] hold the settings made of several
@@ -22,7 +22,8 @@
 //!
 //! NEF, ARW and JPEG files give the settings that their standard Exif tags
 //! record: the exposure program, the metering mode, the flash, the white
-//! balance mode, the color space and exposure bracketing. The others are
+//! balance mode, the color space and exposure bracketing. Raw files give
+//! the bit depth from the standard tags of their raw data. The others are
 //! recorded only in a
 //! maker's own tags, its MakerNote. Nikon's, in NEF files and in the JPEGs
 //! of Nikon cameras, gives the white balance's color temperature and
@@ -62,9 +63,9 @@ use crate::rational::SignedRational;
 /// How the camera was set for a picture: its white balance, exposure
 /// program, metering mode, flash, shutter, image area, raw image size,
 /// color space, focus mode, AF-area mode, AF fine-tune, stabilization, auto
-/// ISO, exposure fine-tuning, release mode, bracketing and daylight saving
-/// time, for a viewer's information panel
-/// beside the exposure.
+/// ISO, exposure fine-tuning, release mode, bracketing, daylight saving
+/// time and raw bit depth, for a viewer's information panel beside the
+/// exposure.
 ///
 /// Every value is `None` when the file does not record it or records it in
 /// a way that cannot be read, such as a code that no variant names. A
@@ -72,7 +73,8 @@ use crate::rational::SignedRational;
 /// [`Metadata::camera_settings`](crate::Metadata::camera_settings) gives
 /// the values a file's standard Exif tags record: the exposure program,
 /// the metering mode, the flash, the white balance mode, the color space
-/// and exposure bracketing. The others, which only a maker's MakerNote
+/// and exposure bracketing, and the raw bit depth that the standard tags of
+/// a raw file's raw data record. The others, which only a maker's MakerNote
 /// records, it gives from Nikon's MakerNote and Sony's, each those its
 /// MakerNote records in plain tags; the shutter, the image area, the raw
 /// image size, AF fine-tune, auto ISO and daylight saving time are `None`
@@ -161,6 +163,7 @@ pub struct CameraSettings {
     pub(crate) release_mode: Option<ReleaseMode>,
     pub(crate) bracketing: Option<Bracketing>,
     pub(crate) daylight_saving_time: Option<bool>,
+    pub(crate) raw_bit_depth: Option<u32>,
 }
 
 impl CameraSettings {
@@ -691,6 +694,34 @@ impl CameraSettings {
         self.daylight_saving_time
     }
 
+    /// How many bits each sample of the raw data holds, as the file records
+    /// it, such as 12 or 14.
+    ///
+    /// Read from the BitsPerSample of the raw data, in the IFD that gives
+    /// [`Metadata::raw_size`](crate::Metadata::raw_size), when it is one
+    /// SHORT above zero. It is the depth the file records, which is not
+    /// always the depth of the stored samples: a lossy curve may store
+    /// fewer bits. Sony's medium and small raws in YCbCr record three
+    /// values, one a sample, and give `None`. A JPEG file has none, since
+    /// it holds no raw data.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use raw_files::CameraFile;
+    ///
+    /// # fn main() -> raw_files::Result<()> {
+    /// let file = CameraFile::open("photo.nef")?;
+    /// if let Some(bits) = file.metadata().camera_settings().raw_bit_depth() {
+    ///     println!("{bits}-bit raw");
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn raw_bit_depth(&self) -> Option<u32> {
+        self.raw_bit_depth
+    }
+
     /// Sets the white balance, in place of the one it had;
     /// [`white_balance`](Self::white_balance) reads it.
     #[must_use]
@@ -835,6 +866,14 @@ impl CameraSettings {
     #[must_use]
     pub fn with_daylight_saving_time(mut self, on: bool) -> Self {
         self.daylight_saving_time = Some(on);
+        self
+    }
+
+    /// Sets the raw bit depth, in place of any set before;
+    /// [`raw_bit_depth`](Self::raw_bit_depth) reads it.
+    #[must_use]
+    pub fn with_raw_bit_depth(mut self, bits: u32) -> Self {
+        self.raw_bit_depth = Some(bits);
         self
     }
 }
@@ -2487,6 +2526,7 @@ mod tests {
             release_mode: Some(ReleaseMode::Continuous),
             bracketing: Some(Bracketing::Exposure),
             daylight_saving_time: Some(true),
+            raw_bit_depth: Some(14),
         }
     }
 
@@ -2511,6 +2551,7 @@ mod tests {
         assert_eq!(settings.release_mode(), None);
         assert_eq!(settings.bracketing(), None);
         assert_eq!(settings.daylight_saving_time(), None);
+        assert_eq!(settings.raw_bit_depth(), None);
 
         let white_balance = WhiteBalance::default();
         assert_eq!(white_balance.mode(), None);
@@ -2576,6 +2617,7 @@ mod tests {
         assert_eq!(settings.release_mode(), Some(ReleaseMode::Continuous));
         assert_eq!(settings.bracketing(), Some(Bracketing::Exposure));
         assert_eq!(settings.daylight_saving_time(), Some(true));
+        assert_eq!(settings.raw_bit_depth(), Some(14));
 
         let white_balance = nikon_white_balance();
         assert_eq!(white_balance.mode(), Some(WhiteBalanceMode::Auto));
@@ -2741,6 +2783,13 @@ mod tests {
                         ..start.clone()
                     },
                 ),
+                (
+                    start.clone().with_raw_bit_depth(12),
+                    CameraSettings {
+                        raw_bit_depth: Some(12),
+                        ..start.clone()
+                    },
+                ),
             ];
             for (place, (built, expected)) in cases.into_iter().enumerate() {
                 assert_eq!(built, expected, "builder {place} from {start:?}");
@@ -2821,7 +2870,8 @@ mod tests {
             .with_exposure_fine_tune(signed_fraction(-3, 6))
             .with_release_mode(ReleaseMode::Continuous)
             .with_bracketing(Bracketing::Exposure)
-            .with_daylight_saving_time(true);
+            .with_daylight_saving_time(true)
+            .with_raw_bit_depth(14);
         assert_eq!(settings, full_settings());
     }
 
@@ -2845,7 +2895,8 @@ mod tests {
             .with_exposure_fine_tune(signed_fraction(1, 6))
             .with_release_mode(ReleaseMode::SelfTimer)
             .with_bracketing(Bracketing::DynamicRange)
-            .with_daylight_saving_time(false);
+            .with_daylight_saving_time(false)
+            .with_raw_bit_depth(12);
         // Every value of `earlier` differs from the full record's, so each
         // builder below has one to replace.
         let full = full_settings();
@@ -2867,7 +2918,8 @@ mod tests {
             .with_exposure_fine_tune(signed_fraction(-3, 6))
             .with_release_mode(ReleaseMode::Continuous)
             .with_bracketing(Bracketing::Exposure)
-            .with_daylight_saving_time(true);
+            .with_daylight_saving_time(true)
+            .with_raw_bit_depth(14);
         assert_eq!(settings, full);
 
         let white_balance = WhiteBalance::default()

@@ -290,7 +290,7 @@ nothing standard records a value. Nothing is deciphered or decrypted.
   - **The raw compression**, from the raw IFD's Compression, refined
     by Nikon's NEFCompression or its record 0x0051.
   - **The raw bit depth**, from the raw IFD's BitsPerSample when it
-    holds one value.
+    holds one value above zero.
   - **The JPEG quality**, from Nikon's Quality text in a JPEG and
     Sony's quality tags, and Nikon's choice between size priority and
     optimal quality. A JPEG whose Quality says `RAW`, which a program
