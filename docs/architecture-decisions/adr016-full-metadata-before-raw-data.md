@@ -111,11 +111,17 @@ Rejected:
 
 ## What this decision does not cover
 
-- How each group enters the API: whether presets that only one maker has
-  keep that maker's names or get neutral ones, whether how the camera
-  processed its JPEG sits beside the camera settings or in a record of
-  its own, and whether opening a file also reads an XMP sidecar beside
-  it or the caller hands it in. Each group's issue settles its own.
+- How each group enters the API. Each group's issue settles its own
+  questions. Two are settled, in the record on metadata from the
+  standard tags
+  ([ADR011](adr011-metadata-from-standard-tags.md)):
+  - the capture settings take neutral words, and the picture style and
+    the processing settings keep each maker's own names;
+  - how the camera processed its JPEG sits among the camera settings,
+    with no record of its own.
+
+  Whether opening a file also reads an XMP sidecar beside it, or the
+  caller hands it in, is open.
 - How an enciphered or encrypted block is read: that is the decision the
   second point above calls for.
 - How XMP and IPTC are parsed, whether by a reader of raw-files' own or
