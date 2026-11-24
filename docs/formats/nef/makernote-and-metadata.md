@@ -1784,10 +1784,7 @@ raw-files reads:
 - the exposure fine-tuning, the release mode and bracketing, and
   daylight saving time;
 - the flash's source, control, sync and compensation;
-- the raw compression and bit depth, and the JPEG quality.
-
-It will read:
-
+- the raw compression and bit depth, and the JPEG quality;
 - the white balance's preset slot and fluorescent lamp.
 
 The AF-area mode is in [section 8.6](#86-focus-point).
@@ -2132,8 +2129,9 @@ count, though on no public NEF or NRW file:
 mark the star or follow the step is open: no frame set both apart.
 
 **The white balance preset slot and fluorescent lamp.** Two parts of the
-white balance ([section 8.7](#87-camera-settings)). The preset slot will
-be the number after 0x0005's `PRESET`:
+white balance ([section 8.7](#87-camera-settings)). The preset slot is
+the number after 0x0005's `PRESET`, read by its form, as a chosen color
+temperature is:
 
 | Text | Slot | Mark | Files, public / mine |
 |---|---|---|---|
@@ -2143,9 +2141,11 @@ be the number after 0x0005's `PRESET`:
 
 **[F]** The count of mine is the Z 9's two frames, each counted twice;
 the D600's frames lie outside the counted sets. The fluorescent lamp
-will come from Exif's LightSource 12 to 16, as the standard names them
+comes from Exif's LightSource 12 to 16, as the standard names them
 [P][23] (4.6.6.7.20, pp. 60 to 61): daylight, day white, cool white,
-white and warm white. Only 14, cool white, is on Nikon files. It comes
+white and warm white. It is read under a manual white balance,
+WhiteBalance 1, as the mode is, and a text that names another mode
+drops it. Only 14, cool white, is on Nikon files. It comes
 with `COOL WHT FL` on 15 of my D300S JPEGs and on my Z 9's frame of that
 setting in the series above. **[F]** Nikon's text agrees with the
 standard's code wherever both exist.
@@ -2452,7 +2452,9 @@ MakerNote out of the critical path:
     temperature as its number, such as `3230K`
     ([section 8.7](#87-camera-settings)). **[F]** Still on no checked
     file: the other fluorescent lamps, the Z 9's preset slots 5 and 6,
-    and whatever the bodies not checked write.
+    which `PRESET` and its number reads by its form
+    ([section 8.10](#810-more-capture-settings)), and whatever the bodies
+    not checked write.
 22. **The color temperature under a manual setting.** Answered for the
     Z 9: it holds a temperature under every setting, 3230 under a chosen
     3230 K and 5200 under a preset; the D850 and the Z fc write 0 under

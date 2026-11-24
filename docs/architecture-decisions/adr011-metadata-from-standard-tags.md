@@ -2,7 +2,7 @@
 
 - Status: Accepted
 - Date: 2026-10-15
-- Revision: 7, 2026-11-23
+- Revision: 8, 2026-11-24
 - Issue: #13; the camera settings #26, revised in #51; authorship and
   location #97; more capture settings #214
 
@@ -210,19 +210,21 @@ nothing standard records a value. Nothing is deciphered or decrypted.
   records the setting itself, else from Exif's WhiteBalance and
   LightSource.
   - Nikon's text is looked up whole in a table of the texts files are
-    known to hold, and a text the table lacks gives none. A chosen
-    color temperature, a number followed by `K`, is the one text read
-    by its form, since no table could list every number.
+    known to hold, and a text the table lacks gives none. Two texts are
+    read by their form, since no table could list every number: a
+    chosen color temperature, a number followed by `K`, and a preset
+    slot, `PRESET` followed by its number.
   - Sony's is 0x0115, never 0xB054, which says auto on files set to
     shade.
   - The modes form one short list in neutral words (auto, daylight,
     cloudy, shade, tungsten, fluorescent, flash, underwater, custom,
     color temperature). Each maker's finer kinds fold into it.
-  - Two parts belong to the white balance. The preset slot is the
-    number after Nikon's `PRESET`. The kind of fluorescent lamp comes
-    from Exif's LightSource 12 to 16. Sony's 0x0112, which also gives
-    the lamp, is not read, since it repeats Exif on every frame
-    measured.
+  - Two parts belong to the white balance. The preset slot is the number
+    after Nikon's `PRESET`. The kind of fluorescent lamp comes from
+    Exif's LightSource 12 to 16 under its manual white balance, as the
+    mode does; a MakerNote that names another mode drops it. Sony's
+    0x0112, which also gives the lamp, is not read, since it repeats
+    Exif on every frame measured.
 - **The color temperature** is the one the MakerNote records, from 1
   to 99,999 K. Zero means not recorded, and a larger number is no
   temperature a camera is set to. Nikon's is the temperature of the
@@ -409,6 +411,9 @@ Rejected:
   record does not say which shutter was used.
 - **Mapping Nikon's white balance texts by their first letters.** A
   text such as `COOL WHT FL` shows that they cannot be predicted.
+- **Nikon's preset texts looked up in the table**, `PRESET1` to
+  `PRESET4` as frames show them. The D3X writes `PRESET0`, and a slot is
+  a number whatever it is, as a chosen color temperature is.
 - **The fine-tuning signed as each maker signs it.** A viewer showing
   or comparing two files' shifts would need to know, for each maker,
   which way a positive value points.

@@ -430,6 +430,11 @@ fn read_metadata(metadata: &Metadata) {
         .raw_compression()
         .map(|compression| compression.to_string());
     let _ = settings.jpeg_quality().map(|quality| quality.to_string());
+    let white_balance = settings.white_balance();
+    let _ = white_balance.preset_slot();
+    let _ = white_balance
+        .fluorescent_lamp()
+        .map(|lamp| lamp.to_string());
     let _ = settings
         .jpeg_compression()
         .map(|compression| compression.to_string());

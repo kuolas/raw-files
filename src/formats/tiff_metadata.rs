@@ -47,8 +47,8 @@ use std::io::{Read, Seek};
 use crate::authorship::Authorship;
 use crate::camera::Camera;
 use crate::camera_settings::{
-    Bracketing, CameraSettings, ColorSpace, ExposureProgram, Flash, FlashMode, MeteringMode,
-    RawCompression, WhiteBalance, WhiteBalanceMode,
+    Bracketing, CameraSettings, ColorSpace, ExposureProgram, Flash, FlashMode, FluorescentLamp,
+    MeteringMode, RawCompression, WhiteBalance, WhiteBalanceMode,
 };
 use crate::container::tiff::tags::COLOR_SPACE;
 use crate::container::tiff::{First, Ifd, Rule, Text, Tree};
@@ -777,7 +777,8 @@ const DCF_OPTION_FILE: &str = "R03";
 
 /// How the camera was set for the picture, as the Exif IFD `exif` records
 /// it: the exposure program, the metering mode, the flash, the white
-/// balance mode, the color space, and exposure bracketing
+/// balance mode and, for a manual one, its kind of fluorescent lamp
+/// ([`fluorescent_lamp`]), the color space, and exposure bracketing
 /// ([`bracketing`]). The color space also reads the Interoperability IFD
 /// `interop`, when the tree has one.
 ///
@@ -802,10 +803,20 @@ fn camera_settings<R: Read + Seek>(
     Ok(CameraSettings {
         white_balance: WhiteBalance {
             mode: white_balance_mode(exif),
-            // Only a maker's MakerNote records the color temperature and
-            // the fine-tuning: Nikon's and Sony's readers fill them.
+            // Only a maker's MakerNote records the color temperature, the
+            // fine-tuning and the preset slot: Nikon's and Sony's readers
+            // fill them.
             color_temperature: None,
             fine_tune: None,
+            preset_slot: None,
+            // As for the mode, LightSource gives the light a manual white
+            // balance, 1, was set for.
+            fluorescent_lamp: match exif.held(rules::WHITE_BALANCE) {
+                Some([1]) => exif
+                    .held(rules::LIGHT_SOURCE)
+                    .and_then(|[code]| fluorescent_lamp(code)),
+                _ => None,
+            },
         },
         exposure_program: exif
             .held(rules::EXPOSURE_PROGRAM)
@@ -1002,6 +1013,32 @@ fn white_balance_of_light(code: u32) -> Option<WhiteBalanceMode> {
         3 | 24 => WhiteBalanceMode::Tungsten,
         2 | 12..=16 => WhiteBalanceMode::Fluorescent,
         4 => WhiteBalanceMode::Flash,
+        _ => return None,
+    })
+}
+
+/// The kind of fluorescent lamp an Exif LightSource `code` names, as Exif
+/// 3.1 names the five (4.6.6.7.20): 12
+/// [`Daylight`](FluorescentLamp::Daylight), 13
+/// [`DayWhite`](FluorescentLamp::DayWhite), 14
+/// [`CoolWhite`](FluorescentLamp::CoolWhite), 15
+/// [`White`](FluorescentLamp::White) and 16
+/// [`WarmWhite`](FluorescentLamp::WarmWhite). `None` for every other code,
+/// 2, a fluorescent lamp of no named kind, among them.
+///
+/// Its caller reads it under a manual white balance alone, Exif's
+/// WhiteBalance 1, as the mode's LightSource is read
+/// ([`white_balance_mode`]): under auto, LightSource records no setting.
+/// The frames of the ILCE-7M2 under each lamp, and those of the Z 9 and
+/// the D300S under cool white, record it beside WhiteBalance 1
+/// (`docs/formats/jpeg/container-and-metadata.md`, section 4).
+fn fluorescent_lamp(code: u32) -> Option<FluorescentLamp> {
+    Some(match code {
+        12 => FluorescentLamp::Daylight,
+        13 => FluorescentLamp::DayWhite,
+        14 => FluorescentLamp::CoolWhite,
+        15 => FluorescentLamp::White,
+        16 => FluorescentLamp::WarmWhite,
         _ => return None,
     })
 }
@@ -3738,6 +3775,69 @@ mod tests {
         }
         // A LightSource alone says nothing of the white balance.
         assert_eq!(white_balance(None, Some(11)), None);
+    }
+
+    /// The kind of fluorescent lamp read from [`settings`]'s file with the
+    /// WhiteBalance `white_balance` and the LightSource `light`, each one
+    /// SHORT when `Some`.
+    fn lamp(white_balance: Option<u16>, light: Option<u16>) -> Option<FluorescentLamp> {
+        settings(|builder, exif| {
+            if let Some(code) = white_balance {
+                builder.short(exif, WHITE_BALANCE, &[code]);
+            }
+            if let Some(code) = light {
+                builder.short(exif, LIGHT_SOURCE, &[code]);
+            }
+        })
+        .white_balance
+        .fluorescent_lamp
+    }
+
+    #[test]
+    fn each_fluorescent_light_source_gives_its_lamp() {
+        let lamps = [
+            (12, FluorescentLamp::Daylight),
+            (13, FluorescentLamp::DayWhite),
+            (14, FluorescentLamp::CoolWhite),
+            (15, FluorescentLamp::White),
+            (16, FluorescentLamp::WarmWhite),
+        ];
+        // Under a manual white balance, as the frames shot under each lamp
+        // record it.
+        for (light, lamp_read) in lamps {
+            assert_eq!(lamp(Some(1), Some(light)), Some(lamp_read), "{light}");
+        }
+        // Every other code: 2, a fluorescent lamp of no named kind, 11,
+        // shade, 17, standard light A, and the rest.
+        let others = (0..=40).chain([255, 65535]);
+        for light in others.filter(|light| !(12..=16).contains(light)) {
+            assert_eq!(lamp(Some(1), Some(light)), None, "{light}");
+        }
+        assert_eq!(lamp(Some(1), None), None);
+    }
+
+    #[test]
+    fn a_white_balance_other_than_manual_gives_no_lamp() {
+        // Under auto, under a code Exif does not define and without a
+        // WhiteBalance, LightSource records no setting: as for the mode.
+        for white_balance in [Some(0), Some(2), None] {
+            for light in 12..=16 {
+                assert_eq!(
+                    lamp(white_balance, Some(light)),
+                    None,
+                    "{white_balance:?}, {light}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn a_light_source_of_another_type_gives_no_lamp() {
+        let read = settings(|builder, exif| {
+            builder.short(exif, WHITE_BALANCE, &[1]);
+            builder.long(exif, LIGHT_SOURCE, &[14]);
+        });
+        assert_eq!(read.white_balance.fluorescent_lamp, None);
     }
 
     /// What the InteropIndex of [`color_space`]'s file is.
