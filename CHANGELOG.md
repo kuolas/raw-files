@@ -388,6 +388,21 @@ does. An entry that can break a caller opens with **Breaking:**.
   // 0.11.0
   let mode = metadata.camera_settings().focus_area_mode();
   ```
+- **Breaking:** `FineTune`, the white balance's shift, is now
+  `WhiteBalanceFineTune`
+  ([#214](https://github.com/kuolas/raw-files/issues/214)). The crate
+  now gives two more fine-tunings, `AfFineTune` and
+  `CameraSettings::exposure_fine_tune`, so the name says which one it
+  is. Rename the type wherever it is imported or written. Its methods
+  keep their names, and so do `WhiteBalance::fine_tune` and
+  `with_fine_tune`:
+
+  ```rust
+  // 0.10.0
+  let shift = FineTune::new(amber_blue, green_magenta);
+  // 0.11.0
+  let shift = WhiteBalanceFineTune::new(amber_blue, green_magenta);
+  ```
 - A tag that raw-files reads only at an exact count is now skipped,
   unread, when it holds another count
   ([#109](https://github.com/kuolas/raw-files/issues/109)). A tag of

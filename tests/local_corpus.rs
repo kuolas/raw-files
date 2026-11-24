@@ -1994,9 +1994,9 @@ fn every_file_of_the_local_corpus_opens_and_gives_a_whole_jpeg() {
 #[test]
 fn the_settings_tally_counts_the_makernote_settings() {
     use raw_files::{
-        AfFineTune, Bracketing, CameraSettings, FineTune, FocusAreaMode, FocusMode, ImageArea,
-        RawImageSize, ReleaseMode, Shutter, SignedRational, Stabilization, StabilizationMode,
-        WhiteBalance,
+        AfFineTune, Bracketing, CameraSettings, FocusAreaMode, FocusMode, ImageArea, RawImageSize,
+        ReleaseMode, Shutter, SignedRational, Stabilization, StabilizationMode, WhiteBalance,
+        WhiteBalanceFineTune,
     };
 
     let shift = |numerator, denominator| SignedRational {
@@ -2004,7 +2004,7 @@ fn the_settings_tally_counts_the_makernote_settings() {
         denominator,
     };
     let zero = shift(0, 4);
-    let towards_amber = FineTune::new(shift(-24, 4), zero);
+    let towards_amber = WhiteBalanceFineTune::new(shift(-24, 4), zero);
     // Three files with a color temperature each, neither the first the
     // lowest nor the highest, so that both ends of the range must move;
     // the first two with the same shift, the third with another; the
@@ -2049,7 +2049,7 @@ fn the_settings_tally_counts_the_makernote_settings() {
         .with_white_balance(
             WhiteBalance::default()
                 .with_color_temperature(5_200)
-                .with_fine_tune(FineTune::new(zero, zero)),
+                .with_fine_tune(WhiteBalanceFineTune::new(zero, zero)),
         )
         .with_electronic_front_curtain_setting(true)
         .with_focus_area_mode(FocusAreaMode::Auto)

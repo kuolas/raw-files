@@ -68,9 +68,10 @@ use super::crop::CropHiSpeed;
 use super::rules;
 use crate::camera::BodyFacts;
 use crate::camera_settings::{
-    AfFineTune, Bracketing, CameraSettings, ColorSpace, FineTune, Flash, FlashControl, FlashSource,
+    AfFineTune, Bracketing, CameraSettings, ColorSpace, Flash, FlashControl, FlashSource,
     FlashSync, FocusAreaMode, FocusMode, ImageArea, JpegCompression, JpegQuality, RawCompression,
-    RawImageSize, ReleaseMode, Shutter, Stabilization, StabilizationMode, WhiteBalanceMode,
+    RawImageSize, ReleaseMode, Shutter, Stabilization, StabilizationMode, WhiteBalanceFineTune,
+    WhiteBalanceMode,
 };
 use crate::container::tiff::Ifd;
 use crate::error::Result;
@@ -570,7 +571,7 @@ fn preset_slot_of_text(text: &str) -> Option<u32> {
 }
 
 /// The white balance fine-tuning that `makernote` records, signed as
-/// [`FineTune`] signs it ([`fine_tune_of`]):
+/// [`WhiteBalanceFineTune`] signs it ([`fine_tune_of`]):
 ///
 /// - from 0x003F, two SRATIONALs in the camera's own steps, as stored,
 ///   such as `-12/4`;
@@ -588,7 +589,7 @@ fn preset_slot_of_text(text: &str) -> Option<u32> {
 fn fine_tune<R: Read + Seek>(
     src: &mut Source<R>,
     makernote: &MakerNote,
-) -> Result<Option<FineTune>> {
+) -> Result<Option<WhiteBalanceFineTune>> {
     let Some(ifd) = makernote.tagged() else {
         return Ok(None);
     };
@@ -612,10 +613,10 @@ fn fine_tune<R: Read + Seek>(
 /// is kept, and the second has its numerator negated.
 ///
 /// Nikon stores a shift towards blue and one towards green as positive, as
-/// frames shot on a Z 9 and a D600 with a known shift show. [`FineTune`]
-/// signs each value as its axis is named, so its green to magenta shift is
-/// positive towards magenta, and Nikon's second value is turned around
-/// (ADR011).
+/// frames shot on a Z 9 and a D600 with a known shift show.
+/// [`WhiteBalanceFineTune`] signs each value as its axis is named, so its
+/// green to magenta shift is positive towards magenta, and Nikon's second
+/// value is turned around (ADR011).
 ///
 /// `None` when either denominator is zero, which records no fraction, and
 /// when the second numerator is `i32::MIN`, whose negation does not fit. No
@@ -623,11 +624,11 @@ fn fine_tune<R: Read + Seek>(
 fn fine_tune_of(
     (amber_blue, amber_blue_denominator): (i32, i32),
     (magenta_green, magenta_green_denominator): (i32, i32),
-) -> Option<FineTune> {
+) -> Option<WhiteBalanceFineTune> {
     let amber_blue = SignedRational::new(amber_blue, amber_blue_denominator).ok()?;
     let green_magenta =
         SignedRational::new(magenta_green.checked_neg()?, magenta_green_denominator).ok()?;
-    Some(FineTune::new(amber_blue, green_magenta))
+    Some(WhiteBalanceFineTune::new(amber_blue, green_magenta))
 }
 
 /// The shutter a ShutterMode `code` names: 0 the mechanical shutter, 16 the
@@ -1633,13 +1634,13 @@ mod tests {
     }
 
     /// A shift of `amber_blue` and `green_magenta`, each a numerator and a
-    /// denominator, as [`FineTune`] holds it.
-    fn shift(amber_blue: (i32, i32), green_magenta: (i32, i32)) -> FineTune {
+    /// denominator, as [`WhiteBalanceFineTune`] holds it.
+    fn shift(amber_blue: (i32, i32), green_magenta: (i32, i32)) -> WhiteBalanceFineTune {
         let (amber_blue, green_magenta) = (
             signed_fraction(amber_blue.0, amber_blue.1),
             signed_fraction(green_magenta.0, green_magenta.1),
         );
-        FineTune::new(amber_blue, green_magenta)
+        WhiteBalanceFineTune::new(amber_blue, green_magenta)
     }
 
     /// Gives `ifd` the tag `tag` as one or two SSHORTs, `values`, which its
@@ -1660,7 +1661,7 @@ mod tests {
     fn fine_tune_of_file(
         order: Order,
         tags: impl FnOnce(&mut TiffBuilder, Order, IfdId),
-    ) -> Option<FineTune> {
+    ) -> Option<WhiteBalanceFineTune> {
         settings_of(order, |inner, ifd| tags(inner, order, ifd))
             .white_balance
             .fine_tune

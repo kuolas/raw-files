@@ -57,8 +57,8 @@ use std::io::{Read, Seek};
 
 use super::{MakerNoteBlock, Picture, Reader, checked_color_temperature};
 use crate::camera_settings::{
-    Bracketing, CameraSettings, FineTune, FlashSource, FocusAreaMode, FocusMode, JpegQuality,
-    RawCompression, ReleaseMode, Stabilization, WhiteBalanceMode,
+    Bracketing, CameraSettings, FlashSource, FocusAreaMode, FocusMode, JpegQuality, RawCompression,
+    ReleaseMode, Stabilization, WhiteBalanceFineTune, WhiteBalanceMode,
 };
 use crate::container::tiff::{Ifd, Rule, Tree};
 use crate::entries::{Directory, Entries, Lookup};
@@ -801,10 +801,10 @@ fn white_balance_mode(code: u32) -> Option<WhiteBalanceMode> {
 }
 
 /// The white balance fine-tuning that `makernote`'s WBShiftAB_GM records,
-/// signed as [`FineTune`] signs it ([`fine_tune_of`]): its two SLONGs,
-/// whole steps, the shift from amber to blue and then the one from green
-/// to magenta. A recorded zero shift, `0, 0`, is a fine-tuning like any
-/// other.
+/// signed as [`WhiteBalanceFineTune`] signs it ([`fine_tune_of`]): its two
+/// SLONGs, whole steps, the shift from amber to blue and then the one from
+/// green to magenta. A recorded zero shift, `0, 0`, is a fine-tuning like
+/// any other.
 ///
 /// `None` when the tag is missing, as on the oldest bodies, breaks its rule
 /// or stores its values outside the block, and when [`fine_tune_of`] gives
@@ -816,7 +816,7 @@ fn white_balance_mode(code: u32) -> Option<WhiteBalanceMode> {
 fn fine_tune<R: Read + Seek>(
     src: &mut Source<R>,
     makernote: &MakerNote,
-) -> Result<Option<FineTune>> {
+) -> Result<Option<WhiteBalanceFineTune>> {
     let Some([blue_amber, green_magenta]) = makernote.ifd.get(src, rules::FINE_TUNE)? else {
         return Ok(None);
     };
@@ -828,17 +828,17 @@ fn fine_tune<R: Read + Seek>(
 /// around, and the second is kept.
 ///
 /// Sony stores a shift towards amber and one towards magenta as positive,
-/// as frames shot on an ILCE-7M2 with a known shift show. [`FineTune`]
-/// signs each value as its axis is named, so its amber to blue shift is
-/// positive towards blue, and Sony's first value is turned around
-/// (ADR011).
+/// as frames shot on an ILCE-7M2 with a known shift show.
+/// [`WhiteBalanceFineTune`] signs each value as its axis is named, so its
+/// amber to blue shift is positive towards blue, and Sony's first value is
+/// turned around (ADR011).
 ///
 /// `None` when the first value is `i32::MIN`, whose negation does not fit.
 /// No file checked holds it.
-fn fine_tune_of(blue_amber: i32, green_magenta: i32) -> Option<FineTune> {
+fn fine_tune_of(blue_amber: i32, green_magenta: i32) -> Option<WhiteBalanceFineTune> {
     let amber_blue = SignedRational::new(blue_amber.checked_neg()?, 1).ok()?;
     let green_magenta = SignedRational::new(green_magenta, 1).ok()?;
-    Some(FineTune::new(amber_blue, green_magenta))
+    Some(WhiteBalanceFineTune::new(amber_blue, green_magenta))
 }
 
 /// The electronic front curtain setting an ElectronicFrontCurtainShutter
@@ -2260,9 +2260,9 @@ mod tests {
 
     /// The fine-tuning of `amber_blue` and `green_magenta` whole steps,
     /// each over 1, as Sony's are read.
-    fn steps(amber_blue: i32, green_magenta: i32) -> FineTune {
+    fn steps(amber_blue: i32, green_magenta: i32) -> WhiteBalanceFineTune {
         let step = |n| SignedRational::new(n, 1).expect("a denominator of 1");
-        FineTune::new(step(amber_blue), step(green_magenta))
+        WhiteBalanceFineTune::new(step(amber_blue), step(green_magenta))
     }
 
     #[test]
