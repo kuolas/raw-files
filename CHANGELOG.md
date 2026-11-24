@@ -111,11 +111,14 @@ does. An entry that can break a caller opens with **Breaking:**.
   - a crop shot in manual focus or in live view has it too, where the
     crop's window was known before only from the points the camera
     used.
-- `FocusAreaMode::Pinpoint`, named "Pinpoint": Nikon files that record
-  AFInfo2 area-mode code 192 give it, where `FocusPoints::area_mode`
-  gave `None` before ([#63](https://github.com/kuolas/raw-files/issues/63)).
-  Z 9 frames shot in pinpoint AF write the code, NEF and JPEG alike;
-  the public Z6III samples write it too.
+- `FocusAreaMode::Pinpoint`, named "Pinpoint": Nikon files whose
+  AFInfo2 records area-mode code 192 give it through
+  `CameraSettings::focus_area_mode`, where they gave no mode before
+  ([#63](https://github.com/kuolas/raw-files/issues/63)). A code is
+  named where the list for the record's version and detection method
+  holds it, and every list but the Nikon 1 bodies' holds 192. Z 9
+  frames shot in pinpoint AF write the code, NEF and JPEG alike; the
+  public Z6III samples write it too.
 - `CameraSettings::focus_mode` gives how the camera focused, a
   `FocusMode`: by hand, or in which autofocus mode, such as continuous
   AF ([#214](https://github.com/kuolas/raw-files/issues/214)). Nikon
@@ -130,14 +133,15 @@ does. An entry that can break a caller opens with **Breaking:**.
 - `CameraSettings::focus_area_mode` names many more modes, and
   `FocusAreaMode::Zone` is given, from Nikon's and Sony's MakerNotes
   ([#214](https://github.com/kuolas/raw-files/issues/214)):
-  - Nikon's AFInfo2: every code of the list its published documentation
+  - Nikon's AFInfo2: the codes of the list its published documentation
     gives for the version and the detection method, such as the
     dynamic-area sizes, group area, wide area and live view's subject
     tracking, and at the Nikon 1 versions, 0200 and 0201, which record
-    no focus point. Under hybrid detection at versions 0100 to 0301,
-    for which the documentation gives no list, the codes both lists
-    share and the mirrorless codes are named, and the DSLR codes 0 to 18
-    give `None`;
+    no focus point. Face priority and plain contrast detection, which
+    no variant names, give `None`. Under hybrid detection at versions
+    0100 to 0301, for which the documentation gives no list, the codes
+    both lists share and the mirrorless codes are named, and the DSLR
+    codes 0 to 18 give `None`;
   - Nikon's AFInfo, on the bodies before AFInfo2: single and dynamic
     area, the closest subject, group dynamic, and single and dynamic
     area with the wide focus frame;
@@ -164,8 +168,9 @@ does. An entry that can break a caller opens with **Breaking:**.
   both ends, `AfFineTune::tele_value` gives the value at the long end,
   and `with_tele_value` sets it. Nikon files give it from their
   MakerNote's AFTune, the long end's value under its "On (Zoom)" code;
-  which saved lens the value belongs to is not given. Sony files give none: they record their AF
-  micro adjustment only in enciphered or unread blocks.
+  which saved lens the value belongs to is not given. Sony files give
+  none: they record their AF micro adjustment only in enciphered or
+  unread blocks.
 - `CameraSettings::stabilization` gives the camera's image
   stabilization, a `Stabilization`: whether it was on and, when the file
   records one, its mode, a `StabilizationMode`: normal, active or
@@ -403,6 +408,20 @@ does. An entry that can break a caller opens with **Breaking:**.
   // 0.11.0
   let shift = WhiteBalanceFineTune::new(amber_blue, green_magenta);
   ```
+- **Breaking:** a `Flash` is built with `Flash::fired()` or
+  `Flash::not_fired()`, no longer `Flash::new(bool)`, and whether it
+  fired is `Flash::has_fired`, no longer `Flash::fired`
+  ([#214](https://github.com/kuolas/raw-files/issues/214)). The call
+  says what it builds, as `Stabilization::on()` does:
+
+  ```rust
+  // 0.10.0
+  let flash = Flash::new(true).with_mode(FlashMode::Fill);
+  assert!(flash.fired());
+  // 0.11.0
+  let flash = Flash::fired().with_mode(FlashMode::Fill);
+  assert!(flash.has_fired());
+  ```
 - A tag that raw-files reads only at an exact count is now skipped,
   unread, when it holds another count
   ([#109](https://github.com/kuolas/raw-files/issues/109)). A tag of
@@ -452,20 +471,6 @@ does. An entry that can break a caller opens with **Breaking:**.
 
   A list costs at most five images to check, where a hostile one cost
   4,091. No camera JPEG measured lists another image, so none changes.
-- **Breaking:** a `Flash` is built with `Flash::fired()` or
-  `Flash::not_fired()`, no longer `Flash::new(bool)`, and whether it
-  fired is `Flash::has_fired`, no longer `Flash::fired`
-  ([#214](https://github.com/kuolas/raw-files/issues/214)). The call
-  says what it builds, as `Stabilization::on()` does:
-
-  ```rust
-  // 0.10.0
-  let flash = Flash::new(true).with_mode(FlashMode::Fill);
-  assert!(flash.fired());
-  // 0.11.0
-  let flash = Flash::fired().with_mode(FlashMode::Fill);
-  assert!(flash.has_fired());
-  ```
 - `Camera::model` now names four more Nikon bodies: the D300S, D3200,
   D3300 and D7100
   ([#214](https://github.com/kuolas/raw-files/issues/214)). Public files
@@ -482,7 +487,10 @@ does. An entry that can break a caller opens with **Breaking:**.
   record. Such a file gave `None` before, so a caller that took `None`
   for an older body now gets a value, and cannot tell it from one the
   file recorded. A crop the file names still comes first, such as the
-  D600's DX crop, and a Sony file still gives `None`.
+  D600's DX crop, and a Sony file still gives `None`. So does a file
+  whose MakerNote holds no crop and an entry too damaged to read, and
+  one that records "off" beside a cropped size smaller than the
+  original.
 - `CameraSettings::raw_image_size` now gives `Large` for a Nikon raw
   file that records no raw size, when the body offers only one
   ([#214](https://github.com/kuolas/raw-files/issues/214)). raw-files'
