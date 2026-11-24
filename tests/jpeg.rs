@@ -44,10 +44,10 @@ use std::ops::Range;
 use raw_files::{
     Bracketing, Camera, CameraFile, CameraSettings, ColorSpace, DateTime, Directory, ErrorKind,
     Exposure, ExposureProgram, FineTune, FlashMode, FlashSync, Focus, FocusAreaMode, FocusMode,
-    FocusOrigin, FocusPoint, FocusPoints, Format, ImageArea, Lens, Limits, Make, Metadata,
-    MeteringMode, Options, Orientation, Point, Preview, PreviewFormat, Rational, ReleaseMode,
-    Shutter, SignedRational, Size, Stabilization, StabilizationMode, Value, WhiteBalance,
-    WhiteBalanceMode,
+    FocusOrigin, FocusPoint, FocusPoints, Format, ImageArea, JpegCompression, JpegQuality, Lens,
+    Limits, Make, Metadata, MeteringMode, Options, Orientation, Point, Preview, PreviewFormat,
+    Rational, ReleaseMode, Shutter, SignedRational, Size, Stabilization, StabilizationMode, Value,
+    WhiteBalance, WhiteBalanceMode,
 };
 use support::arw::{
     ARW4_FOCUS_CENTER, ARW4_FOCUS_FRAME, ARW4_FOCUS_SIZE, ARW4_FULL_SIZE_JPEG,
@@ -2573,6 +2573,8 @@ const FIXTURE_METADATA: &[SampleMetadata] = &[
                 amber_blue: (0, 4),
                 green_magenta: (0, 4),
             }),
+            preset_slot: None,
+            fluorescent_lamp: None,
             exposure_program: Some(ExposureProgram::AperturePriority),
             metering_mode: Some(MeteringMode::MultiSegment),
             flash: Some(SampleFlash {
@@ -2599,6 +2601,10 @@ const FIXTURE_METADATA: &[SampleMetadata] = &[
             release_mode: Some(ReleaseMode::Continuous),
             bracketing: Some(Bracketing::Off),
             daylight_saving_time: Some(false),
+            raw_bit_depth: None,
+            raw_compression: None,
+            jpeg_quality: Some(JpegQuality::Fine),
+            jpeg_compression: Some(JpegCompression::OptimalQuality),
         },
     },
     // The Z 9's DX shot, at full size: CropHiSpeed `[2, 8280, 5520, 5408,
@@ -2655,6 +2661,8 @@ const FIXTURE_METADATA: &[SampleMetadata] = &[
                 amber_blue: (0, 4),
                 green_magenta: (0, 4),
             }),
+            preset_slot: None,
+            fluorescent_lamp: None,
             exposure_program: Some(ExposureProgram::AperturePriority),
             metering_mode: Some(MeteringMode::MultiSegment),
             flash: Some(SampleFlash {
@@ -2681,6 +2689,10 @@ const FIXTURE_METADATA: &[SampleMetadata] = &[
             release_mode: Some(ReleaseMode::Continuous),
             bracketing: Some(Bracketing::Off),
             daylight_saving_time: Some(false),
+            raw_bit_depth: None,
+            raw_compression: None,
+            jpeg_quality: Some(JpegQuality::Basic),
+            jpeg_compression: Some(JpegCompression::SizePriority),
         },
     },
     // The Z 9's 16:9 shot, at the middle size, 6192 by 3480, taken in
@@ -2739,6 +2751,8 @@ const FIXTURE_METADATA: &[SampleMetadata] = &[
                 amber_blue: (0, 4),
                 green_magenta: (0, 4),
             }),
+            preset_slot: None,
+            fluorescent_lamp: None,
             exposure_program: Some(ExposureProgram::AperturePriority),
             metering_mode: Some(MeteringMode::MultiSegment),
             flash: Some(SampleFlash {
@@ -2765,6 +2779,10 @@ const FIXTURE_METADATA: &[SampleMetadata] = &[
             release_mode: Some(ReleaseMode::Continuous),
             bracketing: Some(Bracketing::Off),
             daylight_saving_time: Some(false),
+            raw_bit_depth: None,
+            raw_compression: None,
+            jpeg_quality: Some(JpegQuality::Basic),
+            jpeg_compression: Some(JpegCompression::SizePriority),
         },
     },
     // The JPEG of the Z 9's pinpoint shot, whose NEF `tests/nef.rs`
@@ -2822,6 +2840,8 @@ const FIXTURE_METADATA: &[SampleMetadata] = &[
                 amber_blue: (0, 4),
                 green_magenta: (0, 4),
             }),
+            preset_slot: None,
+            fluorescent_lamp: None,
             exposure_program: Some(ExposureProgram::AperturePriority),
             metering_mode: Some(MeteringMode::Spot),
             flash: Some(SampleFlash {
@@ -2848,6 +2868,10 @@ const FIXTURE_METADATA: &[SampleMetadata] = &[
             release_mode: Some(ReleaseMode::Single),
             bracketing: Some(Bracketing::Off),
             daylight_saving_time: Some(false),
+            raw_bit_depth: None,
+            raw_compression: None,
+            jpeg_quality: Some(JpegQuality::Basic),
+            jpeg_compression: Some(JpegCompression::SizePriority),
         },
     },
     // The JPEG of frame 4 of the D600 session, the shot whose NEF
@@ -2931,6 +2955,8 @@ const FIXTURE_METADATA: &[SampleMetadata] = &[
                 amber_blue: (0, 1),
                 green_magenta: (0, 1),
             }),
+            preset_slot: None,
+            fluorescent_lamp: None,
             exposure_program: Some(ExposureProgram::AperturePriority),
             metering_mode: Some(MeteringMode::MultiSegment),
             flash: Some(SampleFlash {
@@ -2957,6 +2983,10 @@ const FIXTURE_METADATA: &[SampleMetadata] = &[
             release_mode: Some(ReleaseMode::Continuous),
             bracketing: Some(Bracketing::Off),
             daylight_saving_time: Some(false),
+            raw_bit_depth: None,
+            raw_compression: None,
+            jpeg_quality: Some(JpegQuality::Basic),
+            jpeg_compression: None,
         },
     },
 ];
@@ -3526,6 +3556,8 @@ const METADATA: &[SampleMetadata] = &[
                 amber_blue: (0, 1),
                 green_magenta: (0, 1),
             }),
+            preset_slot: None,
+            fluorescent_lamp: None,
             exposure_program: Some(ExposureProgram::Manual),
             metering_mode: Some(MeteringMode::MultiSegment),
             flash: Some(SampleFlash {
@@ -3552,6 +3584,10 @@ const METADATA: &[SampleMetadata] = &[
             release_mode: Some(ReleaseMode::Single),
             bracketing: Some(Bracketing::Off),
             daylight_saving_time: None,
+            raw_bit_depth: None,
+            raw_compression: None,
+            jpeg_quality: Some(JpegQuality::ExtraFine),
+            jpeg_compression: None,
         },
     },
     // ILCE-7RM2 (Wikimedia Commons Ulpu_Pajari_puhumassa_vastaanotettuaan_tiedonjulkistamisen_valtionpalkinnon_2.jpg)
@@ -3603,6 +3639,8 @@ const METADATA: &[SampleMetadata] = &[
                 amber_blue: (0, 1),
                 green_magenta: (0, 1),
             }),
+            preset_slot: None,
+            fluorescent_lamp: None,
             exposure_program: Some(ExposureProgram::Program),
             metering_mode: Some(MeteringMode::MultiSegment),
             flash: Some(SampleFlash {
@@ -3629,6 +3667,10 @@ const METADATA: &[SampleMetadata] = &[
             release_mode: Some(ReleaseMode::Single),
             bracketing: Some(Bracketing::Off),
             daylight_saving_time: None,
+            raw_bit_depth: None,
+            raw_compression: None,
+            jpeg_quality: Some(JpegQuality::Fine),
+            jpeg_compression: None,
         },
     },
     // DSC-RX100M4 (Wikimedia Commons 여의도한강공원샛강생태공원문화다리_09.jpg)
@@ -3672,6 +3714,8 @@ const METADATA: &[SampleMetadata] = &[
                 amber_blue: (0, 1),
                 green_magenta: (0, 1),
             }),
+            preset_slot: None,
+            fluorescent_lamp: None,
             exposure_program: Some(ExposureProgram::Program),
             metering_mode: Some(MeteringMode::MultiSegment),
             flash: Some(SampleFlash {
@@ -3698,6 +3742,10 @@ const METADATA: &[SampleMetadata] = &[
             release_mode: Some(ReleaseMode::Continuous),
             bracketing: Some(Bracketing::Off),
             daylight_saving_time: None,
+            raw_bit_depth: None,
+            raw_compression: None,
+            jpeg_quality: None,
+            jpeg_compression: None,
         },
     },
     // ILCE-6000 (Wikimedia Commons 140319_MS_Queen_Elizabeth_Kobe_Japan01o.JPG)
@@ -3741,6 +3789,8 @@ const METADATA: &[SampleMetadata] = &[
                 amber_blue: (0, 1),
                 green_magenta: (0, 1),
             }),
+            preset_slot: None,
+            fluorescent_lamp: None,
             exposure_program: Some(ExposureProgram::AperturePriority),
             metering_mode: Some(MeteringMode::MultiSegment),
             flash: Some(SampleFlash {
@@ -3767,6 +3817,10 @@ const METADATA: &[SampleMetadata] = &[
             release_mode: None,
             bracketing: Some(Bracketing::WhiteBalance),
             daylight_saving_time: None,
+            raw_bit_depth: None,
+            raw_compression: None,
+            jpeg_quality: None,
+            jpeg_compression: None,
         },
     },
     // DSLR-A100 (Wikimedia Commons "Krone"_flag_on_line_5_tram_(2564030031).jpg)
@@ -3799,6 +3853,8 @@ const METADATA: &[SampleMetadata] = &[
             white_balance_mode: Some(WhiteBalanceMode::Auto),
             color_temperature: None,
             fine_tune: None,
+            preset_slot: None,
+            fluorescent_lamp: None,
             exposure_program: Some(ExposureProgram::ShutterPriority),
             metering_mode: Some(MeteringMode::MultiSegment),
             flash: Some(SampleFlash {
@@ -3825,6 +3881,10 @@ const METADATA: &[SampleMetadata] = &[
             release_mode: None,
             bracketing: None,
             daylight_saving_time: None,
+            raw_bit_depth: None,
+            raw_compression: None,
+            jpeg_quality: None,
+            jpeg_compression: None,
         },
     },
     // NIKON D5300 (Wikimedia Commons "Tours"_French_restaurant_in_Omotesando.JPG)
@@ -3871,6 +3931,8 @@ const METADATA: &[SampleMetadata] = &[
                 amber_blue: (0, 1),
                 green_magenta: (0, 1),
             }),
+            preset_slot: None,
+            fluorescent_lamp: None,
             exposure_program: None,
             metering_mode: Some(MeteringMode::MultiSegment),
             flash: Some(SampleFlash {
@@ -3897,6 +3959,10 @@ const METADATA: &[SampleMetadata] = &[
             release_mode: Some(ReleaseMode::Single),
             bracketing: Some(Bracketing::Off),
             daylight_saving_time: Some(false),
+            raw_bit_depth: None,
+            raw_compression: None,
+            jpeg_quality: Some(JpegQuality::Normal),
+            jpeg_compression: None,
         },
     },
     // NIKON D70 (Wikimedia Commons "Stadswandeling".JPG)
@@ -3937,6 +4003,8 @@ const METADATA: &[SampleMetadata] = &[
             white_balance_mode: Some(WhiteBalanceMode::Auto),
             color_temperature: None,
             fine_tune: None,
+            preset_slot: None,
+            fluorescent_lamp: None,
             exposure_program: Some(ExposureProgram::Program),
             metering_mode: Some(MeteringMode::MultiSegment),
             flash: Some(SampleFlash {
@@ -3963,6 +4031,10 @@ const METADATA: &[SampleMetadata] = &[
             release_mode: Some(ReleaseMode::Single),
             bracketing: Some(Bracketing::Off),
             daylight_saving_time: None,
+            raw_bit_depth: None,
+            raw_compression: None,
+            jpeg_quality: Some(JpegQuality::Fine),
+            jpeg_compression: None,
         },
     },
     // NIKON E800 (Wikimedia Commons MIKI-eki.jpg)
@@ -3995,6 +4067,8 @@ const METADATA: &[SampleMetadata] = &[
             white_balance_mode: None,
             color_temperature: None,
             fine_tune: None,
+            preset_slot: None,
+            fluorescent_lamp: None,
             exposure_program: Some(ExposureProgram::Program),
             metering_mode: Some(MeteringMode::MultiSegment),
             flash: Some(SampleFlash {
@@ -4021,6 +4095,10 @@ const METADATA: &[SampleMetadata] = &[
             release_mode: None,
             bracketing: None,
             daylight_saving_time: None,
+            raw_bit_depth: None,
+            raw_compression: None,
+            jpeg_quality: None,
+            jpeg_compression: None,
         },
     },
     // NIKON E900 (Wikimedia Commons Petro_Star_refinery.jpg)
@@ -4053,6 +4131,8 @@ const METADATA: &[SampleMetadata] = &[
             white_balance_mode: None,
             color_temperature: None,
             fine_tune: None,
+            preset_slot: None,
+            fluorescent_lamp: None,
             exposure_program: None,
             metering_mode: Some(MeteringMode::MultiSegment),
             flash: Some(SampleFlash {
@@ -4079,6 +4159,10 @@ const METADATA: &[SampleMetadata] = &[
             release_mode: None,
             bracketing: None,
             daylight_saving_time: None,
+            raw_bit_depth: None,
+            raw_compression: None,
+            jpeg_quality: None,
+            jpeg_compression: None,
         },
     },
     // NIKON E950 (Wikimedia Commons Starr_020628-0045_Prosopis_pallida.jpg)
@@ -4111,6 +4195,8 @@ const METADATA: &[SampleMetadata] = &[
             white_balance_mode: None,
             color_temperature: None,
             fine_tune: None,
+            preset_slot: None,
+            fluorescent_lamp: None,
             exposure_program: Some(ExposureProgram::Program),
             metering_mode: Some(MeteringMode::MultiSegment),
             flash: Some(SampleFlash {
@@ -4137,6 +4223,10 @@ const METADATA: &[SampleMetadata] = &[
             release_mode: None,
             bracketing: None,
             daylight_saving_time: None,
+            raw_bit_depth: None,
+            raw_compression: None,
+            jpeg_quality: None,
+            jpeg_compression: None,
         },
     },
     // Canon PowerShot G7 X (Wikimedia Commons DC-3_OH-LCH_at_EFJM_20160717.jpg)
@@ -4169,6 +4259,8 @@ const METADATA: &[SampleMetadata] = &[
             white_balance_mode: Some(WhiteBalanceMode::Auto),
             color_temperature: None,
             fine_tune: None,
+            preset_slot: None,
+            fluorescent_lamp: None,
             exposure_program: None,
             metering_mode: Some(MeteringMode::MultiSegment),
             flash: Some(SampleFlash {
@@ -4195,6 +4287,10 @@ const METADATA: &[SampleMetadata] = &[
             release_mode: None,
             bracketing: None,
             daylight_saving_time: None,
+            raw_bit_depth: None,
+            raw_compression: None,
+            jpeg_quality: None,
+            jpeg_compression: None,
         },
     },
 ];
