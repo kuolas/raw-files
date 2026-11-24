@@ -109,7 +109,7 @@ file or a JPEG ([ADR014](adr014-jpeg-files-as-a-format-of-their-own.md)).
   `Path::display`, for a type with no one obvious text form, and
   `Value::display` is one.
 - A value with no empty state that means anything, such as a `Size`, a
-  `Point`, a `Flash` or a `FineTune`, has no `Default`.
+  `Point`, a `Flash` or a `WhiteBalanceFineTune`, has no `Default`.
 - `Limits` caps what a file could make large or long:
   - every allocation whose size comes from the file;
   - the IFDs a walk visits;

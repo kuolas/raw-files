@@ -11,7 +11,7 @@
 //! raw data's bit depth and compression, and the JPEG quality.
 //! [`CameraSettings`] holds them all, and
 //! [`Metadata::camera_settings`](crate::Metadata::camera_settings) gives
-//! them for a file. [`WhiteBalance`], [`FineTune`], [`Flash`],
+//! them for a file. [`WhiteBalance`], [`WhiteBalanceFineTune`], [`Flash`],
 //! [`AfFineTune`] and [`Stabilization`] hold the settings made of several
 //! parts; each enum, such as [`ExposureProgram`], names one setting's
 //! choices in words that fit any maker, with a
@@ -65,8 +65,9 @@
 //!
 //! A program that uses raw-files can build these values for its own
 //! tests, without a camera file: [`CameraSettings`] and [`WhiteBalance`]
-//! through their `with_…` methods, and a [`FineTune`], a [`Flash`], an
-//! [`AfFineTune`] and a [`Stabilization`] through their constructors.
+//! through their `with_…` methods, and a [`WhiteBalanceFineTune`], a
+//! [`Flash`], an [`AfFineTune`] and a [`Stabilization`] through their
+//! constructors.
 //! [`CameraSettings`]'s docs show how.
 
 use std::fmt;
@@ -1087,13 +1088,13 @@ impl CameraSettings {
 /// and no shift:
 ///
 /// ```
-/// use raw_files::{FineTune, SignedRational, WhiteBalance, WhiteBalanceMode};
+/// use raw_files::{SignedRational, WhiteBalance, WhiteBalanceFineTune, WhiteBalanceMode};
 ///
 /// let zero = SignedRational { numerator: 0, denominator: 4 };
 /// let white_balance = WhiteBalance::default()
 ///     .with_mode(WhiteBalanceMode::Auto)
 ///     .with_color_temperature(5_200)
-///     .with_fine_tune(FineTune::new(zero, zero));
+///     .with_fine_tune(WhiteBalanceFineTune::new(zero, zero));
 ///
 /// assert_eq!(white_balance.mode().map(WhiteBalanceMode::name), Some("Auto"));
 /// assert_eq!(white_balance.color_temperature(), Some(5_200));
@@ -1125,7 +1126,7 @@ impl CameraSettings {
 pub struct WhiteBalance {
     pub(crate) mode: Option<WhiteBalanceMode>,
     pub(crate) color_temperature: Option<u32>,
-    pub(crate) fine_tune: Option<FineTune>,
+    pub(crate) fine_tune: Option<WhiteBalanceFineTune>,
     pub(crate) preset_slot: Option<u32>,
     pub(crate) fluorescent_lamp: Option<FluorescentLamp>,
 }
@@ -1184,7 +1185,8 @@ impl WhiteBalance {
     }
 
     /// The photographer's shift of the white balance, a recorded zero shift
-    /// included, signed as [`FineTune`] says, whatever the maker.
+    /// included, signed as [`WhiteBalanceFineTune`] says, whatever the
+    /// maker.
     ///
     /// Only a maker's MakerNote records it. Nikon's records it along both
     /// axes on the D300 and every later body checked, as fractions from the
@@ -1195,7 +1197,7 @@ impl WhiteBalance {
     /// on every Sony body checked but the DSLR-A100, A200, A700 and A900,
     /// the SLT-A55V, the NEX-5, the DSC-F828 and the DSC-R1, which record
     /// none and give `None`.
-    pub fn fine_tune(&self) -> Option<FineTune> {
+    pub fn fine_tune(&self) -> Option<WhiteBalanceFineTune> {
         self.fine_tune
     }
 
@@ -1261,7 +1263,7 @@ impl WhiteBalance {
     /// Sets the fine-tuning, in place of any set before;
     /// [`fine_tune`](Self::fine_tune) reads it.
     #[must_use]
-    pub fn with_fine_tune(mut self, fine_tune: FineTune) -> Self {
+    pub fn with_fine_tune(mut self, fine_tune: WhiteBalanceFineTune) -> Self {
         self.fine_tune = Some(fine_tune);
         self
     }
@@ -1323,21 +1325,21 @@ impl WhiteBalance {
 /// Nikon body's quarter steps:
 ///
 /// ```
-/// use raw_files::{FineTune, SignedRational};
+/// use raw_files::{SignedRational, WhiteBalanceFineTune};
 ///
 /// let shift = SignedRational { numerator: -24, denominator: 4 };
 /// let zero = SignedRational { numerator: 0, denominator: 4 };
-/// let fine_tune = FineTune::new(shift, zero);
+/// let fine_tune = WhiteBalanceFineTune::new(shift, zero);
 /// assert_eq!(fine_tune.amber_blue(), shift);
 /// assert_eq!(fine_tune.green_magenta(), zero);
 /// ```
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub struct FineTune {
+pub struct WhiteBalanceFineTune {
     pub(crate) amber_blue: SignedRational,
     pub(crate) green_magenta: SignedRational,
 }
 
-impl FineTune {
+impl WhiteBalanceFineTune {
     /// The fine-tuning with a shift of `amber_blue` along the amber to blue
     /// axis and one of `green_magenta` along the green to magenta axis,
     /// each signed as its getter is named and kept as given.
@@ -3027,7 +3029,7 @@ mod tests {
         WhiteBalance {
             mode: Some(WhiteBalanceMode::Auto),
             color_temperature: Some(5_200),
-            fine_tune: Some(FineTune {
+            fine_tune: Some(WhiteBalanceFineTune {
                 amber_blue: signed_fraction(-24, 4),
                 green_magenta: signed_fraction(4, 4),
             }),
@@ -3392,7 +3394,7 @@ mod tests {
 
     #[test]
     fn each_white_balance_builder_sets_its_own_value_and_no_other() {
-        let fine_tune = FineTune {
+        let fine_tune = WhiteBalanceFineTune {
             amber_blue: signed_fraction(1, 2),
             green_magenta: signed_fraction(-1, 2),
         };
@@ -3449,7 +3451,7 @@ mod tests {
                 WhiteBalance::default()
                     .with_mode(WhiteBalanceMode::Auto)
                     .with_color_temperature(5_200)
-                    .with_fine_tune(FineTune::new(
+                    .with_fine_tune(WhiteBalanceFineTune::new(
                         signed_fraction(-24, 4),
                         signed_fraction(4, 4),
                     ))
@@ -3545,12 +3547,15 @@ mod tests {
         let white_balance = WhiteBalance::default()
             .with_mode(WhiteBalanceMode::Daylight)
             .with_color_temperature(1)
-            .with_fine_tune(FineTune::new(signed_fraction(1, 1), signed_fraction(1, 1)))
+            .with_fine_tune(WhiteBalanceFineTune::new(
+                signed_fraction(1, 1),
+                signed_fraction(1, 1),
+            ))
             .with_preset_slot(4)
             .with_fluorescent_lamp(FluorescentLamp::Daylight)
             .with_mode(WhiteBalanceMode::Auto)
             .with_color_temperature(5_200)
-            .with_fine_tune(FineTune::new(
+            .with_fine_tune(WhiteBalanceFineTune::new(
                 signed_fraction(-24, 4),
                 signed_fraction(4, 4),
             ))
@@ -3562,15 +3567,15 @@ mod tests {
     #[test]
     fn a_fine_tune_keeps_both_shifts_as_given() {
         // Two different shifts, so that one given for the other is caught.
-        let fine_tune = FineTune::new(signed_fraction(-6, 1), signed_fraction(2, 4));
+        let fine_tune = WhiteBalanceFineTune::new(signed_fraction(-6, 1), signed_fraction(2, 4));
         assert_eq!(fine_tune.amber_blue(), signed_fraction(-6, 1));
         assert_eq!(fine_tune.green_magenta(), signed_fraction(2, 4));
         // As stored: -24/4 is not -6/1, and a zero shift is a value.
         assert_ne!(
-            FineTune::new(signed_fraction(-24, 4), signed_fraction(2, 4)),
+            WhiteBalanceFineTune::new(signed_fraction(-24, 4), signed_fraction(2, 4)),
             fine_tune
         );
-        let zero = FineTune::new(signed_fraction(0, 4), signed_fraction(0, 4));
+        let zero = WhiteBalanceFineTune::new(signed_fraction(0, 4), signed_fraction(0, 4));
         assert_eq!(zero.amber_blue(), signed_fraction(0, 4));
         assert_eq!(zero.green_magenta(), signed_fraction(0, 4));
     }

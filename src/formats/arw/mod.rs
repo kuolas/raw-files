@@ -188,7 +188,9 @@ fn parse<R: Read + Seek>(src: &mut Source<R>, tree: &Tree, limits: &Limits) -> R
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::camera_settings::{CameraSettings, FineTune, WhiteBalance, WhiteBalanceMode};
+    use crate::camera_settings::{
+        CameraSettings, WhiteBalance, WhiteBalanceFineTune, WhiteBalanceMode,
+    };
     use crate::container::tiff::tags::{
         DNG_PRIVATE_DATA, DNG_VERSION, MAKE, MAKER_NOTE, WHITE_BALANCE as EXIF_WHITE_BALANCE,
     };
@@ -399,7 +401,7 @@ mod tests {
         let step = |n| SignedRational::new(n, 1).unwrap();
         let white_balance = WhiteBalance::default()
             .with_mode(WhiteBalanceMode::Underwater)
-            .with_fine_tune(FineTune::new(step(-2), step(3)));
+            .with_fine_tune(WhiteBalanceFineTune::new(step(-2), step(3)));
         let expected = CameraSettings::default()
             .with_white_balance(white_balance)
             .with_electronic_front_curtain_setting(true);

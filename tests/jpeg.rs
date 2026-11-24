@@ -43,11 +43,11 @@ use std::ops::Range;
 
 use raw_files::{
     Bracketing, Camera, CameraFile, CameraSettings, ColorSpace, DateTime, Directory, ErrorKind,
-    Exposure, ExposureProgram, FineTune, FlashMode, FlashSync, Focus, FocusAreaMode, FocusMode,
-    FocusOrigin, FocusPoint, FocusPoints, Format, ImageArea, JpegCompression, JpegQuality, Lens,
-    Limits, Make, Metadata, MeteringMode, Options, Orientation, Point, Preview, PreviewFormat,
-    Rational, ReleaseMode, Shutter, SignedRational, Size, Stabilization, StabilizationMode, Value,
-    WhiteBalance, WhiteBalanceMode,
+    Exposure, ExposureProgram, FlashMode, FlashSync, Focus, FocusAreaMode, FocusMode, FocusOrigin,
+    FocusPoint, FocusPoints, Format, ImageArea, JpegCompression, JpegQuality, Lens, Limits, Make,
+    Metadata, MeteringMode, Options, Orientation, Point, Preview, PreviewFormat, Rational,
+    ReleaseMode, Shutter, SignedRational, Size, Stabilization, StabilizationMode, Value,
+    WhiteBalance, WhiteBalanceFineTune, WhiteBalanceMode,
 };
 use support::arw::{
     ARW4_FOCUS_CENTER, ARW4_FOCUS_FRAME, ARW4_FOCUS_SIZE, ARW4_FULL_SIZE_JPEG,
@@ -1850,7 +1850,7 @@ fn a_sony_jpeg_gives_the_camera_settings_its_makernote_records() {
         let white_balance = WhiteBalance::default()
             .with_mode(WhiteBalanceMode::ColorTemperature)
             .with_color_temperature(3200)
-            .with_fine_tune(FineTune::new(step(-3), step(0)));
+            .with_fine_tune(WhiteBalanceFineTune::new(step(-3), step(0)));
         let settings = CameraSettings::default()
             .with_white_balance(white_balance)
             .with_electronic_front_curtain_setting(true)
