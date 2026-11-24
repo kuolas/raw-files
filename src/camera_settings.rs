@@ -214,10 +214,11 @@ impl CameraSettings {
     /// records, such as its mode.
     ///
     /// Read from Exif's Flash, to which a maker's tags add the parts Exif
-    /// does not record. `None` when the file has no Exif Flash, whatever
-    /// the maker's tags hold, and when the value contradicts itself, as a
-    /// flash that fired on a camera without a flash function does, or sets
-    /// bits Exif reserves.
+    /// does not record; each getter of [`Flash`] says where its part comes
+    /// from. `None` when the file has no Exif Flash, whatever the maker's
+    /// tags hold, and when the value contradicts itself, as a flash that
+    /// fired on a camera without a flash function does, or sets bits Exif
+    /// reserves.
     pub fn flash(&self) -> Option<Flash> {
         self.flash
     }
@@ -1517,48 +1518,123 @@ impl Flash {
         }
     }
 
-    /// Whether the flash fired.
+    /// Whether the flash fired, from bit 0 of Exif's Flash.
     pub fn has_fired(&self) -> bool {
         self.fired
     }
 
-    /// The flash mode, or `None` when the file records none, as a camera
-    /// without a flash function does.
+    /// The flash mode, from bits 3 and 4 of Exif's Flash: 1
+    /// [`Fill`](FlashMode::Fill), 2 [`Off`](FlashMode::Off) and 3
+    /// [`Auto`](FlashMode::Auto). `None` for their 0, "unknown", and where
+    /// Exif's Flash says the camera has no flash function, whose mode is
+    /// not read.
     pub fn mode(&self) -> Option<FlashMode> {
         self.mode
     }
 
     /// Whether red-eye reduction was on: a light before the flash fires,
     /// from a lamp or weak flashes, so that the subject's pupils narrow.
-    /// `false` also when the file does not say: Exif's one bit for it reads
-    /// "no red-eye reduction mode or unknown" when clear.
+    ///
+    /// Read from bit 6 of Exif's Flash, whatever the maker. Nikon's
+    /// MakerNote turns it on too, where its FlashSetting text is
+    /// `RED-EYE`, as [`sync`](Self::sync) says.
+    ///
+    /// `false` also when the file does not say: Exif's bit reads "no
+    /// red-eye reduction mode or unknown" when clear, and it is not read
+    /// where Exif's Flash says the camera has no flash function.
     pub fn red_eye_reduction(&self) -> bool {
         self.red_eye_reduction
     }
 
     /// Whether the camera detected the light the flash sent back, which
     /// tells whether the flash reached the subject: `Some(true)` detected,
-    /// `Some(false)` not detected. `None` when the file does not say, as
-    /// when the flash cannot detect it, and when the flash did not fire,
-    /// since it sent no light back.
+    /// `Some(false)` not detected.
+    ///
+    /// Read from bits 1 and 2 of Exif's Flash, whatever the maker: 2 not
+    /// detected and 3 detected.
+    ///
+    /// `None` when:
+    ///
+    /// - the flash did not fire, since it sent no light back;
+    /// - the two bits hold 0, a flash that cannot detect its return light;
+    /// - they hold 1, which Exif reserves.
     pub fn return_light(&self) -> Option<bool> {
         self.return_light
     }
 
-    /// Which flash it was, the camera's own or a flash unit, or `None` when
-    /// the file does not say.
+    /// Which flash it was: the camera's own or a flash unit.
+    ///
+    /// Read from the MakerNote:
+    ///
+    /// - Nikon's FlashType text, the part before its comma: `Built-in`,
+    ///   or `Optional`, a flash unit;
+    /// - Sony's FlashAction code: 2, an external flash fired, and 3, a
+    ///   wirelessly controlled flash fired, both
+    ///   [`External`](FlashSource::External).
+    ///
+    /// `None` when:
+    ///
+    /// - the file records neither tag, as Sony's DSLRs, its NEX bodies and
+    ///   its SLT bodies up to the SLT-A77V do;
+    /// - Nikon's text is blank, as when no flash fired, or is one the table
+    ///   of texts lacks, such as the D100's `NEW_TTL`. The text is looked
+    ///   up whole, so it gives the source and the
+    ///   [`control`](Self::control) together or neither;
+    /// - Sony's code is 0, did not fire, or 1, fired, which name no flash,
+    ///   or a code the documentation does not give;
+    /// - the tag has another type or count than the maker writes.
+    ///
+    /// What each maker's files record is in the notes on
+    /// [Nikon's capture settings](https://github.com/kuolas/raw-files/blob/master/docs/formats/nef/makernote-and-metadata.md#810-more-capture-settings)
+    /// and
+    /// [Sony's](https://github.com/kuolas/raw-files/blob/master/docs/formats/arw/makernote-and-metadata.md#910-more-capture-settings).
     pub fn source(&self) -> Option<FlashSource> {
         self.source
     }
 
     /// How the flash's output was controlled, such as by the camera's
-    /// metering through the lens, or `None` when the file does not say.
+    /// metering through the lens.
+    ///
+    /// Read from Nikon's MakerNote, the part after the comma in its
+    /// FlashType text: `TTL` and `TTL-BL`, `AA` and `M`, as
+    /// [`FlashControl`] lists them, and in commander mode `TTL&Comdr.` and
+    /// `RPT&Comdr.`, a repeating flash. Commander mode itself, in which
+    /// the camera fires other units, is not given.
+    ///
+    /// `None` when:
+    ///
+    /// - the file records no FlashType, as a file of any other maker;
+    /// - the text is blank, as when no flash fired, or is one the table of
+    ///   texts lacks, such as the D100's `NEW_TTL`. The text is looked up
+    ///   whole, so it gives the [`source`](Self::source) and the control
+    ///   together or neither;
+    /// - the tag has another type than Nikon writes.
+    ///
+    /// What the files record is in the notes on
+    /// [Nikon's capture settings](https://github.com/kuolas/raw-files/blob/master/docs/formats/nef/makernote-and-metadata.md#810-more-capture-settings).
     pub fn control(&self) -> Option<FlashControl> {
         self.control
     }
 
-    /// When in the exposure the flash was set to fire, such as at its end,
-    /// or `None` when the file does not say.
+    /// When in the exposure the flash was set to fire, such as at its end.
+    /// It is the setting, which a camera records whether or not the flash
+    /// fired.
+    ///
+    /// Read from Nikon's MakerNote, its FlashSetting text: `NORMAL`,
+    /// `REAR`, `SLOW` and `REAR SLOW`, as [`FlashSync`] lists them, and
+    /// `RED-EYE`, Nikon's red-eye reduction, which fires the flash as the
+    /// exposure begins: it gives
+    /// [`FrontCurtain`](FlashSync::FrontCurtain) and turns
+    /// [`red_eye_reduction`](Self::red_eye_reduction) on.
+    ///
+    /// `None` when:
+    ///
+    /// - the file records no FlashSetting, as a file of any other maker;
+    /// - the text is blank, or is one the table of texts lacks;
+    /// - the tag has another type than Nikon writes.
+    ///
+    /// What the files record is in the notes on
+    /// [Nikon's capture settings](https://github.com/kuolas/raw-files/blob/master/docs/formats/nef/makernote-and-metadata.md#810-more-capture-settings).
     pub fn sync(&self) -> Option<FlashSync> {
         self.sync
     }
@@ -1566,8 +1642,32 @@ impl Flash {
     /// The flash compensation the photographer set, in EV, as the file
     /// records it: a fraction such as `-2/6`, which a caller reduces for
     /// display. A recorded zero, such as `0/10`, is a compensation of
-    /// zero. `None` when the file does not say. A camera may record it
-    /// whether or not the flash fired.
+    /// zero. A camera may record it whether or not the flash fired.
+    ///
+    /// Read from the MakerNote:
+    ///
+    /// - Nikon's FlashExposureComp, four bytes, a signed count, a factor,
+    ///   a divisor and a zero, read as the count times the factor over the
+    ///   divisor: `fa 01 06 00` is `-6/6`. It is the camera's setting for
+    ///   whichever flash fires. A flash unit's own setting, which Nikon
+    ///   records beside it, is not given;
+    /// - Sony's FlashExposureComp, one SRATIONAL, such as `-7/10`.
+    ///
+    /// `None` when:
+    ///
+    /// - the file records none, as the Nikon bodies with no built-in
+    ///   flash, the Z 9 among them, and Sony's DSLR-A100 and its SR2 and
+    ///   SRF files do;
+    /// - the denominator is zero, as the Z 50 and the Z50II write Nikon's
+    ///   divisor;
+    /// - Nikon's factor is zero or its fourth byte is not, which no file
+    ///   holds;
+    /// - the tag has another type or count than the maker writes.
+    ///
+    /// What each maker's files record is in the notes on
+    /// [Nikon's capture settings](https://github.com/kuolas/raw-files/blob/master/docs/formats/nef/makernote-and-metadata.md#810-more-capture-settings)
+    /// and
+    /// [Sony's](https://github.com/kuolas/raw-files/blob/master/docs/formats/arw/makernote-and-metadata.md#910-more-capture-settings).
     pub fn compensation(&self) -> Option<SignedRational> {
         self.compensation
     }
