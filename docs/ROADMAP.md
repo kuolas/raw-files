@@ -120,9 +120,31 @@ A list of codes that published documentation gives is read whole once
 the files hold part of it, and the notes mark each code as confirmed by
 a frame, observed on files, or documented only.
 
+**How the camera made its JPEG** comes next, as values of
+`CameraSettings`
+([ADR011](architecture-decisions/adr011-metadata-from-standard-tags.md),
+[#230](https://github.com/kuolas/raw-files/issues/230)):
+
+- the picture style: Nikon's Picture Control, or Sony's Creative Style
+  or Creative Look, with its values;
+- the dynamic range optimization and the high dynamic range setting;
+- the high ISO, long exposure and multi-frame noise reductions;
+- the vignetting and distortion corrections, and the chromatic
+  aberration compensation;
+- the scene mode;
+- Exif's contrast, saturation, sharpness, scene capture type, custom
+  rendering and gain control.
+
+Each setting will keep its maker's own name and kinds. Where two
+makers each have a setting for one thing, one value will hold either
+maker's. A `PictureStyle` will hold a Picture Control, a Creative
+Style or a Creative Look. The format notes say what each file records
+([NEF](formats/nef/makernote-and-metadata.md#811-picture-style-and-processing),
+[ARW](formats/arw/makernote-and-metadata.md#911-picture-style-and-processing),
+[JPEG](formats/jpeg/container-and-metadata.md#4-exif-the-app1-segment)).
+
 These groups of values follow, each read from the same directories:
 
-- how the camera processed its JPEG;
 - the lens by name;
 - the XMP and IPTC fields;
 - what editing software, such as Nikon's, writes into the file;
