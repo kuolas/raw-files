@@ -52,7 +52,9 @@
 //!
 //! Where a Nikon MakerNote records its crop as "off", or holds no crop,
 //! raw-files gives the body's sensor format from a table of its own, for
-//! the bodies that table holds.
+//! the bodies that table holds; and where a Nikon raw file's MakerNote
+//! holds no raw size, it gives large for a body the table says offers no
+//! raw sizes.
 //!
 //! On Sony files the shutter, the image area, the raw image size, AF
 //! fine-tune, auto ISO and daylight saving time are `None`: Sony records
@@ -283,10 +285,21 @@ impl CameraSettings {
     /// Read from Nikon's MakerNote, its ImageSizeRAW, which the D750, the
     /// D810, the D5600 and every later body checked record in their raw
     /// files. No raw file checked is a medium one, so no file gives
-    /// [`Medium`](RawImageSize::Medium) yet. A JPEG file has none, whatever
-    /// its MakerNote records, since it holds no raw data: the Z 9 writes
-    /// the JPEG's own size there. A Sony file has none either, since its
-    /// tag gives an APS-C raw the code of a medium one.
+    /// [`Medium`](RawImageSize::Medium) yet. A raw file whose MakerNote
+    /// holds no ImageSizeRAW, and which holds raw data, unlike a TIFF image
+    /// a Nikon body writes, is [`Large`](RawImageSize::Large) when
+    /// raw-files' table of bodies says the body offers no raw sizes, as for
+    /// the D600: the table holds the bodies the
+    /// [notes on camera names](https://github.com/kuolas/raw-files/blob/master/docs/formats/camera-names.md)
+    /// say this of, from the maker's manual. So large also means a body
+    /// that offers no other size, and a caller cannot tell a size the
+    /// table gave from one the file recorded. Any other body's raw file
+    /// without the tag gives `None`, and so does one whose MakerNote holds
+    /// an entry too damaged to read, since that entry may be the tag. A
+    /// JPEG file has none, whatever its MakerNote records, since it holds
+    /// no raw data: the Z 9 writes the JPEG's own size there. A Sony file
+    /// has none either, since its tag gives an APS-C raw the code of a
+    /// medium one.
     pub fn raw_image_size(&self) -> Option<RawImageSize> {
         self.raw_image_size
     }

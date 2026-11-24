@@ -1511,8 +1511,12 @@ samples, the D850, D810 and Z 6 (files 1835, 2036, 3587), and 1 on the
 19 other files that have it, from the D810 on **[F]**. No checked file
 is a medium raw, and the Z 9 makes none: on firmware 5.30 its menu
 offers the large, medium and small sizes for the JPEG only, when it
-shoots a raw file and a JPEG together. The size in pixels is CropArea's
-([section 8.4](#84-image-dimensions)).
+shoots a raw file and a JPEG together. The five bodies of raw-files'
+table of bodies ([camera-names.md](../camera-names.md), section 5),
+which offer no raw sizes, write no ImageSizeRAW: not on their 16
+public raw files, nor on 5,989 of mine **[F]**. raw-files gives their
+raw files the large size from the table. The size in pixels is
+CropArea's ([section 8.4](#84-image-dimensions)).
 
 **Color space.** The color space the camera was set to for its JPEG
 output, sRGB or Adobe RGB. No checked NEF file has the Exif ColorSpace

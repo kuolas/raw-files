@@ -468,6 +468,15 @@ does. An entry that can break a caller opens with **Breaking:**.
   for an older body now gets a value, and cannot tell it from one the
   file recorded. A crop the file names still comes first, such as the
   D600's DX crop, and a Sony file still gives `None`.
+- `CameraSettings::raw_image_size` now gives `Large` for a Nikon raw
+  file that records no raw size, when the body offers only one
+  ([#214](https://github.com/kuolas/raw-files/issues/214)). raw-files'
+  table says so of the D600, D300S, D3200, D3300 and D7100. Such a file
+  gave `None` before. `Large` then also means a body that offers no
+  other size, and a caller cannot tell it from a size the file
+  recorded. A JPEG still gives `None`, since it holds no raw data, and
+  so do a TIFF image a Nikon body writes and a file whose MakerNote holds
+  an entry too damaged to read.
 
 ### Fixed
 

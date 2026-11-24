@@ -21,7 +21,9 @@
 //! - the image area from CropHiSpeed's crop setting ([`image_area`]), or,
 //!   where it is "off" or missing, from the body's sensor format in
 //!   raw-files' table;
-//! - the raw size from ImageSizeRAW ([`raw_image_size`]);
+//! - the raw size from ImageSizeRAW ([`raw_image_size`]), or, where a raw
+//!   file holds none, large for a body raw-files' table says offers no raw
+//!   sizes;
 //! - the raw compression from NEFCompression, else from tag 0x0051
 //!   ([`nef_compression_code`], [`nef_compression`]);
 //! - the JPEG quality from Quality's text ([`jpeg_quality_of_text`]), and
@@ -88,6 +90,10 @@ pub(super) struct FromStandardTags<'a> {
     ///
     /// [`Camera::body_facts`]: crate::camera::Camera::body_facts
     pub(super) body: Option<BodyFacts>,
+    /// Whether the file holds raw data: the standard tags gave a raw size.
+    /// A TIFF image a Nikon body or program wrote is read as a raw file
+    /// too, and holds none.
+    pub(super) holds_raw_data: bool,
     /// Whether the Exif IFD keeps a ColorSpace entry
     /// ([`Standard`](tiff_metadata::Standard)).
     pub(super) exif_records_color_space: bool,
@@ -129,9 +135,15 @@ const NIKON_COMPRESSED: u32 = 34713;
 ///   crop or a movie crop, and a setting of "off" whose cropped size is
 ///   smaller than its original, which no measured file holds.
 /// - **The raw image size** is ImageSizeRAW's code ([`raw_image_size`]),
-///   for a raw file's picture alone. In a JPEG, whose `picture` is
-///   [`Picture::Jpeg`], the tag follows the JPEG's own size, and a JPEG
-///   holds no raw data (ADR014).
+///   for a raw file's picture alone. Where the MakerNote holds no
+///   ImageSizeRAW, it is large when `standard.body` says the body offers
+///   no raw sizes (ADR011), in a file that holds raw data
+///   (`standard.holds_raw_data`): a TIFF image holds none, whatever its
+///   body. An ImageSizeRAW that breaks its rule, that the IFD skipped as
+///   damaged ([`holds_no`]), or whose code [`raw_image_size`] does not
+///   read, such as 2, the medium size, gives none. In a JPEG, whose
+///   `picture` is [`Picture::Jpeg`], the tag follows the JPEG's own size,
+///   and a JPEG holds no raw data (ADR014).
 /// - **The raw compression**, for a raw file's picture whose
 ///   `standard.raw_compression` is Nikon's compressed form, 34713, is the
 ///   one NEFCompression's code names, read from NEFCompression or, on the
@@ -199,6 +211,7 @@ pub(super) fn camera_settings<R: Read + Seek>(
         mut settings,
         model,
         body,
+        holds_raw_data,
         exif_records_color_space,
         raw_compression,
     } = standard;
@@ -233,6 +246,11 @@ pub(super) fn camera_settings<R: Read + Seek>(
         None => None,
     };
     settings.raw_image_size = match picture {
+        // A body that offers no raw sizes writes every raw file at its
+        // large one.
+        Picture::Raw if holds_no(ifd, super::IMAGE_SIZE_RAW) => body
+            .filter(|facts| holds_raw_data && !facts.offers_raw_sizes)
+            .map(|_| RawImageSize::Large),
         Picture::Raw => ifd
             .held(rules::IMAGE_SIZE_RAW)
             .and_then(|[code]| raw_image_size(code)),
@@ -1055,8 +1073,9 @@ fn color_space(code: u32) -> Option<ColorSpace> {
 mod tests {
     use super::super::block::read;
     use super::super::testing::{
-        AT, D600_FX, ORDERS, TAIL, Tags, entry_at, exif_file, exif_metadata, jpeg_metadata_of,
-        metadata_of, nikon_file, nikon_file_with, raw_file, read_file, retyped, tags_block, whole,
+        AT, CFA, D600_FX, ORDERS, RAW, TAIL, Tags, entry_at, exif_file, exif_metadata,
+        jpeg_metadata_of, metadata_of, nikon_file, nikon_file_with, raw_file, read_file, retyped,
+        tags_block, whole,
     };
     use super::super::{
         AF_INFO, AF_INFO2, AF_TUNE, COLOR_SPACE, COLOR_TEMPERATURE, COMPRESSION_RECORD,
@@ -1069,8 +1088,8 @@ mod tests {
     use crate::camera_settings::{ExposureProgram, FlashMode, FluorescentLamp, WhiteBalance};
     use crate::container::tiff::tags::{
         COLOR_SPACE as EXIF_COLOR_SPACE, COMPRESSION, EXPOSURE_MODE, EXPOSURE_PROGRAM,
-        FLASH as EXIF_FLASH, INTEROP_INDEX, LIGHT_SOURCE, MAKE, MAKER_NOTE, MODEL,
-        WHITE_BALANCE as EXIF_WHITE_BALANCE,
+        FLASH as EXIF_FLASH, IMAGE_LENGTH, IMAGE_WIDTH, INTEROP_INDEX, LIGHT_SOURCE, MAKE,
+        MAKER_NOTE, MODEL, PHOTOMETRIC_INTERPRETATION, WHITE_BALANCE as EXIF_WHITE_BALANCE,
     };
     use crate::container::tiff::{self, walk};
     use crate::error::ErrorKind;
@@ -1964,17 +1983,24 @@ mod tests {
     }
 
     /// A file in byte order `order` whose IFD0 holds the Make `make` and
-    /// the Model `model`, and whose MakerNote holds what `tags` adds to its
-    /// MakerNote IFD.
-    fn body_file(order: Order, make: &str, model: &str, tags: Tags) -> Vec<u8> {
+    /// the Model `model`, and raw data of size [`RAW`] when `raw` is true,
+    /// and whose MakerNote holds what `tags` adds to its MakerNote IFD.
+    fn body_file(order: Order, make: &str, model: &str, raw: bool, tags: Tags) -> Vec<u8> {
         let block = tags_block(order, tags).0;
         let count = whole(&block);
-        body_file_of(order, make, model, &block, count)
+        body_file_of(order, make, model, raw, &block, count)
     }
 
     /// As [`body_file`], with the MakerNote the first `count` bytes of
     /// `block`.
-    fn body_file_of(order: Order, make: &str, model: &str, block: &[u8], count: u64) -> Vec<u8> {
+    fn body_file_of(
+        order: Order,
+        make: &str,
+        model: &str,
+        raw: bool,
+        block: &[u8],
+        count: u64,
+    ) -> Vec<u8> {
         let mut builder = TiffBuilder::new(order);
         let ifd0 = builder.ifd();
         let exif = builder.ifd();
@@ -1982,6 +2008,12 @@ mod tests {
             .ascii(ifd0, MAKE, make)
             .ascii(ifd0, MODEL, model)
             .exif(ifd0, exif);
+        if raw {
+            builder
+                .short(ifd0, PHOTOMETRIC_INTERPRETATION, &[CFA])
+                .long(ifd0, IMAGE_WIDTH, &[RAW.width])
+                .long(ifd0, IMAGE_LENGTH, &[RAW.height]);
+        }
         builder.undefined(exif, 0x9000, b"0232");
         entry_at(&mut builder, exif, MAKER_NOTE, UNDEFINED, AT, count);
         builder.blob_at(AT, block);
@@ -1990,9 +2022,9 @@ mod tests {
     }
 
     /// The camera settings of the file [`body_file`] builds, of a Nikon
-    /// body, read as a raw file.
+    /// body, with raw data, read as a raw file.
     fn body_settings(order: Order, model: &str, tags: Tags) -> CameraSettings {
-        metadata_of(body_file(order, "NIKON CORPORATION", model, tags)).camera_settings
+        metadata_of(body_file(order, "NIKON CORPORATION", model, true, tags)).camera_settings
     }
 
     /// The CropHiSpeed of the D600's DX crop, as its DX frames record it.
@@ -2115,7 +2147,8 @@ mod tests {
                 ("unknown type", &unknown, whole(&unknown)),
                 ("past the block", &block, whole(&block) - 1),
             ] {
-                let file = body_file_of(order, "NIKON CORPORATION", "NIKON D600", block, count);
+                let file =
+                    body_file_of(order, "NIKON CORPORATION", "NIKON D600", true, block, count);
                 let read = metadata_of(file).camera_settings;
                 assert_eq!(read.image_area, None, "{order:?}, {what}");
             }
@@ -2124,6 +2157,7 @@ mod tests {
                 order,
                 "NIKON CORPORATION",
                 "NIKON D600",
+                true,
                 &block,
                 whole(&block),
             );
@@ -2157,14 +2191,14 @@ mod tests {
             let tags: Tags = |inner, ifd| {
                 inner.short(ifd, CROP_HI_SPEED, &D600_FX);
             };
-            let file = body_file(order, "Nikon", "NIKON D600", tags);
+            let file = body_file(order, "Nikon", "NIKON D600", true, tags);
             assert_eq!(
                 metadata_of(file).camera_settings.image_area,
                 None,
                 "{order:?}"
             );
             // The control: the Make the D600 writes.
-            let file = body_file(order, "NIKON CORPORATION", "NIKON D600", tags);
+            let file = body_file(order, "NIKON CORPORATION", "NIKON D600", true, tags);
             assert_eq!(
                 metadata_of(file).camera_settings.image_area,
                 Some(ImageArea::FullFrame),
@@ -2177,9 +2211,15 @@ mod tests {
     fn a_d600_jpeg_gives_the_sensor_format_too() {
         // The image area is the shot's, in a JPEG as in a raw file.
         for order in ORDERS {
-            let file = body_file(order, "NIKON CORPORATION", "NIKON D600", |inner, ifd| {
-                inner.short(ifd, CROP_HI_SPEED, &D600_FX);
-            });
+            let file = body_file(
+                order,
+                "NIKON CORPORATION",
+                "NIKON D600",
+                false,
+                |inner, ifd| {
+                    inner.short(ifd, CROP_HI_SPEED, &D600_FX);
+                },
+            );
             let read = jpeg_metadata_of(file, [6016, 4016]).camera_settings;
             assert_eq!(read.image_area, Some(ImageArea::FullFrame), "{order:?}");
         }
@@ -2208,6 +2248,129 @@ mod tests {
                 });
                 assert_eq!(read.raw_image_size, None, "{order:?}, {code}");
             }
+        }
+    }
+
+    #[test]
+    fn a_raw_file_of_a_body_that_offers_no_raw_sizes_is_large() {
+        // The D600 and the D3200 write no ImageSizeRAW, and offer one raw
+        // size.
+        for order in ORDERS {
+            for model in ["NIKON D600", "NIKON D3200"] {
+                let read = body_settings(order, model, |_, _| {});
+                assert_eq!(
+                    read.raw_image_size,
+                    Some(RawImageSize::Large),
+                    "{order:?}, {model}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn a_recorded_raw_size_comes_before_the_table() {
+        // A code read gives its size; 2, the medium size, which no checked
+        // raw file holds and so is not read, 0, which nothing names, and a
+        // tag that breaks its rule give none: the file said something.
+        let cases: [(Tags, Option<RawImageSize>); 4] = [
+            (
+                |inner, ifd| {
+                    inner.short(ifd, IMAGE_SIZE_RAW, &[3]);
+                },
+                Some(RawImageSize::Small),
+            ),
+            (
+                |inner, ifd| {
+                    inner.short(ifd, IMAGE_SIZE_RAW, &[2]);
+                },
+                None,
+            ),
+            (
+                |inner, ifd| {
+                    inner.short(ifd, IMAGE_SIZE_RAW, &[0]);
+                },
+                None,
+            ),
+            (
+                |inner, ifd| {
+                    inner.long(ifd, IMAGE_SIZE_RAW, &[1]);
+                },
+                None,
+            ),
+        ];
+        for order in ORDERS {
+            for (place, (tags, size)) in cases.into_iter().enumerate() {
+                let read = body_settings(order, "NIKON D600", tags);
+                assert_eq!(read.raw_image_size, size, "{order:?}, case {place}");
+            }
+        }
+    }
+
+    #[test]
+    fn an_image_size_raw_the_ifd_skipped_as_damaged_gives_none_from_the_table() {
+        // ImageSizeRAW 3, small, of an unknown type: the IFD skips it, so it
+        // is not seen by its tag, and the raw was not large.
+        for order in ORDERS {
+            let (block, entry) = tags_block(order, |inner, ifd| {
+                inner.short(ifd, IMAGE_SIZE_RAW, &[3]);
+            });
+            let unknown = retyped(order, block, entry, 99, 1);
+            let file = body_file_of(
+                order,
+                "NIKON CORPORATION",
+                "NIKON D600",
+                true,
+                &unknown,
+                whole(&unknown),
+            );
+            let read = metadata_of(file).camera_settings;
+            assert_eq!(read.raw_image_size, None, "{order:?}");
+        }
+    }
+
+    #[test]
+    fn a_body_the_table_holds_no_facts_for_gives_no_raw_size_without_the_tag() {
+        // A body outside the table, one with a name and no facts, a Make no
+        // maker is recognized from, and no Model at all.
+        for order in ORDERS {
+            for model in ["NIKON D7200", "NIKON Z 9"] {
+                let read = body_settings(order, model, |_, _| {});
+                assert_eq!(read.raw_image_size, None, "{order:?}, {model}");
+            }
+            let file = body_file(order, "Nikon", "NIKON D600", true, |_, _| {});
+            assert_eq!(metadata_of(file).camera_settings.raw_image_size, None);
+            assert_eq!(settings_of(order, |_, _| {}).raw_image_size, None);
+        }
+    }
+
+    #[test]
+    fn a_file_without_raw_data_of_a_body_the_table_holds_has_no_raw_size() {
+        // A TIFF image a D300S or a program wrote is read as a raw file, as
+        // this one is, and holds no raw data to have a size. Its image area
+        // is still the shot's.
+        for order in ORDERS {
+            let file = body_file(
+                order,
+                "NIKON CORPORATION",
+                "NIKON D600",
+                false,
+                |inner, ifd| {
+                    inner.short(ifd, CROP_HI_SPEED, &D600_FX);
+                },
+            );
+            let read = metadata_of(file).camera_settings;
+            assert_eq!(read.raw_image_size, None, "{order:?}");
+            assert_eq!(read.image_area, Some(ImageArea::FullFrame), "{order:?}");
+        }
+    }
+
+    #[test]
+    fn a_jpeg_of_a_body_the_table_holds_has_no_raw_size() {
+        // A JPEG holds no raw data, whatever the body offers.
+        for order in ORDERS {
+            let file = body_file(order, "NIKON CORPORATION", "NIKON D600", false, |_, _| {});
+            let read = jpeg_metadata_of(file, [6016, 4016]).camera_settings;
+            assert_eq!(read.raw_image_size, None, "{order:?}");
         }
     }
 

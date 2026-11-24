@@ -44,9 +44,10 @@ Linux and Windows alike.
     whether it was an external flash;
   - the shutter;
   - Sony's electronic front curtain setting;
-  - the image area, which raw-files' table of bodies gives for a Nikon
-    body it holds whose file records the crop as off;
-  - the raw image size;
+  - the image area and the raw image size; for a Nikon body raw-files'
+    table of bodies holds, the table gives the image area where the file
+    records the crop as off or not at all, and the raw size where a raw
+    file records none;
   - the color space;
   - the focus mode;
   - the AF-area mode, whether or not the file gives a focus point;
