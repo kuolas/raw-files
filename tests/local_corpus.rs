@@ -138,7 +138,9 @@
 //!   `(-24/4, 0/4)`, and each preset slot by its number. Of the color
 //!   temperatures, the lowest and the highest are printed. The raw files
 //!   are counted by bit depth and by compression, and the files with a
-//!   JPEG quality by its step.
+//!   JPEG quality by its step. Of the files with an image area or a raw
+//!   size, it counts those whose value came from raw-files' table of
+//!   bodies rather than from a tag the file records.
 //! - **The focus point**: the files that have one, and how many of those
 //!   record that the camera confirmed focus, that it missed, or
 //!   neither. The points by origin: "Recorded" is a position the camera
@@ -188,9 +190,9 @@ use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
 use raw_files::{
-    Altitude, Authorship, Camera, CameraFile, DateTime, Direction, FocusLayout, FocusOrigin,
-    FocusPoints, Format, Latitude, Lens, Location, Longitude, Metadata, North, PlacedFocusLayout,
-    Point, Rational, Size,
+    Altitude, Authorship, Camera, CameraFile, DateTime, Direction, Directory, FocusLayout,
+    FocusOrigin, FocusPoints, Format, Latitude, Lens, Location, Longitude, Metadata, North,
+    PlacedFocusLayout, Point, Rational, Size, Value,
 };
 
 /// A file that counts the bytes its reads return, into a counter the caller
@@ -449,8 +451,13 @@ struct SettingsTally {
     electronic_front_curtain_on: usize,
     image_area: usize,
     image_areas: BTreeMap<&'static str, usize>,
+    /// Files whose image area came from raw-files' table of bodies, not
+    /// from a crop code ([`SettingsTally::record_table`]).
+    image_area_from_table: usize,
     raw_image_size: usize,
     raw_image_sizes: BTreeMap<&'static str, usize>,
+    /// Files whose raw size came from the table of bodies, not from a tag.
+    raw_image_size_from_table: usize,
     color_space: usize,
     color_spaces: BTreeMap<&'static str, usize>,
     focus_area_mode: usize,
@@ -502,6 +509,39 @@ struct SettingsTally {
 }
 
 impl SettingsTally {
+    /// Counts whether `file`'s image area and raw size came from raw-files'
+    /// table of bodies rather than from a tag the file records. The getters
+    /// cannot tell, so the raw view does: an image area given where Nikon's
+    /// MakerNote holds no CropHiSpeed (0x001B), or one whose first value is
+    /// 0, "off", came from the table; so did a raw size given where the
+    /// MakerNote holds no ImageSizeRAW (0x003E). A Sony file never gives
+    /// either from the table, and gives neither value at all.
+    fn record_table<R: Read + Seek>(&mut self, file: &CameraFile<R>) {
+        /// Nikon's CropHiSpeed.
+        const CROP_HI_SPEED: u16 = 0x001B;
+        /// Nikon's ImageSizeRAW.
+        const IMAGE_SIZE_RAW: u16 = 0x003E;
+        let settings = file.metadata().camera_settings();
+        let entries = file.entries();
+        if settings.image_area().is_some() {
+            let off = match entries.entry(Directory::MakerNote, CROP_HI_SPEED) {
+                None => true,
+                Some(entry) => matches!(
+                    file.read_value(&entry),
+                    Ok(Value::Short(values)) if values.first() == Some(&0)
+                ),
+            };
+            self.image_area_from_table += usize::from(off);
+        }
+        if settings.raw_image_size().is_some()
+            && entries
+                .entry(Directory::MakerNote, IMAGE_SIZE_RAW)
+                .is_none()
+        {
+            self.raw_image_size_from_table += 1;
+        }
+    }
+
     /// Counts the camera settings `metadata` has.
     fn record(&mut self, metadata: &Metadata) {
         /// Counts one more file with the setting, in `total`, and one more
@@ -1349,12 +1389,12 @@ impl Tally {
             s.electronic_front_curtain - s.electronic_front_curtain_on
         );
         println!(
-            "files with an image area: {}, by area: {:?}",
-            s.image_area, s.image_areas
+            "files with an image area: {}, of which from the table of bodies: {}, by area: {:?}",
+            s.image_area, s.image_area_from_table, s.image_areas
         );
         println!(
-            "files with a raw image size: {}, by size: {:?}",
-            s.raw_image_size, s.raw_image_sizes
+            "files with a raw image size: {}, of which from the table of bodies: {}, by size: {:?}",
+            s.raw_image_size, s.raw_image_size_from_table, s.raw_image_sizes
         );
         println!(
             "files with a color space: {}, by color space: {:?}",
@@ -1769,6 +1809,7 @@ fn check(path: &Path, tally: &mut Tally) {
     }
     tally.metadata.record(camera_file.metadata());
     tally.settings.record(camera_file.metadata());
+    tally.settings.record_table(&camera_file);
     tally.focus.record(camera_file.metadata());
     tally.entries.record(&camera_file);
     let Some(preview) = camera_file.largest_preview() else {
@@ -2099,6 +2140,39 @@ fn the_settings_tally_counts_the_makernote_settings() {
     without_color_temperature.record(&Metadata::default().with_camera_settings(fourth));
     assert_eq!(without_color_temperature.color_temperature, 0);
     assert_eq!(without_color_temperature.color_temperature_range, None);
+}
+
+#[test]
+fn the_settings_tally_counts_what_the_table_of_bodies_gave() {
+    // Committed files: the D600's FX frame, crop code 0 and no
+    // ImageSizeRAW, both from the table; its DX frame, crop code 2, the
+    // raw size alone from the table; its JPEG, the image area alone; and a
+    // Z 9 file, whose tags give both.
+    let fixtures = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures");
+    let cases = [
+        ("nikon-d600/frame-01.nef", (1, 1)),
+        ("nikon-d600/frame-49.nef", (0, 1)),
+        ("nikon-d600/frame-04.jpg", (1, 0)),
+        ("nikon-z9-dx.nef", (0, 0)),
+    ];
+    let mut total = SettingsTally::default();
+    for (name, from_table) in cases {
+        let file = CameraFile::open(fixtures.join(name)).unwrap();
+        let settings = file.metadata().camera_settings();
+        assert!(settings.image_area().is_some(), "{name}");
+        let mut tally = SettingsTally::default();
+        tally.record_table(&file);
+        total.record_table(&file);
+        assert_eq!(
+            (tally.image_area_from_table, tally.raw_image_size_from_table),
+            from_table,
+            "{name}"
+        );
+    }
+    assert_eq!(
+        (total.image_area_from_table, total.raw_image_size_from_table),
+        (2, 2)
+    );
 }
 
 #[test]
