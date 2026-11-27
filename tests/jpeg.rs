@@ -42,12 +42,12 @@ use std::io::Cursor;
 use std::ops::Range;
 
 use raw_files::{
-    Bracketing, Camera, CameraFile, CameraSettings, ColorSpace, Contrast, DateTime, Directory,
-    ErrorKind, Exposure, ExposureProgram, FlashMode, FlashSync, Focus, FocusAreaMode, FocusMode,
-    FocusOrigin, FocusPoint, FocusPoints, Format, GainControl, ImageArea, JpegCompression,
-    JpegQuality, Lens, Limits, Make, Metadata, MeteringMode, Options, Orientation, Point, Preview,
-    PreviewFormat, Rational, ReleaseMode, Saturation, SceneCaptureType, Sharpness, Shutter,
-    SignedRational, Size, Stabilization, StabilizationMode, Value, WhiteBalance,
+    Bracketing, Camera, CameraFile, CameraSettings, ColorSpace, Contrast, DRangeOptimizer,
+    DateTime, Directory, ErrorKind, Exposure, ExposureProgram, FlashMode, FlashSync, Focus,
+    FocusAreaMode, FocusMode, FocusOrigin, FocusPoint, FocusPoints, Format, GainControl, ImageArea,
+    JpegCompression, JpegQuality, Lens, Limits, Make, Metadata, MeteringMode, Options, Orientation,
+    Point, Preview, PreviewFormat, Rational, ReleaseMode, Saturation, SceneCaptureType, Sharpness,
+    Shutter, SignedRational, Size, Stabilization, StabilizationMode, Value, WhiteBalance,
     WhiteBalanceFineTune, WhiteBalanceMode,
 };
 use support::arw::{
@@ -2004,12 +2004,14 @@ fn an_a100_jpeg_opens_with_its_standard_metadata_and_no_focus_point() {
             Orientation::Rotate90,
         );
         // Its ImageStabilization, 0 as on the A100's own JPEG, gives the
-        // stabilization off.
+        // stabilization off, and its DynamicRangeOptimizer, 0, the D-Range
+        // Optimizer off.
         let metadata = sony_metadata(SONY_MAKE, A100_MODEL, A100_MAIN, None, None);
         let settings = metadata
             .camera_settings()
             .clone()
-            .with_stabilization(Stabilization::off());
+            .with_stabilization(Stabilization::off())
+            .with_dynamic_range_optimization(DRangeOptimizer::Off.into());
         assert_opens(
             &file.built.bytes,
             &previews,

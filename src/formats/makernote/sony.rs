@@ -57,9 +57,9 @@ use std::io::{Read, Seek};
 
 use super::{MakerNoteBlock, Picture, Reader, checked_color_temperature};
 use crate::camera_settings::{
-    Bracketing, CameraSettings, CreativeLook, CreativeStyle, FlashSource, FocusAreaMode, FocusMode,
-    JpegQuality, PictureStyle, RawCompression, ReleaseMode, Stabilization, WhiteBalanceFineTune,
-    WhiteBalanceMode,
+    Bracketing, CameraSettings, CreativeLook, CreativeStyle, DRangeOptimizer,
+    DynamicRangeOptimization, FlashSource, FocusAreaMode, FocusMode, JpegQuality, PictureStyle,
+    RawCompression, ReleaseMode, Stabilization, WhiteBalanceFineTune, WhiteBalanceMode,
 };
 use crate::container::tiff::{Ifd, Rule, Tree};
 use crate::entries::{Directory, Entries, Lookup};
@@ -175,6 +175,11 @@ const CREATIVE_STYLE: u16 = 0xB020;
 /// none was recorded.
 const COLOR_TEMPERATURE: u16 = 0xB021;
 
+/// The Sony MakerNote tag that records the D-Range Optimizer
+/// (DynamicRangeOptimizer): one LONG, a code for its step, such as 0 off,
+/// 3 auto and 16 to 23 its levels 1 to 8.
+const DYNAMIC_RANGE_OPTIMIZER: u16 = 0xB025;
+
 /// The Sony MakerNote tag that records the JPEG quality step the camera was
 /// set to (JPEGQuality): one SHORT, 0 standard, 1 fine and 2 extra fine;
 /// 65535, which every interchangeable-lens body that records it writes,
@@ -222,6 +227,8 @@ mod rules {
         Rule::new(super::FOCUS_FRAME_SIZE, &[FieldType::Undefined]);
     pub(super) const FOCUS_LOCATION2: Rule<[u32; 4]> = Rule::new(super::FOCUS_LOCATION2, SHORT);
     pub(super) const COLOR_TEMPERATURE: Held<[u32; 1]> = Held::new(super::COLOR_TEMPERATURE, LONG);
+    pub(super) const DYNAMIC_RANGE_OPTIMIZER: Held<[u32; 1]> =
+        Held::new(super::DYNAMIC_RANGE_OPTIMIZER, LONG);
     pub(super) const IMAGE_STABILIZATION: Held<[u32; 1]> =
         Held::new(super::IMAGE_STABILIZATION, LONG);
     pub(super) const RELEASE_MODE: Held<[u32; 1]> = Held::new(super::RELEASE_MODE, SHORT);
@@ -556,6 +563,9 @@ fn area<R: Read + Seek>(src: &mut Source<R>, makernote: &MakerNote) -> Result<Op
 /// - **The picture style** is the Creative Style or the Creative Look that
 ///   CreativeStyle's name and the three values beside it record
 ///   ([`picture_style`]).
+/// - **The dynamic range optimization** is the D-Range Optimizer step
+///   that DynamicRangeOptimizer's code names ([`d_range_optimizer`]).
+///   0xB04F, which repeats it in three steps, is not read.
 ///
 /// The shutter used, the image area and the raw image size stay as
 /// `settings` has them, `None`. Sony records the first two only in
@@ -610,6 +620,10 @@ fn camera_settings<R: Read + Seek>(
         }
     }
     settings.picture_style = picture_style(src, ifd)?;
+    settings.dynamic_range_optimization = ifd
+        .held(rules::DYNAMIC_RANGE_OPTIMIZER)
+        .and_then(|[code]| d_range_optimizer(code))
+        .map(DynamicRangeOptimization::DRangeOptimizer);
     if let Some(flash) = settings.flash.as_mut() {
         if let Some(source) = ifd
             .held(rules::FLASH_ACTION)
@@ -667,6 +681,46 @@ fn picture_style<R: Read + Seek>(src: &mut Source<R>, ifd: &Ifd) -> Result<Optio
             sharpness,
         })
     }))
+}
+
+/// The D-Range Optimizer step a DynamicRangeOptimizer `code` names, in the
+/// list ExifTool's published documentation gives, read whole, since files
+/// hold part of it (ARW notes, section 9.11):
+///
+/// - 0 [`Off`](DRangeOptimizer::Off), 1
+///   [`Standard`](DRangeOptimizer::Standard), 2
+///   [`AdvancedAuto`](DRangeOptimizer::AdvancedAuto) and 3
+///   [`Auto`](DRangeOptimizer::Auto), each on files;
+/// - 8 to 12, [`AdvancedLevel1`](DRangeOptimizer::AdvancedLevel1) to
+///   [`AdvancedLevel5`](DRangeOptimizer::AdvancedLevel5), documented only;
+/// - 16 to 23, [`Level1`](DRangeOptimizer::Level1) to
+///   [`Level8`](DRangeOptimizer::Level8), of which 16 and 20 are on
+///   files.
+///
+/// `None` for every other code, such as 4 to 7 or 13 to 15, which the
+/// list lacks.
+fn d_range_optimizer(code: u32) -> Option<DRangeOptimizer> {
+    use DRangeOptimizer::*;
+    Some(match code {
+        0 => Off,
+        1 => Standard,
+        2 => AdvancedAuto,
+        3 => Auto,
+        8 => AdvancedLevel1,
+        9 => AdvancedLevel2,
+        10 => AdvancedLevel3,
+        11 => AdvancedLevel4,
+        12 => AdvancedLevel5,
+        16 => Level1,
+        17 => Level2,
+        18 => Level3,
+        19 => Level4,
+        20 => Level5,
+        21 => Level6,
+        22 => Level7,
+        23 => Level8,
+        _ => return None,
+    })
 }
 
 /// The JPEG quality step that the MakerNote's IFD `ifd` records, from the
@@ -3192,14 +3246,16 @@ mod tests {
             .short(ifd, RELEASE_MODE, &[0])
             .slong(ifd, CONTRAST, &[0])
             .slong(ifd, SATURATION, &[0])
-            .slong(ifd, SHARPNESS, &[0]);
+            .slong(ifd, SHARPNESS, &[0])
+            .long(ifd, DYNAMIC_RANGE_OPTIMIZER, &[3]);
     }
 
     /// What [`settings_tags`] gives, from `settings`, for an E-mount body
     /// such as the ILCE-7M2: AF-C, the flexible spot as a single point,
     /// the stabilization on, a single frame and no bracketing, and, where
-    /// `settings` holds a flash, a compensation of zero, and a Creative
-    /// Style at 0, with no name. FlashAction's 0 names no source, and
+    /// `settings` holds a flash, a compensation of zero, a Creative Style
+    /// at 0, with no name, and the D-Range Optimizer on auto. FlashAction's
+    /// 0 names no source, and
     /// Quality's 6 and JPEGQuality's 65535 no JPEG quality.
     fn with_settings_tags(settings: CameraSettings) -> CameraSettings {
         let white_balance = WhiteBalance::default()
@@ -3219,7 +3275,8 @@ mod tests {
                 contrast: Some(0),
                 saturation: Some(0),
                 sharpness: Some(0),
-            }));
+            }))
+            .with_dynamic_range_optimization(DRangeOptimizer::Auto.into());
         if let Some(flash) = settings.flash {
             let zero = SignedRational::new(0, 10).expect("a denominator of 10");
             settings = settings.with_flash(flash.with_compensation(zero));
@@ -3870,6 +3927,101 @@ mod tests {
                 builder.long(ifd, WHITE_BALANCE, &[0]);
             });
             assert_eq!(settings.picture_style, None, "{order:?}");
+        }
+    }
+
+    /// What [`camera_settings`] gives, from the empty settings, for a Sony
+    /// file in byte order `order` that `picture` says is a raw file or a
+    /// JPEG, whose headerless MakerNote holds what `tags` adds to its IFD.
+    fn picture_settings_of(
+        order: Order,
+        picture: Picture,
+        tags: impl FnOnce(&mut TiffBuilder, IfdId),
+    ) -> CameraSettings {
+        let (mut src, makernote) = focus_file(order, b"", tags);
+        camera_settings(
+            &mut src,
+            &makernote,
+            CameraSettings::default(),
+            Some(Family::EMount),
+            picture,
+        )
+        .unwrap()
+    }
+
+    // The D-Range Optimizer.
+
+    /// Each code of DynamicRangeOptimizer's list with the step it names,
+    /// and codes the list lacks.
+    const D_RANGE_OPTIMIZERS: [(u32, Option<DRangeOptimizer>); 25] = [
+        (0, Some(DRangeOptimizer::Off)),
+        (1, Some(DRangeOptimizer::Standard)),
+        (2, Some(DRangeOptimizer::AdvancedAuto)),
+        (3, Some(DRangeOptimizer::Auto)),
+        (8, Some(DRangeOptimizer::AdvancedLevel1)),
+        (9, Some(DRangeOptimizer::AdvancedLevel2)),
+        (10, Some(DRangeOptimizer::AdvancedLevel3)),
+        (11, Some(DRangeOptimizer::AdvancedLevel4)),
+        (12, Some(DRangeOptimizer::AdvancedLevel5)),
+        (16, Some(DRangeOptimizer::Level1)),
+        (17, Some(DRangeOptimizer::Level2)),
+        (18, Some(DRangeOptimizer::Level3)),
+        (19, Some(DRangeOptimizer::Level4)),
+        (20, Some(DRangeOptimizer::Level5)),
+        (21, Some(DRangeOptimizer::Level6)),
+        (22, Some(DRangeOptimizer::Level7)),
+        (23, Some(DRangeOptimizer::Level8)),
+        (4, None),
+        (7, None),
+        (13, None),
+        (15, None),
+        (24, None),
+        (65535, None),
+        (0xFFFF_FFFF, None),
+        (0x0001_0003, None),
+    ];
+
+    #[test]
+    fn each_d_range_optimizer_code_gives_its_step_in_a_raw_file_and_a_jpeg() {
+        for order in ORDERS {
+            for picture in [Picture::Raw, Picture::Jpeg] {
+                for (code, step) in D_RANGE_OPTIMIZERS {
+                    let settings = picture_settings_of(order, picture, |builder, ifd| {
+                        builder.long(ifd, DYNAMIC_RANGE_OPTIMIZER, &[code]);
+                    });
+                    assert_eq!(
+                        settings.dynamic_range_optimization,
+                        step.map(DynamicRangeOptimization::DRangeOptimizer),
+                        "{order:?}, {picture:?}, {code}"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn a_d_range_optimizer_of_another_shape_gives_none_and_costs_nothing_else() {
+        for order in ORDERS {
+            // One SHORT, two LONGs, and one SLONG.
+            for place in 0..3 {
+                let settings = settings_of(order, |builder, ifd| {
+                    match place {
+                        0 => builder.short(ifd, DYNAMIC_RANGE_OPTIMIZER, &[3]),
+                        1 => builder.long(ifd, DYNAMIC_RANGE_OPTIMIZER, &[3, 3]),
+                        _ => builder.slong(ifd, DYNAMIC_RANGE_OPTIMIZER, &[3]),
+                    };
+                    builder.long(ifd, WHITE_BALANCE, &[16]);
+                });
+                assert_eq!(
+                    settings.dynamic_range_optimization, None,
+                    "{order:?}, {place}"
+                );
+                assert_eq!(
+                    settings.white_balance.mode,
+                    Some(WhiteBalanceMode::Daylight),
+                    "{order:?}, {place}"
+                );
+            }
         }
     }
 }

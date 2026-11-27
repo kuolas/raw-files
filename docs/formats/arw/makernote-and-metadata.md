@@ -1922,11 +1922,12 @@ settings
 
 - the picture style, Sony's Creative Style or Creative Look, with its
   contrast, saturation and sharpness;
-- Exif's six processing values.
+- Exif's six processing values;
+- the D-Range Optimizer.
 
 It will read:
 
-- the D-Range Optimizer and Auto HDR;
+- Auto HDR;
 - the high ISO, long exposure and multi-frame noise reductions;
 - the three lens compensations;
 - the scene.
@@ -2035,7 +2036,7 @@ write `Vivid`.
 area by area, and sets its brightness and gradation from it [P][33]
 (p. 75). 0xB025 DynamicRangeOptimizer is one LONG
 [S][1], on 207 public files of 107 bodies and on all of mine. Only the
-DSC-F828 and the DSC-R1 lack it. raw-files will read it as the
+DSC-F828 and the DSC-R1 lack it. raw-files reads it as the
 `DRangeOptimizer` of a `DynamicRangeOptimization`:
 
 | Code | The documentation's name [S][1] | Mark | Files, public / mine |
@@ -2053,7 +2054,7 @@ DSC-F828 and the DSC-R1 lack it. raw-files will read it as the
 **[F]** The standard and advanced codes are on A-mount DSLRs alone:
 the DSLR-A200, A300, A350, A700 and A900 hold 1, and the DSLR-A390
 holds 2. 0xB04F repeats the setting as off, standard or plus on 184
-public files, and will not be read. Sony's manual at hand names the
+public files, and is not read. Sony's manual at hand names the
 setting and gives no list of levels [P][33] (p. 75).
 
 **Auto HDR.** The camera shoots three exposures and overlays them into
@@ -2466,14 +2467,17 @@ plain MakerNote tags where Exif has no value, and decipher nothing [I]:
 and what stays unnamed.
 
 For the picture style and the processing settings of
-[section 9.11](#911-picture-style-and-processing), raw-files will read
+[section 9.11](#911-picture-style-and-processing), raw-files reads
 [I]:
 
 - the Creative Style from 0xB020 and 0x2004 to 0x2006. Where the file
   records any of 0x2032 to 0x2036, the same four tags are a Creative
   Look;
 - the D-Range Optimizer from 0xB025, never from 0xB04F, which repeats
-  it in three steps;
+  it in three steps.
+
+It will read:
+
 - Auto HDR from the first half of 0x200A;
 - the high ISO noise reduction from 0x2009, where a raw file's 0 will
   give none;
