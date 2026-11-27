@@ -80,11 +80,11 @@ fn parse<R: Read + Seek>(src: &mut Source<R>, tree: &Tree, limits: &Limits) -> R
 mod tests {
     use super::*;
     use crate::camera_settings::{
-        CameraSettings, Contrast, FocusMode, Saturation, SceneCaptureType, Sharpness,
+        CameraSettings, Contrast, FocusMode, GainControl, Saturation, SceneCaptureType, Sharpness,
     };
     use crate::container::tiff::tags::{
-        CONTRAST, DNG_PRIVATE_DATA, DNG_VERSION, MAKE, MAKER_NOTE, SATURATION, SCENE_CAPTURE_TYPE,
-        SHARPNESS,
+        CONTRAST, CUSTOM_RENDERED, DNG_PRIVATE_DATA, DNG_VERSION, GAIN_CONTROL, MAKE, MAKER_NOTE,
+        SATURATION, SCENE_CAPTURE_TYPE, SHARPNESS,
     };
     use crate::entries::Directory;
     use crate::formats::testing::file;
@@ -213,9 +213,8 @@ mod tests {
 
     #[test]
     fn the_standard_processing_values_stand_beside_the_makernotes_settings() {
-        // Exif's directions of contrast, saturation and sharpness and its
-        // scene capture type beside a MakerNote whose FocusMode (0x0007)
-        // says AF-C: the MakerNote's
+        // Exif's six values of how the camera processed the picture beside
+        // a MakerNote whose FocusMode (0x0007) says AF-C: the MakerNote's
         // reader adds its setting and leaves Exif's values as they are.
         let (mut src, tree) = file(|builder, ifd0| {
             let (exif, makernote) = (builder.ifd(), builder.ifd());
@@ -226,6 +225,8 @@ mod tests {
                 .short(exif, SATURATION, &[2])
                 .short(exif, SHARPNESS, &[2])
                 .short(exif, SCENE_CAPTURE_TYPE, &[1])
+                .short(exif, CUSTOM_RENDERED, &[1])
+                .short(exif, GAIN_CONTROL, &[2])
                 .ascii(makernote, 0x0007, "AF-C  ")
                 .undefined_ifd(exif, MAKER_NOTE, makernote);
         });
@@ -235,7 +236,9 @@ mod tests {
             .with_contrast(Contrast::Soft)
             .with_saturation(Saturation::High)
             .with_sharpness(Sharpness::Hard)
-            .with_scene_capture_type(SceneCaptureType::Landscape);
+            .with_scene_capture_type(SceneCaptureType::Landscape)
+            .with_custom_rendered(true)
+            .with_gain_control(GainControl::HighGainUp);
         assert_eq!(parsed.metadata.camera_settings, expected);
     }
 }

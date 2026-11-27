@@ -189,12 +189,12 @@ fn parse<R: Read + Seek>(src: &mut Source<R>, tree: &Tree, limits: &Limits) -> R
 mod tests {
     use super::*;
     use crate::camera_settings::{
-        CameraSettings, Contrast, FocusMode, Saturation, SceneCaptureType, Sharpness, WhiteBalance,
-        WhiteBalanceFineTune, WhiteBalanceMode,
+        CameraSettings, Contrast, FocusMode, GainControl, Saturation, SceneCaptureType, Sharpness,
+        WhiteBalance, WhiteBalanceFineTune, WhiteBalanceMode,
     };
     use crate::container::tiff::tags::{
-        CONTRAST, DNG_PRIVATE_DATA, DNG_VERSION, MAKE, MAKER_NOTE, SATURATION, SCENE_CAPTURE_TYPE,
-        SHARPNESS, WHITE_BALANCE as EXIF_WHITE_BALANCE,
+        CONTRAST, CUSTOM_RENDERED, DNG_PRIVATE_DATA, DNG_VERSION, GAIN_CONTROL, MAKE, MAKER_NOTE,
+        SATURATION, SCENE_CAPTURE_TYPE, SHARPNESS, WHITE_BALANCE as EXIF_WHITE_BALANCE,
     };
     use crate::container::tiff::{Block, walk};
     use crate::entries::Value;
@@ -412,8 +412,8 @@ mod tests {
 
     #[test]
     fn the_standard_processing_values_stand_beside_the_makernotes_settings() {
-        // Exif's directions of contrast, saturation and sharpness and its
-        // scene capture type beside a MakerNote whose FocusMode says AF-C: the MakerNote's reader adds
+        // Exif's six values of how the camera processed the picture beside
+        // a MakerNote whose FocusMode says AF-C: the MakerNote's reader adds
         // its setting and leaves Exif's values as they are.
         let (mut src, tree) = file(|builder, ifd| {
             let exif = builder.ifd();
@@ -425,6 +425,8 @@ mod tests {
                 .short(exif, SATURATION, &[1])
                 .short(exif, SHARPNESS, &[1])
                 .short(exif, SCENE_CAPTURE_TYPE, &[2])
+                .short(exif, CUSTOM_RENDERED, &[0])
+                .short(exif, GAIN_CONTROL, &[3])
                 .byte(makernote, FOCUS_MODE, &[3])
                 .undefined_ifd(exif, MAKER_NOTE, makernote);
         });
@@ -434,7 +436,9 @@ mod tests {
             .with_contrast(Contrast::Hard)
             .with_saturation(Saturation::Low)
             .with_sharpness(Sharpness::Soft)
-            .with_scene_capture_type(SceneCaptureType::Portrait);
+            .with_scene_capture_type(SceneCaptureType::Portrait)
+            .with_custom_rendered(false)
+            .with_gain_control(GainControl::LowGainDown);
         assert_eq!(parsed.metadata.camera_settings(), &expected);
     }
 

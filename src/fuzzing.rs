@@ -444,6 +444,8 @@ fn read_metadata(metadata: &Metadata) {
         .map(|saturation| saturation.to_string());
     let _ = settings.sharpness().map(|sharpness| sharpness.to_string());
     let _ = settings.scene_capture_type().map(|scene| scene.to_string());
+    let _ = settings.custom_rendered();
+    let _ = settings.gain_control().map(|gain| gain.to_string());
     let tiny = Size {
         width: 1,
         height: 1,

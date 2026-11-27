@@ -10,7 +10,8 @@
 //! mode, bracketing, whether the clock was on daylight saving time, the
 //! raw data's bit depth and compression, the JPEG quality and compression,
 //! and how the camera processed the picture: the directions of contrast,
-//! saturation and sharpness, and the scene capture type.
+//! saturation and sharpness, the scene capture type, custom rendering and
+//! gain control.
 //! [`CameraSettings`] holds them all, and
 //! [`Metadata::camera_settings`](crate::Metadata::camera_settings) gives
 //! them for a file. [`WhiteBalance`], [`WhiteBalanceFineTune`], [`Flash`],
@@ -27,8 +28,8 @@
 //! record: the exposure program, the metering mode, the flash, the white
 //! balance mode and the kind of fluorescent lamp it was set for, the color
 //! space and exposure bracketing, the directions of contrast, saturation
-//! and sharpness, and the scene capture type. Raw files give the raw data's
-//! bit depth from
+//! and sharpness, the scene capture type, custom rendering and gain
+//! control. Raw files give the raw data's bit depth from
 //! its own standard tags, and its compression where those tags say it is
 //! uncompressed. The others are recorded only in a maker's own tags, its
 //! MakerNote, or in a maker's own codes:
@@ -88,8 +89,8 @@ use crate::rational::SignedRational;
 /// ISO, exposure fine-tuning, release mode, bracketing, daylight saving
 /// time, raw bit depth and compression, JPEG quality and compression, the
 /// directions of contrast, saturation and sharpness it processed the
-/// picture in, and the scene capture type, for a viewer's information
-/// panel beside the exposure.
+/// picture in, the scene capture type, custom rendering and gain control,
+/// for a viewer's information panel beside the exposure.
 ///
 /// Every value is `None` when the file does not record it or records it in
 /// a way that cannot be read, such as a code that no variant names. A
@@ -99,7 +100,8 @@ use crate::rational::SignedRational;
 /// the metering mode, the flash, the white balance mode and its kind of
 /// fluorescent lamp, the color space and exposure bracketing, the
 /// directions of contrast, saturation and sharpness, the scene capture
-/// type, and the raw bit depth and an uncompressed raw's compression that the standard tags of a raw
+/// type, custom rendering and gain control, and the raw bit depth and an
+/// uncompressed raw's compression that the standard tags of a raw
 /// file's raw data record. The others, which only a maker's
 /// MakerNote or its own codes record, it gives from Nikon's MakerNote and
 /// Sony's, each those its MakerNote records in plain tags, and from each
@@ -199,6 +201,8 @@ pub struct CameraSettings {
     pub(crate) saturation: Option<Saturation>,
     pub(crate) sharpness: Option<Sharpness>,
     pub(crate) scene_capture_type: Option<SceneCaptureType>,
+    pub(crate) custom_rendered: Option<bool>,
+    pub(crate) gain_control: Option<GainControl>,
 }
 
 impl CameraSettings {
@@ -1109,6 +1113,85 @@ impl CameraSettings {
         self.scene_capture_type
     }
 
+    /// Whether the camera processed the picture in a special way, as Exif
+    /// records it: `Some(true)` for its custom process, `Some(false)` for
+    /// its normal process.
+    ///
+    /// Exif means it to mark processing aimed at the picture's output: a
+    /// reader that finds it is expected not to apply processing of its
+    /// own. Bodies set it for different things. Every Nikon Z 9 file
+    /// measured is marked, for a reason not known, while the D3200 and
+    /// D7200 mark only the files whose long exposure noise reduction ran.
+    ///
+    /// Read from Exif's CustomRendered, one SHORT: 0 normal process and 1
+    /// custom process, for every maker, in a raw file and a JPEG alike. No
+    /// MakerNote fills it.
+    ///
+    /// `None` when:
+    ///
+    /// - the file records none;
+    /// - the code is one Exif reserves, 2 or above, as some phones write:
+    ///   3 and 4 are on phones' JPEGs measured;
+    /// - the tag is not one SHORT.
+    ///
+    /// What files record is in the notes on
+    /// [the Exif segment](https://github.com/kuolas/raw-files/blob/master/docs/formats/jpeg/container-and-metadata.md#4-exif-the-app1-segment).
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use raw_files::CameraFile;
+    ///
+    /// # fn main() -> raw_files::Result<()> {
+    /// let file = CameraFile::open("photo.jpg")?;
+    /// if file.metadata().camera_settings().custom_rendered() == Some(true) {
+    ///     println!("processed in a custom way");
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn custom_rendered(&self) -> Option<bool> {
+        self.custom_rendered
+    }
+
+    /// The degree of overall gain adjustment the camera applied, as Exif
+    /// records it, such as [`LowGainUp`](GainControl::LowGainUp), or
+    /// [`NoAdjustment`](GainControl::NoAdjustment), whose name is Exif's
+    /// "None".
+    ///
+    /// Read from Exif's GainControl, one SHORT: 0 none, 1 low gain up, 2
+    /// high gain up, 3 low gain down and 4 high gain down, for every maker,
+    /// in a raw file and a JPEG alike. No MakerNote fills it. In practice
+    /// Nikon bodies write it; nearly every Sony file measured records
+    /// none.
+    ///
+    /// `None` when:
+    ///
+    /// - the file records none;
+    /// - the code is one Exif reserves, 5 or above;
+    /// - the tag is not one SHORT.
+    ///
+    /// What files record is in the notes on
+    /// [the Exif segment](https://github.com/kuolas/raw-files/blob/master/docs/formats/jpeg/container-and-metadata.md#4-exif-the-app1-segment).
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use raw_files::{CameraFile, GainControl};
+    ///
+    /// # fn main() -> raw_files::Result<()> {
+    /// let file = CameraFile::open("photo.nef")?;
+    /// match file.metadata().camera_settings().gain_control() {
+    ///     Some(GainControl::NoAdjustment) | None => {}
+    ///     Some(gain) => println!("gain control: {gain}"),
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn gain_control(&self) -> Option<GainControl> {
+        self.gain_control
+    }
+
     /// Sets the white balance, in place of the one it had;
     /// [`white_balance`](Self::white_balance) reads it.
     #[must_use]
@@ -1317,6 +1400,23 @@ impl CameraSettings {
     #[must_use]
     pub fn with_scene_capture_type(mut self, scene: SceneCaptureType) -> Self {
         self.scene_capture_type = Some(scene);
+        self
+    }
+
+    /// Sets whether the camera processed the picture in a special way, in
+    /// place of any value set before;
+    /// [`custom_rendered`](Self::custom_rendered) reads it.
+    #[must_use]
+    pub fn with_custom_rendered(mut self, custom: bool) -> Self {
+        self.custom_rendered = Some(custom);
+        self
+    }
+
+    /// Sets the gain control, in place of any set before;
+    /// [`gain_control`](Self::gain_control) reads it.
+    #[must_use]
+    pub fn with_gain_control(mut self, gain: GainControl) -> Self {
+        self.gain_control = Some(gain);
         self
     }
 }
@@ -3565,6 +3665,65 @@ impl fmt::Display for SceneCaptureType {
     }
 }
 
+/// The degree of overall gain adjustment the camera applied, as Exif's
+/// GainControl names it (Exif 3.1, 4.6.6.7.41): 0 none, 1 low gain up, 2
+/// high gain up, 3 low gain down and 4 high gain down. A code Exif reserves
+/// gives `None`.
+///
+/// Exif's "None" is the variant [`NoAdjustment`](Self::NoAdjustment), so
+/// that a recorded value never reads `Some(GainControl::None)`; its
+/// [`name`](Self::name) is the standard's word.
+///
+/// `GainControl` is `#[non_exhaustive]`, so match on it with a wildcard arm.
+/// It orders as its variants are listed, and a new variant is added after the
+/// existing ones, so an order once observed holds. Its [`name`](Self::name)s,
+/// which `Display` writes too, are "None", "Low gain up", "High gain up",
+/// "Low gain down" and "High gain down".
+///
+/// # Examples
+///
+/// ```
+/// use raw_files::GainControl;
+///
+/// assert_eq!(GainControl::NoAdjustment.name(), "None");
+/// assert_eq!(GainControl::LowGainUp.to_string(), "Low gain up");
+/// ```
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[non_exhaustive]
+pub enum GainControl {
+    /// No gain adjustment: Exif's "None".
+    NoAdjustment,
+    /// A small adjustment of the gain upward.
+    LowGainUp,
+    /// A large adjustment of the gain upward.
+    HighGainUp,
+    /// A small adjustment of the gain downward.
+    LowGainDown,
+    /// A large adjustment of the gain downward.
+    HighGainDown,
+}
+
+impl GainControl {
+    /// The adjustment's name, for an information panel, such as "Low gain
+    /// up"; the type's docs list them all.
+    pub fn name(self) -> &'static str {
+        match self {
+            GainControl::NoAdjustment => "None",
+            GainControl::LowGainUp => "Low gain up",
+            GainControl::HighGainUp => "High gain up",
+            GainControl::LowGainDown => "Low gain down",
+            GainControl::HighGainDown => "High gain down",
+        }
+    }
+}
+
+impl fmt::Display for GainControl {
+    /// Writes [`name`](GainControl::name).
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.name())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -3635,6 +3794,8 @@ mod tests {
             saturation: Some(Saturation::Low),
             sharpness: Some(Sharpness::Soft),
             scene_capture_type: Some(SceneCaptureType::Portrait),
+            custom_rendered: Some(true),
+            gain_control: Some(GainControl::HighGainUp),
         }
     }
 
@@ -3667,6 +3828,8 @@ mod tests {
         assert_eq!(settings.saturation(), None);
         assert_eq!(settings.sharpness(), None);
         assert_eq!(settings.scene_capture_type(), None);
+        assert_eq!(settings.custom_rendered(), None);
+        assert_eq!(settings.gain_control(), None);
 
         let white_balance = WhiteBalance::default();
         assert_eq!(white_balance.mode(), None);
@@ -3748,6 +3911,8 @@ mod tests {
             settings.scene_capture_type(),
             Some(SceneCaptureType::Portrait)
         );
+        assert_eq!(settings.custom_rendered(), Some(true));
+        assert_eq!(settings.gain_control(), Some(GainControl::HighGainUp));
 
         let white_balance = nikon_white_balance();
         assert_eq!(white_balance.mode(), Some(WhiteBalanceMode::Auto));
@@ -3980,6 +4145,20 @@ mod tests {
                         ..start.clone()
                     },
                 ),
+                (
+                    start.clone().with_custom_rendered(false),
+                    CameraSettings {
+                        custom_rendered: Some(false),
+                        ..start.clone()
+                    },
+                ),
+                (
+                    start.clone().with_gain_control(GainControl::NoAdjustment),
+                    CameraSettings {
+                        gain_control: Some(GainControl::NoAdjustment),
+                        ..start.clone()
+                    },
+                ),
             ];
             for (place, (built, expected)) in cases.into_iter().enumerate() {
                 assert_eq!(built, expected, "builder {place} from {start:?}");
@@ -4086,7 +4265,9 @@ mod tests {
             .with_contrast(Contrast::Hard)
             .with_saturation(Saturation::Low)
             .with_sharpness(Sharpness::Soft)
-            .with_scene_capture_type(SceneCaptureType::Portrait);
+            .with_scene_capture_type(SceneCaptureType::Portrait)
+            .with_custom_rendered(true)
+            .with_gain_control(GainControl::HighGainUp);
         assert_eq!(settings, full_settings());
     }
 
@@ -4118,7 +4299,9 @@ mod tests {
             .with_contrast(Contrast::Soft)
             .with_saturation(Saturation::High)
             .with_sharpness(Sharpness::Hard)
-            .with_scene_capture_type(SceneCaptureType::NightScene);
+            .with_scene_capture_type(SceneCaptureType::NightScene)
+            .with_custom_rendered(false)
+            .with_gain_control(GainControl::LowGainDown);
         // Every value of `earlier` differs from the full record's, so each
         // builder below has one to replace.
         let full = full_settings();
@@ -4148,7 +4331,9 @@ mod tests {
             .with_contrast(Contrast::Hard)
             .with_saturation(Saturation::Low)
             .with_sharpness(Sharpness::Soft)
-            .with_scene_capture_type(SceneCaptureType::Portrait);
+            .with_scene_capture_type(SceneCaptureType::Portrait)
+            .with_custom_rendered(true)
+            .with_gain_control(GainControl::HighGainUp);
         assert_eq!(settings, full);
 
         let white_balance = WhiteBalance::default()
@@ -4669,6 +4854,23 @@ mod tests {
         all
     }
 
+    fn all_gain_controls() -> [GainControl; 5] {
+        use GainControl::*;
+        let all = [
+            NoAdjustment,
+            LowGainUp,
+            HighGainUp,
+            LowGainDown,
+            HighGainDown,
+        ];
+        for gain in all {
+            match gain {
+                NoAdjustment | LowGainUp | HighGainUp | LowGainDown | HighGainDown => {}
+            }
+        }
+        all
+    }
+
     #[test]
     fn every_name_is_the_one_documented_and_display_writes_it() {
         // The names are stable once released: a program may show or store
@@ -4871,6 +5073,17 @@ mod tests {
             SceneCaptureType::name,
             &["Standard", "Landscape", "Portrait", "Night scene"],
         );
+        assert_names(
+            &all_gain_controls(),
+            GainControl::name,
+            &[
+                "None",
+                "Low gain up",
+                "High gain up",
+                "Low gain down",
+                "High gain down",
+            ],
+        );
     }
 
     #[test]
@@ -4901,6 +5114,7 @@ mod tests {
         assert_ordered(&all_saturations());
         assert_ordered(&all_sharpnesses());
         assert_ordered(&all_scene_capture_types());
+        assert_ordered(&all_gain_controls());
     }
 
     #[test]

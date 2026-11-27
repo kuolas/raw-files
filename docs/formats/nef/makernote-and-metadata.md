@@ -2592,8 +2592,8 @@ mine.
 standard's codes [P][23] (4.6.6.7.35, p. 69; 4.6.6.7.40 to 4.6.6.7.44,
 pp. 70 to 71). The
 [JPEG notes](../jpeg/container-and-metadata.md#4-exif-the-app1-segment)
-give the codes. raw-files will read them from Exif alone, in a raw
-file as in a JPEG. They are on 279 public files and on 48,615 of mine;
+give the codes. raw-files reads them from Exif alone, in a raw file as
+in a JPEG. They are on 279 public files and on 48,615 of mine;
 CustomRendered is on 48,561 of mine.
 
 | Tag | Values, public | Values, mine |
@@ -2784,6 +2784,8 @@ plain MakerNote tags where Exif has no value, and decrypt nothing [I]:
   and the size priority or optimal quality from 0x0044;
 - the white balance's preset slot from the number after `PRESET`, and
   its fluorescent lamp from Exif's LightSource 12 to 16;
+- contrast, saturation, sharpness, the scene capture type, custom
+  rendering and gain control from Exif alone;
 - the picture style and the processing settings of
   [section 8.11](#811-picture-style-and-processing), which raw-files
   will read:
@@ -2799,9 +2801,7 @@ plain MakerNote tags where Exif has no value, and decrypt nothing [I]:
   - vignette control from 0x002A, and auto distortion control from
     byte 4 of 0x002B;
   - the scene mode from 0x00AB, else 0x008F, where a blank text will
-    give none;
-  - contrast, saturation, sharpness, the scene capture type, custom
-    rendering and gain control from Exif alone.
+    give none.
 
 ShotInfo's firmware version and image area, NikonSettings, and the
 digits that 0x0051 and 0x0056 start with stay unread: the first two are

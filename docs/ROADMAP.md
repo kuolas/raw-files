@@ -131,13 +131,15 @@ a frame, observed on files, or documented only.
 - the high ISO, long exposure and multi-frame noise reductions;
 - the vignetting and distortion corrections, and the chromatic
   aberration compensation;
-- the scene mode;
-- Exif's contrast, saturation, sharpness, scene capture type, custom
-  rendering and gain control.
+- the scene mode.
 
-Each setting will keep its maker's own name and kinds. Where two
-makers each have a setting for one thing, one value will hold either
-maker's. A `PictureStyle` will hold a Picture Control, a Creative
+Exif's contrast, saturation, sharpness, scene capture type, custom
+rendering and gain control are read already, for any maker, from Exif
+alone.
+
+Each setting of the list will keep its maker's own name and kinds.
+Where two makers each have a setting for one thing, one value will hold
+either maker's. A `PictureStyle` will hold a Picture Control, a Creative
 Style or a Creative Look. The format notes say what each file records
 ([NEF](formats/nef/makernote-and-metadata.md#811-picture-style-and-processing),
 [ARW](formats/arw/makernote-and-metadata.md#911-picture-style-and-processing),
