@@ -126,31 +126,33 @@ a frame, observed on files, or documented only.
 [#230](https://github.com/kuolas/raw-files/issues/230)).
 
 Exif's contrast, saturation, sharpness, scene capture type, custom
-rendering and gain control are read for any maker, from Exif alone.
-The picture style is read from each maker's MakerNote: a `PictureStyle` holds Nikon's Picture Control, or Sony's
-Creative Style or Creative Look, with its values. So are two more
-values, each holding either maker's setting. A
-`DynamicRangeOptimization` holds Nikon's Active D-Lighting or Sony's
-D-Range Optimizer. A `HighDynamicRange` holds Nikon's HDR or Sony's
-Auto HDR. The noise reductions are read as well: the high ISO one, in
-one list of both makers' steps, the long exposure one, and Sony's
-multi-frame one. A `VignettingCorrection` holds Nikon's vignette
-control or Sony's shading compensation, and a `DistortionCorrection`
-Nikon's auto distortion control or Sony's distortion compensation;
-Sony's chromatic aberration compensation is read too. A `Scene` holds
-Nikon's scene mode, as the camera writes it, or Sony's Scene Selection.
+rendering and gain control are read for any maker, from Exif alone. The
+picture style is read from each maker's MakerNote: a `PictureStyle`
+holds Nikon's Picture Control, or Sony's Creative Style or Creative
+Look, with its values. So are five more values, each holding either
+maker's setting. A `DynamicRangeOptimization` holds Nikon's Active
+D-Lighting or Sony's D-Range Optimizer. A `HighDynamicRange` holds
+Nikon's HDR or Sony's Auto HDR. The noise reductions are read as well:
+the high ISO one, in one list of both makers' steps, the long exposure
+one, and Sony's multi-frame one. A `VignettingCorrection` holds Nikon's
+vignette control or Sony's shading compensation, and a
+`DistortionCorrection` Nikon's auto distortion control or Sony's
+distortion compensation; Sony's chromatic aberration compensation is
+read too. A `Scene` holds Nikon's scene mode, as the camera writes it,
+or Sony's Scene Selection.
 
 Each of these settings keeps its maker's own name and kinds, as the
 picture style does. Where two makers each have a setting for one thing,
-one value holds either maker's, in the picture style's shape. The format notes say what each file records
+one value holds either maker's, in the picture style's shape. The
+format notes say what each file records
 ([NEF](formats/nef/makernote-and-metadata.md#811-picture-style-and-processing),
 [ARW](formats/arw/makernote-and-metadata.md#911-picture-style-and-processing),
 [JPEG](formats/jpeg/container-and-metadata.md#4-exif-the-app1-segment)).
 
 These groups of values follow, each read from the same directories:
 
-- the lens by name;
 - the XMP and IPTC fields;
+- the lens by name;
 - what editing software, such as Nikon's, writes into the file;
 - what a maker records only in enciphered or encrypted blocks. Reading
   these needs a decision of its own first, and they are given only as
@@ -255,11 +257,13 @@ release's changes.
   [#150](https://github.com/kuolas/raw-files/issues/150)).
 - **On master, not released**: what the CHANGELOG lists under
   [Unreleased](../CHANGELOG.md#unreleased), among it the handle named
-  `CameraFile`, the layout of a body's points placed on the picture, and
+  `CameraFile`, the layout of a body's points placed on the picture,
   more capture settings
-  ([#214](https://github.com/kuolas/raw-files/issues/214)).
-- **Next**: more of full metadata, group by group, beginning with how
-  the camera processed its JPEG
+  ([#214](https://github.com/kuolas/raw-files/issues/214)), and how the
+  camera made its JPEG
+  ([#230](https://github.com/kuolas/raw-files/issues/230)).
+- **Next**: more of full metadata, group by group, beginning with the
+  XMP and IPTC fields
   ([#50](https://github.com/kuolas/raw-files/issues/50)). The values
   only enciphered or encrypted blocks hold come last.
 

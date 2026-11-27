@@ -64,23 +64,23 @@ Linux and Windows alike.
     type, custom rendering and gain control;
   - the picture style, under its maker's own name, with its name and
     values: on Nikon files the Picture Control, and on Sony files the
-    Creative Style or the Creative Look.
+    Creative Style or the Creative Look;
   - the dynamic range optimization, under its maker's own name: on Nikon
-    files Active D-Lighting, and on Sony files the D-Range Optimizer.
+    files Active D-Lighting, and on Sony files the D-Range Optimizer;
   - the high dynamic range setting, under its maker's own name, on or
-    off with its parts: on Nikon files HDR, and on Sony files Auto HDR.
+    off with its parts: on Nikon files HDR, and on Sony files Auto HDR;
   - the noise reductions: the high ISO one, in each maker's steps, and
     whether the long exposure one was on; on Sony files the multi-frame
-    one too.
+    one too;
   - the vignetting correction, under its maker's own name: on Nikon
-    files vignette control, and on Sony files the shading compensation.
+    files vignette control, and on Sony files the shading compensation;
   - the distortion correction, under its maker's own name: on Nikon
     files auto distortion control, and on Sony files the distortion
-    compensation.
-  - on Sony files the chromatic aberration compensation.
+    compensation;
+  - on Sony files the chromatic aberration compensation;
   - the scene, under its maker's own name: on Nikon files the scene
     mode, the camera's own text, such as `PORTRAIT` or `AUTO`, and on
-    Sony files the Scene Selection, such as Intelligent Auto.
+    Sony files the Scene Selection, such as Intelligent Auto;
   - [`CameraSettings`](https://docs.rs/raw-files/latest/raw_files/struct.CameraSettings.html)
     says which a maker's files leave out: Sony's give no shutter, image
     area or raw image size.
