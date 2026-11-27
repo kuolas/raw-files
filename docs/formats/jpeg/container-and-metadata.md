@@ -360,11 +360,11 @@ how the camera processed the picture, each one SHORT [P][3]:
 - **The scene capture type** is the type of scene. The standard says
   it may also record the mode the picture was shot in.
 - **Gain control** is the degree of overall gain adjustment.
-- raw-files will read each from one SHORT, in the standard's words, as
+- raw-files reads each from one SHORT, in the standard's words, as
   ADR011 decides: `CameraSettings::contrast`, `saturation`,
   `sharpness`, `scene_capture_type`, `custom_rendered` and
-  `gain_control`. A reserved code will give `None`. No MakerNote will
-  fill one of the six.
+  `gain_control`. A reserved code gives `None`. No MakerNote fills one
+  of the six.
 
 The six tags were counted on 24 November 2026. A counting program of
 my own read them through `CameraFile::entries` and
@@ -391,7 +391,7 @@ phones. **[F]**
   holds 3 and 4 on JPEGs of an Apple phone. **[F]** ExifTool's
   documentation says that Apple's phones use other CustomRendered
   values, and some Samsung bodies a SceneCaptureType of 4 [S][6]. Each
-  will give `None`.
+  gives `None`.
 - **Gain control is a Nikon tag in practice.** Of the 16,919 JPEGs of
   mine that hold it, 16,624 are my Nikon bodies'. **[F]**
 - **The four Z 9 JPEG fixtures hold CustomRendered 1**, as every file

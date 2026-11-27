@@ -279,6 +279,11 @@ pub(crate) const COLOR_SPACE: u16 = crate::tags::exif::COLOR_SPACE;
 /// ([`INTEROP_INDEX`]) names the rule the file follows.
 pub(crate) const INTEROP_IFD: u16 = crate::tags::exif::INTEROPERABILITY_IFD_POINTER;
 
+/// Whether the camera processed the picture in a special way, as a SHORT
+/// (CustomRendered), read from the Exif IFD: 0 normal process and 1 custom
+/// process.
+pub(crate) const CUSTOM_RENDERED: u16 = crate::tags::exif::CUSTOM_RENDERED;
+
 /// How the camera set the exposure, as a SHORT (ExposureMode), read from
 /// the Exif IFD: 0 auto exposure, 1 manual exposure and 2 auto bracket,
 /// which raw-files reads as exposure bracketing.
@@ -300,6 +305,11 @@ pub(crate) const FOCAL_LENGTH_IN_35MM_FILM: u16 = crate::tags::exif::FOCAL_LENGT
 /// (SceneCaptureType), read from the Exif IFD: 0 standard, 1 landscape, 2
 /// portrait and 3 night scene.
 pub(crate) const SCENE_CAPTURE_TYPE: u16 = crate::tags::exif::SCENE_CAPTURE_TYPE;
+
+/// The degree of overall gain adjustment, as a SHORT (GainControl), read
+/// from the Exif IFD: 0 none, 1 low gain up, 2 high gain up, 3 low gain
+/// down and 4 high gain down.
+pub(crate) const GAIN_CONTROL: u16 = crate::tags::exif::GAIN_CONTROL;
 
 /// The direction of the contrast processing the camera applied, as a
 /// SHORT (Contrast), read from the Exif IFD: 0 normal, 1 soft and 2 hard.

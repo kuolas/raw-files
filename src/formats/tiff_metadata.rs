@@ -48,8 +48,8 @@ use crate::authorship::Authorship;
 use crate::camera::Camera;
 use crate::camera_settings::{
     Bracketing, CameraSettings, ColorSpace, Contrast, ExposureProgram, Flash, FlashMode,
-    FluorescentLamp, MeteringMode, RawCompression, Saturation, SceneCaptureType, Sharpness,
-    WhiteBalance, WhiteBalanceMode,
+    FluorescentLamp, GainControl, MeteringMode, RawCompression, Saturation, SceneCaptureType,
+    Sharpness, WhiteBalance, WhiteBalanceMode,
 };
 use crate::container::tiff::tags::COLOR_SPACE;
 use crate::container::tiff::{First, Ifd, Rule, Text, Tree};
@@ -142,8 +142,10 @@ mod rules {
     pub(super) const WHITE_BALANCE: Held<[u32; 1]> = Held::new(tags::WHITE_BALANCE, SHORT);
     pub(super) const LIGHT_SOURCE: Held<[u32; 1]> = Held::new(tags::LIGHT_SOURCE, SHORT);
     pub(super) const COLOR_SPACE: Held<[u32; 1]> = Held::new(tags::COLOR_SPACE, SHORT);
+    pub(super) const CUSTOM_RENDERED: Held<[u32; 1]> = Held::new(tags::CUSTOM_RENDERED, SHORT);
     pub(super) const SCENE_CAPTURE_TYPE: Held<[u32; 1]> =
         Held::new(tags::SCENE_CAPTURE_TYPE, SHORT);
+    pub(super) const GAIN_CONTROL: Held<[u32; 1]> = Held::new(tags::GAIN_CONTROL, SHORT);
     pub(super) const CONTRAST: Held<[u32; 1]> = Held::new(tags::CONTRAST, SHORT);
     pub(super) const SATURATION: Held<[u32; 1]> = Held::new(tags::SATURATION, SHORT);
     pub(super) const SHARPNESS: Held<[u32; 1]> = Held::new(tags::SHARPNESS, SHORT);
@@ -786,9 +788,11 @@ const DCF_OPTION_FILE: &str = "R03";
 /// balance mode and, for a manual one, its kind of fluorescent lamp
 /// ([`fluorescent_lamp`]), the color space, exposure bracketing
 /// ([`bracketing`]), the directions of contrast ([`contrast`]),
-/// saturation ([`saturation`]) and sharpness ([`sharpness`]), and the
-/// scene capture type ([`scene_capture_type`]). The color space also reads
-/// the Interoperability IFD `interop`, when the tree has one.
+/// saturation ([`saturation`]) and sharpness ([`sharpness`]), the scene
+/// capture type ([`scene_capture_type`]), custom rendering
+/// ([`custom_rendered`]) and gain control ([`gain_control`]). The color
+/// space also reads the Interoperability IFD `interop`, when the tree has
+/// one.
 ///
 /// Each tag must be exactly one SHORT, as the standard gives it. Each code
 /// Exif defines and a variant names gives that variant. Every other code,
@@ -799,9 +803,9 @@ const DCF_OPTION_FILE: &str = "R03";
 /// A format's MakerNote reader fills them where its MakerNote records them.
 /// It also puts the MakerNote's white balance setting, finer than Exif's,
 /// in place of the mode read here, when the MakerNote names one. No
-/// MakerNote reader touches the directions of contrast, saturation and
-/// sharpness, or the scene capture type: a maker's finer values and its
-/// scene modes are its own (ADR011).
+/// MakerNote reader touches the six values of how the camera processed the
+/// picture, from the directions of contrast to gain control: a maker's
+/// finer values and its scene modes are its own (ADR011).
 ///
 /// # Errors
 ///
@@ -883,6 +887,42 @@ fn camera_settings<R: Read + Seek>(
         scene_capture_type: exif
             .held(rules::SCENE_CAPTURE_TYPE)
             .and_then(|[code]| scene_capture_type(code)),
+        custom_rendered: exif
+            .held(rules::CUSTOM_RENDERED)
+            .and_then(|[code]| custom_rendered(code)),
+        gain_control: exif
+            .held(rules::GAIN_CONTROL)
+            .and_then(|[code]| gain_control(code)),
+    })
+}
+
+/// Whether an Exif CustomRendered `code` marks a custom process: 0, normal
+/// process, `false`, and 1, custom process, `true` (Exif 3.1, 4.6.6.7.35).
+/// `None` for every code Exif reserves, 2 and above, such as the 3 and 4
+/// that Apple's phones write.
+fn custom_rendered(code: u32) -> Option<bool> {
+    match code {
+        0 => Some(false),
+        1 => Some(true),
+        _ => None,
+    }
+}
+
+/// The adjustment an Exif GainControl `code` names: 0, none,
+/// [`NoAdjustment`](GainControl::NoAdjustment), 1
+/// [`LowGainUp`](GainControl::LowGainUp), 2
+/// [`HighGainUp`](GainControl::HighGainUp), 3
+/// [`LowGainDown`](GainControl::LowGainDown) and 4
+/// [`HighGainDown`](GainControl::HighGainDown) (Exif 3.1, 4.6.6.7.41).
+/// `None` for every code Exif reserves, 5 and above.
+fn gain_control(code: u32) -> Option<GainControl> {
+    Some(match code {
+        0 => GainControl::NoAdjustment,
+        1 => GainControl::LowGainUp,
+        2 => GainControl::HighGainUp,
+        3 => GainControl::LowGainDown,
+        4 => GainControl::HighGainDown,
+        _ => return None,
     })
 }
 
@@ -4135,9 +4175,9 @@ mod tests {
     /// fill mode, a manual white balance for shade, a color space that is
     /// "uncalibrated", which the InteropIndex `R03` beside it makes Adobe
     /// RGB, and auto bracket, exposure bracketing; then how the camera
-    /// processed the picture: hard contrast, low saturation, soft sharpness
-    /// and a night scene.
-    const FULL_SETTINGS: [(u16, u16); 11] = [
+    /// processed the picture: hard contrast, low saturation, soft
+    /// sharpness, a night scene, a custom process and a high gain down.
+    const FULL_SETTINGS: [(u16, u16); 13] = [
         (EXPOSURE_PROGRAM, 3),
         (METERING_MODE, 5),
         // Fired in fill mode, the return light detected, red-eye
@@ -4151,6 +4191,8 @@ mod tests {
         (SATURATION, 1),
         (SHARPNESS, 1),
         (SCENE_CAPTURE_TYPE, 3),
+        (CUSTOM_RENDERED, 1),
+        (GAIN_CONTROL, 4),
     ];
 
     /// The metadata of a file whose IFD0 holds the Make `SONY`, whose Exif
@@ -4202,6 +4244,8 @@ mod tests {
             saturation: Some(Saturation::Low),
             sharpness: Some(Sharpness::Soft),
             scene_capture_type: Some(SceneCaptureType::NightScene),
+            custom_rendered: Some(true),
+            gain_control: Some(GainControl::HighGainDown),
             ..CameraSettings::default()
         };
         change(&mut settings);
@@ -4227,7 +4271,7 @@ mod tests {
     #[test]
     fn a_setting_missing_or_of_another_type_or_count_is_none_and_costs_no_other() {
         type Unset = fn(&mut CameraSettings);
-        let settings: [(u16, Unset); 11] = [
+        let settings: [(u16, Unset); 13] = [
             (EXPOSURE_PROGRAM, |settings| {
                 settings.exposure_program = None
             }),
@@ -4243,6 +4287,8 @@ mod tests {
             (SCENE_CAPTURE_TYPE, |settings| {
                 settings.scene_capture_type = None
             }),
+            (CUSTOM_RENDERED, |settings| settings.custom_rendered = None),
+            (GAIN_CONTROL, |settings| settings.gain_control = None),
         ];
         // Each with the code that gives a value as one SHORT.
         type Damage = fn(&mut TiffBuilder, IfdId, u16, u16);
@@ -4343,6 +4389,38 @@ mod tests {
         for code in [4, 5, 6, 64, 255, 65535] {
             let read = settings_of(SCENE_CAPTURE_TYPE, code);
             assert_eq!(read.scene_capture_type, None, "{code}");
+        }
+    }
+
+    #[test]
+    fn custom_rendered_says_whether_the_process_was_custom() {
+        for (code, expected) in [(0, Some(false)), (1, Some(true))] {
+            let read = settings_of(CUSTOM_RENDERED, code);
+            assert_eq!(read.custom_rendered, expected, "{code}");
+        }
+        // Apple's phones write 3 and 4; Exif reserves every code from 2 on.
+        for code in [2, 3, 4, 255, 65535] {
+            let read = settings_of(CUSTOM_RENDERED, code);
+            assert_eq!(read.custom_rendered, None, "{code}");
+        }
+    }
+
+    #[test]
+    fn every_gain_control_exif_defines_gives_its_adjustment() {
+        for (code, gain) in [
+            (0, GainControl::NoAdjustment),
+            (1, GainControl::LowGainUp),
+            (2, GainControl::HighGainUp),
+            (3, GainControl::LowGainDown),
+            (4, GainControl::HighGainDown),
+        ] {
+            let read = settings_of(GAIN_CONTROL, code);
+            assert_eq!(read.gain_control, Some(gain), "{code}");
+        }
+        // Exif reserves every code from 5 on.
+        for code in [5, 6, 255, 65535] {
+            let read = settings_of(GAIN_CONTROL, code);
+            assert_eq!(read.gain_control, None, "{code}");
         }
     }
 

@@ -60,8 +60,8 @@ Linux and Windows alike.
   - the raw data's bit depth and compression, on raw files;
   - the JPEG quality, and on Nikon files the JPEG compression;
   - how the camera processed the picture, in Exif's words: the
-    directions of contrast, saturation and sharpness, and the scene
-    capture type.
+    directions of contrast, saturation and sharpness, the scene capture
+    type, custom rendering and gain control.
   - [`CameraSettings`](https://docs.rs/raw-files/latest/raw_files/struct.CameraSettings.html)
     says which a maker's files leave out: Sony's give no shutter, image
     area or raw image size.

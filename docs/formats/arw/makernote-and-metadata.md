@@ -2213,7 +2213,7 @@ and code 5 its Sports Action, is my reading of the names [I].
 standard's codes [P][30] (4.6.6.7.35, p. 69; 4.6.6.7.40 to 4.6.6.7.44,
 pp. 70 to 71). The
 [JPEG notes](../jpeg/container-and-metadata.md#4-exif-the-app1-segment)
-give the codes. raw-files will read them from Exif alone.
+give the codes. raw-files reads them from Exif alone.
 
 | Tag | Values, public | Values, mine |
 |---|---|---|
@@ -2479,9 +2479,10 @@ For the picture style and the processing settings of
 - the multi-frame noise reduction from 0x200B;
 - the shading, chromatic aberration and distortion compensations from
   0x2011 to 0x2013, never from the raw SubIFD's codes;
-- the scene from 0xB023, where 0 will give none;
-- contrast, saturation, sharpness, the scene capture type, custom
-  rendering and gain control from Exif alone.
+- the scene from 0xB023, where 0 will give none.
+
+It reads contrast, saturation, sharpness, the scene capture type,
+custom rendering and gain control from Exif alone.
 
 The raw image size stays unread, because 0x202E cannot tell an APS-C
 raw from a medium one; and the shutter used and APS-C mode, because only

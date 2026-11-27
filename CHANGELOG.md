@@ -331,6 +331,20 @@ does. An entry that can break a caller opens with **Breaking:**.
     phones write do.
   - On the Nikon files measured it follows the Picture Control more
     than the mode.
+- `CameraSettings::custom_rendered` says whether the camera processed
+  the picture in a special way, and `gain_control` gives its gain
+  adjustment, a `GainControl`
+  ([#230](https://github.com/kuolas/raw-files/issues/230)). Each has its
+  `with_…` builder.
+  - They are read from Exif's CustomRendered and GainControl for every
+    maker, raw and JPEG alike. A code Exif reserves gives `None`,
+    as the 3 and 4 that Apple's phones write in CustomRendered do.
+  - `GainControl` names none, low gain up, high gain up, low gain down
+    and high gain down. Exif's "None" is the variant `NoAdjustment`,
+    whose name is "None".
+  - Bodies mark a custom process for different things. Every Nikon Z 9
+    file measured is marked. The D3200 and D7200 mark only the files
+    whose long exposure noise reduction ran.
 
 ### Changed
 

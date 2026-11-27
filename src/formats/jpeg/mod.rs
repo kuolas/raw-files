@@ -427,14 +427,14 @@ fn lookup<R: Read + Seek>(
 mod tests {
     use super::*;
     use crate::camera_settings::{
-        CameraSettings, ColorSpace, Contrast, FocusMode, MeteringMode, Saturation,
+        CameraSettings, ColorSpace, Contrast, FocusMode, GainControl, MeteringMode, Saturation,
         SceneCaptureType, Sharpness,
     };
     use crate::container::jpeg::segments;
     use crate::container::tiff::tags::{
-        BITS_PER_SAMPLE, COLOR_SPACE, COMPRESSION, CONTRAST, IMAGE_LENGTH, IMAGE_WIDTH,
-        INTEROP_INDEX, MAKE, MAKER_NOTE, METERING_MODE, PHOTOMETRIC_INTERPRETATION, SATURATION,
-        SCENE_CAPTURE_TYPE, SHARPNESS,
+        BITS_PER_SAMPLE, COLOR_SPACE, COMPRESSION, CONTRAST, CUSTOM_RENDERED, GAIN_CONTROL,
+        IMAGE_LENGTH, IMAGE_WIDTH, INTEROP_INDEX, MAKE, MAKER_NOTE, METERING_MODE,
+        PHOTOMETRIC_INTERPRETATION, SATURATION, SCENE_CAPTURE_TYPE, SHARPNESS,
     };
     use crate::entries::Directory;
     use crate::error::ErrorKind;
@@ -630,6 +630,8 @@ mod tests {
                 .short(exif, SATURATION, &[2])
                 .short(exif, SHARPNESS, &[2])
                 .short(exif, SCENE_CAPTURE_TYPE, &[3])
+                .short(exif, CUSTOM_RENDERED, &[1])
+                .short(exif, GAIN_CONTROL, &[1])
                 .ascii(interop, INTEROP_INDEX, "R03");
             if !block.is_empty() {
                 let makernote = tiff.blob(block);
@@ -646,7 +648,9 @@ mod tests {
                 .with_contrast(Contrast::Soft)
                 .with_saturation(Saturation::High)
                 .with_sharpness(Sharpness::Hard)
-                .with_scene_capture_type(SceneCaptureType::NightScene);
+                .with_scene_capture_type(SceneCaptureType::NightScene)
+                .with_custom_rendered(true)
+                .with_gain_control(GainControl::LowGainUp);
             let expected = match make {
                 "SONY" => exif.with_focus_mode(FocusMode::Continuous),
                 _ => exif,
