@@ -3080,27 +3080,58 @@ mod tests {
         }
     }
 
-    /// Adds to `ifd` every settings tag the reader reads, as a frame shot
-    /// on the ILCE-7M2 under a chosen color temperature of 3200 K might
-    /// record them, shifted three steps towards amber, with the electronic
-    /// front curtain on.
+    /// Adds to `ifd` every settings tag the reader reads that the ILCE-7M2
+    /// records, as one of its frames might record them: shot under a
+    /// chosen color temperature of 3200 K, shifted three steps towards
+    /// amber, with the electronic front curtain on, in AF-C with the
+    /// flexible spot, the stabilization on, one frame for each press, the
+    /// flash not fired and its compensation at zero, as a raw file written
+    /// with a JPEG beside it, whose JPEG quality the body records in no
+    /// plain tag.
+    ///
+    /// The ILCE-7M2 records no ExposureStandardAdjustment and no Quality2,
+    /// so neither is added: the tests of the exposure fine-tuning and the
+    /// JPEG quality add them.
     fn settings_tags(builder: &mut TiffBuilder, ifd: IfdId) {
         builder
+            .long(ifd, QUALITY, &[6])
+            .srational(ifd, FLASH_EXPOSURE_COMP, &[(0, 10)])
             .long(ifd, WHITE_BALANCE, &[1])
             .slong(ifd, FINE_TUNE, &[3, 0])
+            .long(ifd, FLASH_ACTION, &[0])
             .long(ifd, ELECTRONIC_FRONT_CURTAIN, &[1])
-            .long(ifd, COLOR_TEMPERATURE, &[3200]);
+            .byte(ifd, FOCUS_MODE, &[3])
+            .byte(ifd, AF_AREA_MODE, &[1])
+            .long(ifd, COLOR_TEMPERATURE, &[3200])
+            .long(ifd, IMAGE_STABILIZATION, &[1])
+            .short(ifd, JPEG_QUALITY, &[65535])
+            .short(ifd, RELEASE_MODE, &[0]);
     }
 
-    /// What [`settings_tags`] gives, from `settings`.
+    /// What [`settings_tags`] gives, from `settings`, for an E-mount body
+    /// such as the ILCE-7M2: AF-C, the flexible spot as a single point,
+    /// the stabilization on, a single frame and no bracketing, and, where
+    /// `settings` holds a flash, a compensation of zero. FlashAction's 0
+    /// names no source, and Quality's 6 and JPEGQuality's 65535 no JPEG
+    /// quality.
     fn with_settings_tags(settings: CameraSettings) -> CameraSettings {
         let white_balance = WhiteBalance::default()
             .with_mode(WhiteBalanceMode::ColorTemperature)
             .with_color_temperature(3200)
             .with_fine_tune(steps(-3, 0));
-        settings
+        let mut settings = settings
             .with_white_balance(white_balance)
             .with_electronic_front_curtain_setting(true)
+            .with_focus_mode(FocusMode::Continuous)
+            .with_focus_area_mode(FocusAreaMode::Single)
+            .with_stabilization(Stabilization::on())
+            .with_release_mode(ReleaseMode::Single)
+            .with_bracketing(Bracketing::Off);
+        if let Some(flash) = settings.flash {
+            let zero = SignedRational::new(0, 10).expect("a denominator of 10");
+            settings = settings.with_flash(flash.with_compensation(zero));
+        }
+        settings
     }
 
     #[test]
@@ -3197,13 +3228,19 @@ mod tests {
     fn metadata_gives_the_makernotes_settings_and_focus_point() {
         // The ILCE-7M4's focus tags beside the settings tags, read into
         // metadata whose other values stay as the standard tags gave them.
+        // The settings tags hold the FocusMode, so the focus tags hold
+        // none; the Model gives the family that names the AF-area mode.
         for order in ORDERS {
             let (mut src, makernote) = focus_file(order, b"", |builder, ifd| {
-                tags_7m4(builder, ifd, order);
+                tags_7m4_with(builder, ifd, order, None, AREA_7M4);
                 settings_tags(builder, ifd);
             });
             let standard = Metadata::default()
-                .with_camera(Camera::default().with_recorded_make("SONY"))
+                .with_camera(
+                    Camera::default()
+                        .with_recorded_make("SONY")
+                        .with_recorded_model("ILCE-7M4"),
+                )
                 .with_camera_settings(exif_settings());
             let read = |src: &mut Src, picture| {
                 let standard = Standard {
@@ -3215,11 +3252,8 @@ mod tests {
             let found = read(&mut src, Picture::Raw);
             // The same for a JPEG's picture.
             assert_eq!(read(&mut src, Picture::Jpeg), found, "{order:?}");
-            // The ILCE-7M4's tags include its FocusMode, 3, AF-C.
             let expected = standard
-                .with_camera_settings(
-                    with_settings_tags(exif_settings()).with_focus_mode(FocusMode::Continuous),
-                )
+                .with_camera_settings(with_settings_tags(exif_settings()))
                 .with_focus(focus_7m4());
             assert_eq!(found, expected, "{order:?}");
             // The point as a list of one, its primary, recorded.
