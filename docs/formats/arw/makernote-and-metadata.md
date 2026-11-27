@@ -2747,10 +2747,10 @@ Every one of my 500 files has each of them but 0x9416 and 0x900B.
   the Minolta-format IFD of MakerNote tag 0xB028 are not TIFF
   directories the view walks: the 0xB028 entry's bytes only, and of the
   MRW block, which no entry holds, nothing.
-- **The XMP packet** (IFD0 0x02BC, on 152 public files and none of
-  mine) and **an IPTC entry** (0x83BB, one public file): their bytes
-  only; XMP and IPTC are parsed by full metadata's group for them.
-  **[F]**
+- **The XMP packet** (IFD0 0x02BC, on 152 public files, the clone's 130
+  and 22 fixtures, and none of mine) and **an IPTC entry** (0x83BB, one public file): their bytes
+  only. raw-files will read both as the
+  [XMP and IPTC notes](../xmp-and-iptc.md) describe them. **[F]**
 - **The content of the enciphered records**: their bytes only, until a
   decision allows deciphering them (ADR016).
 

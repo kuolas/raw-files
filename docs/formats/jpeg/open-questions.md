@@ -26,10 +26,6 @@ describes the files.
    that decision; such marks did not tell whether the pixels kept the
    camera's framing. Affects
    [container-and-metadata.md](container-and-metadata.md#13-pitfalls).
-2. **XMP.** An XMP segment can record an editor's crop, rating or labels,
-   and a camera's rating. raw-files does not read it; reading it would
-   need a decision of its own. Affects
-   [container-and-metadata.md](container-and-metadata.md#5-other-application-segments).
 
 ## 2. Facts to establish from sample files
 
@@ -94,8 +90,6 @@ describes the files.
 
 ## 3. Sources not consulted
 
-- Adobe's XMP specification, for the XMP segment's identifier and
-  packet; the identifier on these pages is as found in the files.
 - The ICC profile specification, for the APP2 segments that carry color
   profiles.
 - The earlier editions of Exif (2.32, 3.0) and of the Multi-Picture
@@ -170,3 +164,11 @@ describes the files.
   [test-data.md](test-data.md#3-how-the-files-were-chosen)). [S]
 - **A file whose size is a multiple of 64 KiB** need not be truncated:
   Sony pads to that size. [F]
+- **XMP.** An XMP segment can record an editor's crop, rating or
+  labels, and a camera's rating. raw-files will read it, with the IPTC
+  block, as the record on XMP and IPTC decides
+  ([ADR024](../../architecture-decisions/adr024-xmp-and-iptc.md)). It
+  will give every property, and the rating, the label and the IPTC Core
+  values typed. An editor's crop stays a property of its own namespace, and
+  nothing reads it into the focus point or the picture's size. The
+  [XMP and IPTC notes](../xmp-and-iptc.md) say what files hold.

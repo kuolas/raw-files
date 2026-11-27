@@ -490,7 +490,7 @@ counts per format.
 | Directory | Tag | Files, public / mine | Why it has no name |
 |---|---|---|---|
 | IFD chain | 0x000B | JPEG 0 / 5 | no document read names it |
-| IFD chain | 0x02BC | ARW 152 / 40; NEF 227 / 6186 | XMP part 3 (p. 10; Table 12, p. 19) and the DNG specification (p. 14) call it "the XMP metadata tag (700)", holding an XMP packet, and give it no field name |
+| IFD chain | 0x02BC | ARW 152 / 40; NEF 227 / 6186 | XMP part 3 (p. 10; Table 12, p. 19) and the DNG specification (p. 14) call it "the XMP metadata tag (700)", holding an XMP packet, and give it no field name; the [XMP and IPTC notes](xmp-and-iptc.md) describe the packet |
 | IFD chain | 0x0301 | JPEG 0 / 3 | no document read names it |
 | IFD chain | 0x0303 | JPEG 0 / 3 | no document read names it |
 | IFD chain | 0x4746 | JPEG 0 / 7 | no document read names it |
@@ -520,7 +520,7 @@ counts per format.
 | IFD chain | 0x74C8 | ARW 149 / 40 | no document read names it |
 | IFD chain | 0x828D | ARW 241 / 277; NEF 381 / 6308 | no document read names it |
 | IFD chain | 0x828E | ARW 239 / 277; NEF 381 / 6308 | no document read names it |
-| IFD chain | 0x83BB | ARW 1 / 0 | XMP part 3 (p. 10; Table 12, p. 19) and the DNG specification (p. 14) call it "the IPTC metadata tag (33723)", and give it no field name |
+| IFD chain | 0x83BB | ARW 1 / 0 | XMP part 3 (p. 10; Table 12, p. 19) and the DNG specification (p. 14) call it "the IPTC metadata tag (33723)", and give it no field name; the [XMP and IPTC notes](xmp-and-iptc.md) describe the block |
 | IFD chain | 0x8773 | NEF 2 / 0 | no document read names it |
 | IFD chain | 0x9003 | JPEG 0 / 12; NEF 381 / 6308 | Exif names it in the Exif IFD only |
 | IFD chain | 0x9216 | JPEG 0 / 5; NEF 383 / 6308 | no document read names it |

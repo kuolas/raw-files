@@ -20,6 +20,9 @@ Each folder's README lists its pages and says where to start.
   with the document that gives it, and the field types.
 - [camera-names.md](camera-names.md): how a camera's Make and Model
   texts are read into its maker's and its model's names.
+- [xmp-and-iptc.md](xmp-and-iptc.md): where files hold an XMP packet
+  and an IPTC block, what cameras and editors write there, and XMP
+  sidecars.
 - [sample-files.md](sample-files.md): how a sample file comes in,
   where its expected values come from, and how to check one.
 
