@@ -320,6 +320,17 @@ does. An entry that can break a caller opens with **Breaking:**.
   They are read from Exif's tags of the same names for every maker, raw
   and JPEG alike, and a code Exif reserves gives `None`. Each gives a
   direction only: a maker's finer value belongs to its picture style.
+- `CameraSettings::scene_capture_type` gives the type of scene the
+  camera was set for, a `SceneCaptureType`: standard, landscape,
+  portrait or night scene. `with_scene_capture_type` sets it
+  ([#230](https://github.com/kuolas/raw-files/issues/230)).
+  - It is read from Exif's SceneCaptureType for every maker, raw and
+    JPEG alike.
+  - Standard is a type the camera recorded, not the absence of one.
+  - A code Exif reserves gives `None`, as the 4, 5, 6 and 64 that some
+    phones write do.
+  - On the Nikon files measured it follows the Picture Control more
+    than the mode.
 
 ### Changed
 

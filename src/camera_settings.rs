@@ -10,7 +10,7 @@
 //! mode, bracketing, whether the clock was on daylight saving time, the
 //! raw data's bit depth and compression, the JPEG quality and compression,
 //! and how the camera processed the picture: the directions of contrast,
-//! saturation and sharpness.
+//! saturation and sharpness, and the scene capture type.
 //! [`CameraSettings`] holds them all, and
 //! [`Metadata::camera_settings`](crate::Metadata::camera_settings) gives
 //! them for a file. [`WhiteBalance`], [`WhiteBalanceFineTune`], [`Flash`],
@@ -26,8 +26,9 @@
 //! NEF, ARW and JPEG files give the settings that their standard Exif tags
 //! record: the exposure program, the metering mode, the flash, the white
 //! balance mode and the kind of fluorescent lamp it was set for, the color
-//! space and exposure bracketing, and the directions of contrast,
-//! saturation and sharpness. Raw files give the raw data's bit depth from
+//! space and exposure bracketing, the directions of contrast, saturation
+//! and sharpness, and the scene capture type. Raw files give the raw data's
+//! bit depth from
 //! its own standard tags, and its compression where those tags say it is
 //! uncompressed. The others are recorded only in a maker's own tags, its
 //! MakerNote, or in a maker's own codes:
@@ -85,9 +86,10 @@ use crate::rational::SignedRational;
 /// program, metering mode, flash, shutter, image area, raw image size,
 /// color space, focus mode, AF-area mode, AF fine-tune, stabilization, auto
 /// ISO, exposure fine-tuning, release mode, bracketing, daylight saving
-/// time, raw bit depth and compression, JPEG quality and compression, and
-/// the directions of contrast, saturation and sharpness it processed the
-/// picture in, for a viewer's information panel beside the exposure.
+/// time, raw bit depth and compression, JPEG quality and compression, the
+/// directions of contrast, saturation and sharpness it processed the
+/// picture in, and the scene capture type, for a viewer's information
+/// panel beside the exposure.
 ///
 /// Every value is `None` when the file does not record it or records it in
 /// a way that cannot be read, such as a code that no variant names. A
@@ -96,8 +98,8 @@ use crate::rational::SignedRational;
 /// the values a file's standard Exif tags record: the exposure program,
 /// the metering mode, the flash, the white balance mode and its kind of
 /// fluorescent lamp, the color space and exposure bracketing, the
-/// directions of contrast, saturation and sharpness, and the raw bit depth
-/// and an uncompressed raw's compression that the standard tags of a raw
+/// directions of contrast, saturation and sharpness, the scene capture
+/// type, and the raw bit depth and an uncompressed raw's compression that the standard tags of a raw
 /// file's raw data record. The others, which only a maker's
 /// MakerNote or its own codes record, it gives from Nikon's MakerNote and
 /// Sony's, each those its MakerNote records in plain tags, and from each
@@ -196,6 +198,7 @@ pub struct CameraSettings {
     pub(crate) contrast: Option<Contrast>,
     pub(crate) saturation: Option<Saturation>,
     pub(crate) sharpness: Option<Sharpness>,
+    pub(crate) scene_capture_type: Option<SceneCaptureType>,
 }
 
 impl CameraSettings {
@@ -1064,6 +1067,48 @@ impl CameraSettings {
         self.sharpness
     }
 
+    /// The type of scene the camera was set for, as Exif records it, such
+    /// as [`Landscape`](SceneCaptureType::Landscape).
+    /// [`Standard`](SceneCaptureType::Standard) is a type the camera
+    /// recorded, not the absence of one.
+    ///
+    /// Exif says it may also record the mode the picture was shot in. On
+    /// the Nikon files measured it follows the Picture Control more than
+    /// the mode: files shot in a program mode under the Landscape and
+    /// Portrait controls record landscape and portrait.
+    ///
+    /// Read from Exif's SceneCaptureType, one SHORT: 0 standard, 1
+    /// landscape, 2 portrait and 3 night scene, for every maker, in a raw
+    /// file and a JPEG alike. No MakerNote fills it.
+    ///
+    /// `None` when:
+    ///
+    /// - the file records none;
+    /// - the code is one Exif reserves, 4 or above, as some phones write:
+    ///   4, 5, 6 and 64 are on phones' JPEGs measured;
+    /// - the tag is not one SHORT.
+    ///
+    /// What files record is in the notes on
+    /// [the Exif segment](https://github.com/kuolas/raw-files/blob/master/docs/formats/jpeg/container-and-metadata.md#4-exif-the-app1-segment).
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use raw_files::{CameraFile, SceneCaptureType};
+    ///
+    /// # fn main() -> raw_files::Result<()> {
+    /// let file = CameraFile::open("photo.nef")?;
+    /// match file.metadata().camera_settings().scene_capture_type() {
+    ///     Some(SceneCaptureType::Standard) | None => {}
+    ///     Some(scene) => println!("scene: {scene}"),
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn scene_capture_type(&self) -> Option<SceneCaptureType> {
+        self.scene_capture_type
+    }
+
     /// Sets the white balance, in place of the one it had;
     /// [`white_balance`](Self::white_balance) reads it.
     #[must_use]
@@ -1264,6 +1309,14 @@ impl CameraSettings {
     #[must_use]
     pub fn with_sharpness(mut self, sharpness: Sharpness) -> Self {
         self.sharpness = Some(sharpness);
+        self
+    }
+
+    /// Sets the scene capture type, in place of any set before;
+    /// [`scene_capture_type`](Self::scene_capture_type) reads it.
+    #[must_use]
+    pub fn with_scene_capture_type(mut self, scene: SceneCaptureType) -> Self {
+        self.scene_capture_type = Some(scene);
         self
     }
 }
@@ -3460,6 +3513,58 @@ impl fmt::Display for Sharpness {
     }
 }
 
+/// The type of scene the camera was set for, as Exif's SceneCaptureType
+/// names it (Exif 3.1, 4.6.6.7.40): 0 standard, 1 landscape, 2 portrait
+/// and 3 night scene. A code Exif reserves gives `None`.
+///
+/// `SceneCaptureType` is `#[non_exhaustive]`, so match on it with a
+/// wildcard arm. It orders as its variants are listed, and a new variant is
+/// added after the existing ones, so an order once observed holds. Its
+/// [`name`](Self::name)s, which `Display` writes too, are "Standard",
+/// "Landscape", "Portrait" and "Night scene".
+///
+/// # Examples
+///
+/// ```
+/// use raw_files::SceneCaptureType;
+///
+/// assert_eq!(SceneCaptureType::Landscape.name(), "Landscape");
+/// assert_eq!(SceneCaptureType::NightScene.to_string(), "Night scene");
+/// ```
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[non_exhaustive]
+pub enum SceneCaptureType {
+    /// A standard scene: a type the camera recorded, not the absence of
+    /// one.
+    Standard,
+    /// A landscape.
+    Landscape,
+    /// A portrait.
+    Portrait,
+    /// A scene at night.
+    NightScene,
+}
+
+impl SceneCaptureType {
+    /// The type's name, for an information panel, such as "Night scene";
+    /// the type's docs list them all.
+    pub fn name(self) -> &'static str {
+        match self {
+            SceneCaptureType::Standard => "Standard",
+            SceneCaptureType::Landscape => "Landscape",
+            SceneCaptureType::Portrait => "Portrait",
+            SceneCaptureType::NightScene => "Night scene",
+        }
+    }
+}
+
+impl fmt::Display for SceneCaptureType {
+    /// Writes [`name`](SceneCaptureType::name).
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.name())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -3529,6 +3634,7 @@ mod tests {
             contrast: Some(Contrast::Hard),
             saturation: Some(Saturation::Low),
             sharpness: Some(Sharpness::Soft),
+            scene_capture_type: Some(SceneCaptureType::Portrait),
         }
     }
 
@@ -3560,6 +3666,7 @@ mod tests {
         assert_eq!(settings.contrast(), None);
         assert_eq!(settings.saturation(), None);
         assert_eq!(settings.sharpness(), None);
+        assert_eq!(settings.scene_capture_type(), None);
 
         let white_balance = WhiteBalance::default();
         assert_eq!(white_balance.mode(), None);
@@ -3637,6 +3744,10 @@ mod tests {
         assert_eq!(settings.contrast(), Some(Contrast::Hard));
         assert_eq!(settings.saturation(), Some(Saturation::Low));
         assert_eq!(settings.sharpness(), Some(Sharpness::Soft));
+        assert_eq!(
+            settings.scene_capture_type(),
+            Some(SceneCaptureType::Portrait)
+        );
 
         let white_balance = nikon_white_balance();
         assert_eq!(white_balance.mode(), Some(WhiteBalanceMode::Auto));
@@ -3860,6 +3971,15 @@ mod tests {
                         ..start.clone()
                     },
                 ),
+                (
+                    start
+                        .clone()
+                        .with_scene_capture_type(SceneCaptureType::Standard),
+                    CameraSettings {
+                        scene_capture_type: Some(SceneCaptureType::Standard),
+                        ..start.clone()
+                    },
+                ),
             ];
             for (place, (built, expected)) in cases.into_iter().enumerate() {
                 assert_eq!(built, expected, "builder {place} from {start:?}");
@@ -3965,7 +4085,8 @@ mod tests {
             .with_jpeg_compression(JpegCompression::OptimalQuality)
             .with_contrast(Contrast::Hard)
             .with_saturation(Saturation::Low)
-            .with_sharpness(Sharpness::Soft);
+            .with_sharpness(Sharpness::Soft)
+            .with_scene_capture_type(SceneCaptureType::Portrait);
         assert_eq!(settings, full_settings());
     }
 
@@ -3996,7 +4117,8 @@ mod tests {
             .with_jpeg_compression(JpegCompression::SizePriority)
             .with_contrast(Contrast::Soft)
             .with_saturation(Saturation::High)
-            .with_sharpness(Sharpness::Hard);
+            .with_sharpness(Sharpness::Hard)
+            .with_scene_capture_type(SceneCaptureType::NightScene);
         // Every value of `earlier` differs from the full record's, so each
         // builder below has one to replace.
         let full = full_settings();
@@ -4025,7 +4147,8 @@ mod tests {
             .with_jpeg_compression(JpegCompression::OptimalQuality)
             .with_contrast(Contrast::Hard)
             .with_saturation(Saturation::Low)
-            .with_sharpness(Sharpness::Soft);
+            .with_sharpness(Sharpness::Soft)
+            .with_scene_capture_type(SceneCaptureType::Portrait);
         assert_eq!(settings, full);
 
         let white_balance = WhiteBalance::default()
@@ -4535,6 +4658,17 @@ mod tests {
         all
     }
 
+    fn all_scene_capture_types() -> [SceneCaptureType; 4] {
+        use SceneCaptureType::*;
+        let all = [Standard, Landscape, Portrait, NightScene];
+        for scene in all {
+            match scene {
+                Standard | Landscape | Portrait | NightScene => {}
+            }
+        }
+        all
+    }
+
     #[test]
     fn every_name_is_the_one_documented_and_display_writes_it() {
         // The names are stable once released: a program may show or store
@@ -4732,6 +4866,11 @@ mod tests {
             Sharpness::name,
             &["Normal", "Soft", "Hard"],
         );
+        assert_names(
+            &all_scene_capture_types(),
+            SceneCaptureType::name,
+            &["Standard", "Landscape", "Portrait", "Night scene"],
+        );
     }
 
     #[test]
@@ -4761,6 +4900,7 @@ mod tests {
         assert_ordered(&all_contrasts());
         assert_ordered(&all_saturations());
         assert_ordered(&all_sharpnesses());
+        assert_ordered(&all_scene_capture_types());
     }
 
     #[test]

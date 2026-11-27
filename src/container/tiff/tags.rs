@@ -296,6 +296,11 @@ pub(crate) const WHITE_BALANCE: u16 = crate::tags::exif::WHITE_BALANCE;
 /// know.
 pub(crate) const FOCAL_LENGTH_IN_35MM_FILM: u16 = crate::tags::exif::FOCAL_LENGTH_IN_35MM_FILM;
 
+/// The type of scene the camera was set for, as a SHORT
+/// (SceneCaptureType), read from the Exif IFD: 0 standard, 1 landscape, 2
+/// portrait and 3 night scene.
+pub(crate) const SCENE_CAPTURE_TYPE: u16 = crate::tags::exif::SCENE_CAPTURE_TYPE;
+
 /// The direction of the contrast processing the camera applied, as a
 /// SHORT (Contrast), read from the Exif IFD: 0 normal, 1 soft and 2 hard.
 pub(crate) const CONTRAST: u16 = crate::tags::exif::CONTRAST;

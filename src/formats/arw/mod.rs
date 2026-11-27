@@ -189,12 +189,12 @@ fn parse<R: Read + Seek>(src: &mut Source<R>, tree: &Tree, limits: &Limits) -> R
 mod tests {
     use super::*;
     use crate::camera_settings::{
-        CameraSettings, Contrast, FocusMode, Saturation, Sharpness, WhiteBalance,
+        CameraSettings, Contrast, FocusMode, Saturation, SceneCaptureType, Sharpness, WhiteBalance,
         WhiteBalanceFineTune, WhiteBalanceMode,
     };
     use crate::container::tiff::tags::{
-        CONTRAST, DNG_PRIVATE_DATA, DNG_VERSION, MAKE, MAKER_NOTE, SATURATION, SHARPNESS,
-        WHITE_BALANCE as EXIF_WHITE_BALANCE,
+        CONTRAST, DNG_PRIVATE_DATA, DNG_VERSION, MAKE, MAKER_NOTE, SATURATION, SCENE_CAPTURE_TYPE,
+        SHARPNESS, WHITE_BALANCE as EXIF_WHITE_BALANCE,
     };
     use crate::container::tiff::{Block, walk};
     use crate::entries::Value;
@@ -412,8 +412,8 @@ mod tests {
 
     #[test]
     fn the_standard_processing_values_stand_beside_the_makernotes_settings() {
-        // Exif's directions of contrast, saturation and sharpness beside a
-        // MakerNote whose FocusMode says AF-C: the MakerNote's reader adds
+        // Exif's directions of contrast, saturation and sharpness and its
+        // scene capture type beside a MakerNote whose FocusMode says AF-C: the MakerNote's reader adds
         // its setting and leaves Exif's values as they are.
         let (mut src, tree) = file(|builder, ifd| {
             let exif = builder.ifd();
@@ -424,6 +424,7 @@ mod tests {
                 .short(exif, CONTRAST, &[2])
                 .short(exif, SATURATION, &[1])
                 .short(exif, SHARPNESS, &[1])
+                .short(exif, SCENE_CAPTURE_TYPE, &[2])
                 .byte(makernote, FOCUS_MODE, &[3])
                 .undefined_ifd(exif, MAKER_NOTE, makernote);
         });
@@ -432,7 +433,8 @@ mod tests {
             .with_focus_mode(FocusMode::Continuous)
             .with_contrast(Contrast::Hard)
             .with_saturation(Saturation::Low)
-            .with_sharpness(Sharpness::Soft);
+            .with_sharpness(Sharpness::Soft)
+            .with_scene_capture_type(SceneCaptureType::Portrait);
         assert_eq!(parsed.metadata.camera_settings(), &expected);
     }
 
