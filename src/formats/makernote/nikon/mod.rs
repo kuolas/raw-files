@@ -243,6 +243,11 @@ const AF_INFO: u16 = 0x0088;
 /// documentation names, and bit 11, pre-capture, are not read.
 const SHOOTING_MODE: u16 = 0x0089;
 
+/// The Nikon MakerNote tag under which the Coolpix bodies record the
+/// scene mode (SceneMode): ASCII text, 16 bytes with the NUL, padded with
+/// spaces, as [`VARI_PROGRAM`]. No measured file holds both.
+const COOLPIX_SCENE_MODE: u16 = 0x008F;
+
 /// The Nikon MakerNote tag that records how the raw data is compressed
 /// (NEFCompression): one SHORT, a code of Nikon's own. The bodies before
 /// the Z bodies write it, and the Z fc and the Z 30; the other Z bodies
@@ -253,6 +258,12 @@ const NEF_COMPRESSION: u16 = 0x0093;
 /// reduction ran on the picture (NoiseReduction): ASCII text, `FPNR`
 /// where it ran and `OFF` where it did not.
 const NOISE_REDUCTION: u16 = 0x0095;
+
+/// The Nikon MakerNote tag that records the scene mode on the DSLR and Z
+/// bodies (0x00AB, which ExifTool's documentation calls VariProgram):
+/// ASCII text, 16 bytes with the NUL, padded with spaces, such as `AUTO`
+/// or `PORTRAIT`, and blank under the program, priority and manual modes.
+const VARI_PROGRAM: u16 = 0x00AB;
 
 /// The Nikon MakerNote tag that records the high ISO noise reduction
 /// (HighISONoiseReduction): one SHORT, a code for its step, such as 0
@@ -344,6 +355,8 @@ mod rules {
     pub(super) const AF_INFO2: Rule<Vec<u8>> = Rule::new(super::AF_INFO2, &[FieldType::Undefined]);
     pub(super) const NEF_COMPRESSION: Held<[u32; 1]> = Held::new(super::NEF_COMPRESSION, SHORT);
     pub(super) const NOISE_REDUCTION: Rule<Text> = Rule::new(super::NOISE_REDUCTION, ASCII);
+    pub(super) const COOLPIX_SCENE_MODE: Rule<Text> = Rule::new(super::COOLPIX_SCENE_MODE, ASCII);
+    pub(super) const VARI_PROGRAM: Rule<Text> = Rule::new(super::VARI_PROGRAM, ASCII);
     pub(super) const COMPRESSION_RECORD: Rule<Vec<u8>> =
         Rule::new(super::COMPRESSION_RECORD, &[FieldType::Undefined]);
 

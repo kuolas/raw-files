@@ -429,7 +429,7 @@ pub use camera_settings::{
     ImageArea, JpegCompression, JpegQuality, LensCompensation, MeteringMode, PictureControl,
     PictureControlAdjustment, PictureControlFilterEffect, PictureControlToning,
     PictureControlValue, PictureStyle, RawCompression, RawImageSize, ReleaseMode, Saturation,
-    SceneCaptureType, Sharpness, Shutter, Stabilization, StabilizationMode, VignetteControl,
+    Scene, SceneCaptureType, Sharpness, Shutter, Stabilization, StabilizationMode, VignetteControl,
     VignettingCorrection, WhiteBalance, WhiteBalanceFineTune, WhiteBalanceMode,
 };
 pub use datetime::DateTime;

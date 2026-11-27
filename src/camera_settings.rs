@@ -14,7 +14,8 @@
 //! gain control, the maker's picture style, its dynamic range
 //! optimization and its high dynamic range setting, the high ISO, long
 //! exposure and multi-frame noise reductions, its vignetting and
-//! distortion corrections, and its chromatic aberration compensation.
+//! distortion corrections, its chromatic aberration compensation, and
+//! the scene it was set for.
 //! [`CameraSettings`] holds them all, and
 //! [`Metadata::camera_settings`](crate::Metadata::camera_settings) gives
 //! them for a file. [`WhiteBalance`], [`WhiteBalanceFineTune`], [`Flash`],
@@ -30,7 +31,8 @@
 //! [`VignettingCorrection`] Nikon's [`VignetteControl`] or Sony's shading
 //! compensation, and [`DistortionCorrection`] Nikon's
 //! [`AutoDistortionControl`] or Sony's distortion compensation, each of
-//! Sony's a [`LensCompensation`].
+//! Sony's a [`LensCompensation`]; and [`Scene`] holds Nikon's scene mode,
+//! its own text.
 //!
 //! Every value is optional. A file may not record it, or may record it in
 //! a way that cannot be read, such as a code no variant names; either way
@@ -59,7 +61,7 @@
 //!   optimal quality; the Picture Control, Nikon's picture style; Active
 //!   D-Lighting; HDR; the high ISO noise reduction; whether the long
 //!   exposure noise reduction ran, which says it was on; vignette
-//!   control; and auto distortion control.
+//!   control; auto distortion control; and the scene mode.
 //! - Sony's MakerNote, in ARW files and their family and in the JPEGs of
 //!   Sony cameras, gives the white balance setting in place of Exif's,
 //!   with its fine-tuning and the color temperature of a chosen color
@@ -113,8 +115,8 @@ use crate::rational::{Rational, SignedRational};
 /// picture in, the scene capture type, custom rendering, gain control, the
 /// maker's picture style, dynamic range optimization and high dynamic
 /// range setting, the noise reductions, the vignetting and distortion
-/// corrections, and the chromatic aberration compensation, for a viewer's
-/// information panel beside the exposure.
+/// corrections, the chromatic aberration compensation, and the scene, for
+/// a viewer's information panel beside the exposure.
 ///
 /// Every value is `None` when the file does not record it or records it in
 /// a way that cannot be read, such as a code that no variant names. A
@@ -239,6 +241,7 @@ pub struct CameraSettings {
     pub(crate) vignetting_correction: Option<VignettingCorrection>,
     pub(crate) distortion_correction: Option<DistortionCorrection>,
     pub(crate) chromatic_aberration_compensation: Option<LensCompensation>,
+    pub(crate) scene: Option<Scene>,
 }
 
 impl CameraSettings {
@@ -1704,6 +1707,58 @@ impl CameraSettings {
         self.chromatic_aberration_compensation
     }
 
+    /// The scene the photographer set the camera for, or its auto mode,
+    /// under its maker's own name: Nikon's scene mode, the camera's own
+    /// text ([`Scene`]). Exif's [`scene_capture_type`](Self::scene_capture_type)
+    /// is a value of its own.
+    ///
+    /// Read from Nikon's MakerNote, in a raw file and a JPEG alike: the
+    /// text of 0x00AB, which ExifTool's documentation calls VariProgram
+    /// and the DSLR and Z bodies write, or, in a file without it, of
+    /// SceneMode (0x008F), which the Coolpix bodies write. No measured
+    /// file holds both. The text is given as the camera writes it,
+    /// cleaned as every text, such as `PORTRAIT`, `CLOSE UP`, or an effect
+    /// such as `TOY CAMERA`; the auto modes too, `AUTO` and
+    /// `AUTO(FLASH OFF)`. raw-files keeps no list of the texts. On the
+    /// measured files a text is set exactly where Exif's ExposureProgram
+    /// is 0, "not defined", so that
+    /// [`exposure_program`](Self::exposure_program) is `None`.
+    ///
+    /// `None` when:
+    ///
+    /// - the file records none, as every file of another maker does, and
+    ///   every file of the D300S measured;
+    /// - the text is blank, as it is under the program, priority and
+    ///   manual modes;
+    /// - the text is not ASCII, or is longer than 255 bytes; a 0x00AB that
+    ///   gives none does not give way to 0x008F.
+    ///
+    /// What files record is in the NEF notes on
+    /// [the scene mode](https://github.com/kuolas/raw-files/blob/master/docs/formats/nef/makernote-and-metadata.md#811-picture-style-and-processing).
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use raw_files::{CameraFile, Scene};
+    ///
+    /// # fn main() -> raw_files::Result<()> {
+    /// let file = CameraFile::open("photo.nef")?;
+    /// if let Some(scene) = file.metadata().camera_settings().scene() {
+    ///     println!("{}: {}", scene.setting_name(), scene.name());
+    ///     match scene {
+    ///         Scene::SceneMode(text) if text.starts_with("AUTO") => {
+    ///             println!("one of Nikon's auto modes");
+    ///         }
+    ///         _ => {}
+    ///     }
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn scene(&self) -> Option<&Scene> {
+        self.scene.as_ref()
+    }
+
     /// Sets the white balance, in place of the one it had;
     /// [`white_balance`](Self::white_balance) reads it.
     #[must_use]
@@ -2018,6 +2073,14 @@ impl CameraSettings {
         compensation: LensCompensation,
     ) -> Self {
         self.chromatic_aberration_compensation = Some(compensation);
+        self
+    }
+
+    /// Sets the scene, in place of any set before; [`scene`](Self::scene)
+    /// reads it.
+    #[must_use]
+    pub fn with_scene(mut self, scene: Scene) -> Self {
+        self.scene = Some(scene);
         self
     }
 }
@@ -6425,6 +6488,74 @@ impl fmt::Display for LensCompensation {
     }
 }
 
+/// The scene the photographer set the camera for, or its auto mode, under
+/// its maker's own name: the variant says which maker's setting it is,
+/// and holds that setting's own value.
+///
+/// Each maker names the setting and records it in its own way, so each
+/// keeps its own value:
+///
+/// - [`SceneMode`](Self::SceneMode), Nikon's scene mode, the camera's
+///   own text, as it writes it.
+///
+/// [`setting_name`](Self::setting_name) gives the maker's word for the
+/// setting, for a viewer's label, and [`name`](Self::name) the scene's
+/// name, whichever maker's it is.
+///
+/// Exif's scene capture type, [`SceneCaptureType`], is a value of its
+/// own: a program may set it without a scene mode, as Nikon's Picture
+/// Controls do.
+///
+/// `Scene` is `#[non_exhaustive]`, so match on it with a wildcard arm:
+/// another maker's setting is added as a variant. It is `Clone` and not
+/// `Copy`, since Nikon's holds a text, and has no `Default`: a setting is
+/// always one maker's. It has no `Display` either, as
+/// [`DynamicRangeOptimization`] has none: a viewer writes the setting's
+/// name and the scene's together.
+///
+/// # Examples
+///
+/// A maker's setting, labeled for a viewer and read by its variant:
+///
+/// ```
+/// use raw_files::Scene;
+///
+/// let nikon = Scene::SceneMode("AUTO(FLASH OFF)".to_owned());
+/// println!("{}: {}", nikon.setting_name(), nikon.name());
+/// let flash_off = match &nikon {
+///     Scene::SceneMode(text) => text == "AUTO(FLASH OFF)",
+///     _ => false,
+/// };
+/// assert!(flash_off);
+/// assert_eq!(nikon.setting_name(), "Scene mode");
+/// assert_eq!(nikon.name(), "AUTO(FLASH OFF)");
+/// ```
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum Scene {
+    /// Nikon's scene mode: the camera's text, as it writes it, such as
+    /// `PORTRAIT` or `AUTO`.
+    SceneMode(String),
+}
+
+impl Scene {
+    /// The maker's word for the setting, for a viewer's label: "Scene
+    /// mode".
+    pub fn setting_name(&self) -> &'static str {
+        match self {
+            Scene::SceneMode(_) => "Scene mode",
+        }
+    }
+
+    /// The scene's name, whichever maker's setting it is: Nikon's text,
+    /// as the camera writes it, such as `PORTRAIT`.
+    pub fn name(&self) -> &str {
+        match self {
+            Scene::SceneMode(text) => text,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -6512,6 +6643,7 @@ mod tests {
                 AutoDistortionControl::OnUnderwater,
             )),
             chromatic_aberration_compensation: Some(LensCompensation::Auto),
+            scene: Some(Scene::SceneMode("AUTO(FLASH OFF)".to_owned())),
         }
     }
 
@@ -6599,6 +6731,7 @@ mod tests {
         assert_eq!(settings.vignetting_correction(), None);
         assert_eq!(settings.distortion_correction(), None);
         assert_eq!(settings.chromatic_aberration_compensation(), None);
+        assert_eq!(settings.scene(), None);
 
         let control = PictureControl::default();
         assert_eq!(control.name(), None);
@@ -6743,6 +6876,10 @@ mod tests {
         assert_eq!(
             settings.chromatic_aberration_compensation(),
             Some(LensCompensation::Auto)
+        );
+        assert_eq!(
+            settings.scene(),
+            Some(&Scene::SceneMode("AUTO(FLASH OFF)".to_owned()))
         );
 
         let control = full_control();
@@ -7096,6 +7233,15 @@ mod tests {
                         ..start.clone()
                     },
                 ),
+                (
+                    start
+                        .clone()
+                        .with_scene(Scene::SceneMode("PORTRAIT".to_owned())),
+                    CameraSettings {
+                        scene: Some(Scene::SceneMode("PORTRAIT".to_owned())),
+                        ..start.clone()
+                    },
+                ),
             ];
             for (place, (built, expected)) in cases.into_iter().enumerate() {
                 assert_eq!(built, expected, "builder {place} from {start:?}");
@@ -7396,6 +7542,15 @@ mod tests {
     }
 
     #[test]
+    fn a_scene_gives_its_makers_word_and_its_name() {
+        for text in ["AUTO", "AUTO(FLASH OFF)", "TOY CAMERA"] {
+            let scene = Scene::SceneMode(text.to_owned());
+            assert_eq!(scene.setting_name(), "Scene mode");
+            assert_eq!(scene.name(), text);
+        }
+    }
+
+    #[test]
     fn on_and_off_build_an_hdr_that_says_so_with_no_parts() {
         for (hdr, on) in [(Hdr::on(), true), (Hdr::off(), false)] {
             assert_eq!(hdr.is_on(), on);
@@ -7660,7 +7815,8 @@ mod tests {
             .with_distortion_correction(DistortionCorrection::from(
                 AutoDistortionControl::OnUnderwater,
             ))
-            .with_chromatic_aberration_compensation(LensCompensation::Auto);
+            .with_chromatic_aberration_compensation(LensCompensation::Auto)
+            .with_scene(Scene::SceneMode("AUTO(FLASH OFF)".to_owned()));
         assert_eq!(settings, full_settings());
     }
 
@@ -7703,7 +7859,8 @@ mod tests {
             .with_multi_frame_noise_reduction(true)
             .with_vignetting_correction(VignetteControl::Normal.into())
             .with_distortion_correction(AutoDistortionControl::On.into())
-            .with_chromatic_aberration_compensation(LensCompensation::Off);
+            .with_chromatic_aberration_compensation(LensCompensation::Off)
+            .with_scene(Scene::SceneMode("SPORT".to_owned()));
         // Every value of `earlier` differs from the full record's, so each
         // builder below has one to replace.
         let full = full_settings();
@@ -7744,7 +7901,8 @@ mod tests {
             .with_multi_frame_noise_reduction(false)
             .with_vignetting_correction(VignetteControl::Low.into())
             .with_distortion_correction(AutoDistortionControl::OnUnderwater.into())
-            .with_chromatic_aberration_compensation(LensCompensation::Auto);
+            .with_chromatic_aberration_compensation(LensCompensation::Auto)
+            .with_scene(full.scene.clone().unwrap());
         assert_eq!(settings, full);
 
         let hdr = Hdr::on()
