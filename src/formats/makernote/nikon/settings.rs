@@ -6,8 +6,8 @@
 //! focus mode, the AF-area mode, AF fine-tune, the stabilization, auto ISO,
 //! the exposure fine-tuning, the release mode and bracketing, daylight
 //! saving time, the flash's source, control, sync and compensation, the
-//! Picture Control, Active D-Lighting, HDR, and the high ISO and long
-//! exposure noise reductions.
+//! Picture Control, Active D-Lighting, HDR, the high ISO and long exposure
+//! noise reductions, and vignette control.
 //!
 //! The MakerNote records how the camera was set for the picture beyond
 //! what the Exif tags record (ADR011). [`camera_settings`] reads each
@@ -55,7 +55,9 @@
 //! - the high ISO noise reduction from HighISONoiseReduction
 //!   ([`high_iso_noise_reduction`]);
 //! - the long exposure noise reduction from NoiseReduction's text
-//!   ([`long_exposure_noise_reduction_of_text`]).
+//!   ([`long_exposure_noise_reduction_of_text`]);
+//! - the vignetting correction from VignetteControl
+//!   ([`vignette_control`]).
 //!
 //! A code or a text gives a value only where its meaning is known, as the
 //! next paragraph says. Anything else costs that value alone.
@@ -84,7 +86,8 @@ use crate::camera_settings::{
     Flash, FlashControl, FlashSource, FlashSync, FocusAreaMode, FocusMode, Hdr,
     HdrExposureDifferential, HdrSmoothing, HdrStrength, HighDynamicRange, HighIsoNoiseReduction,
     ImageArea, JpegCompression, JpegQuality, PictureStyle, RawCompression, RawImageSize,
-    ReleaseMode, Shutter, Stabilization, StabilizationMode, WhiteBalanceFineTune, WhiteBalanceMode,
+    ReleaseMode, Shutter, Stabilization, StabilizationMode, VignetteControl, VignettingCorrection,
+    WhiteBalanceFineTune, WhiteBalanceMode,
 };
 use crate::container::tiff::Ifd;
 use crate::error::Result;
@@ -217,6 +220,9 @@ const NIKON_COMPRESSED: u32 = 34713;
 /// - **The long exposure noise reduction** is on where NoiseReduction's
 ///   text, read by the text rule, says it ran
 ///   ([`long_exposure_noise_reduction_of_text`]), and `None` otherwise.
+/// - **The vignetting correction** is the vignette control step that
+///   VignetteControl's code names ([`vignette_control`]), in a raw file
+///   and a JPEG alike.
 ///
 /// Nikon records no multi-frame noise reduction, so it stays `None`.
 ///
@@ -355,6 +361,10 @@ pub(super) fn camera_settings<R: Read + Seek>(
         .and_then(|[code]| high_iso_noise_reduction(code));
     settings.long_exposure_noise_reduction = tiff_metadata::text(src, ifd, rules::NOISE_REDUCTION)?
         .and_then(|text| long_exposure_noise_reduction_of_text(&text));
+    settings.vignetting_correction = ifd
+        .held(rules::VIGNETTE_CONTROL)
+        .and_then(|[code]| vignette_control(code))
+        .map(VignettingCorrection::VignetteControl);
     Ok(settings)
 }
 
@@ -550,6 +560,23 @@ fn high_iso_noise_reduction(code: u32) -> Option<HighIsoNoiseReduction> {
 /// speeds slower than 1 s.
 fn long_exposure_noise_reduction_of_text(text: &str) -> Option<bool> {
     (text == "FPNR").then_some(true)
+}
+
+/// The vignette control step a VignetteControl `code` names, in the list
+/// ExifTool's published documentation gives, read whole, since files hold
+/// part of it (NEF notes, section 8.11): 0 [`Off`](VignetteControl::Off),
+/// 1 [`Low`](VignetteControl::Low) and 3
+/// [`Normal`](VignetteControl::Normal), each on files, and 5
+/// [`High`](VignetteControl::High), documented only. `None` for every
+/// other code, such as 2 or 4, which the list lacks.
+fn vignette_control(code: u32) -> Option<VignetteControl> {
+    Some(match code {
+        0 => VignetteControl::Off,
+        1 => VignetteControl::Low,
+        3 => VignetteControl::Normal,
+        5 => VignetteControl::High,
+        _ => return None,
+    })
 }
 
 /// `exif_flash`, the flash the Exif tags gave, with the parts the
@@ -1329,8 +1356,8 @@ mod tests {
         COMPRESSION_RECORD, COOLPIX_PICTURE_CONTROL, CROP_HI_SPEED, EXPOSURE_TUNING, FINE_TUNE,
         FINE_TUNE_STEPS, FLASH_EXPOSURE_COMP, FLASH_SETTING, FLASH_TYPE, FOCUS_MODE, HDR_INFO,
         HIGH_ISO_NOISE_REDUCTION, IMAGE_SIZE_RAW, ISO_SELECTION, JPG_COMPRESSION, NEF_COMPRESSION,
-        NOISE_REDUCTION, PICTURE_CONTROL, QUALITY, SHOOTING_MODE, SHUTTER_MODE, VR_INFO,
-        WHITE_BALANCE, WORLD_TIME, metadata,
+        NOISE_REDUCTION, PICTURE_CONTROL, QUALITY, SHOOTING_MODE, SHUTTER_MODE, VIGNETTE_CONTROL,
+        VR_INFO, WHITE_BALANCE, WORLD_TIME, metadata,
     };
     use super::*;
     use crate::camera_settings::{
@@ -4568,6 +4595,60 @@ mod tests {
                 Some(WhiteBalanceMode::Daylight),
                 "{order:?}"
             );
+        }
+    }
+
+    // Vignette control.
+
+    /// Each code of VignetteControl's list with the step it names, and
+    /// codes the list lacks.
+    const VIGNETTE_CONTROLS: [(u16, Option<VignetteControl>); 8] = [
+        (0, Some(VignetteControl::Off)),
+        (1, Some(VignetteControl::Low)),
+        (3, Some(VignetteControl::Normal)),
+        (5, Some(VignetteControl::High)),
+        (2, None),
+        (4, None),
+        (6, None),
+        (65535, None),
+    ];
+
+    #[test]
+    fn each_vignette_control_code_gives_its_step_in_a_raw_file_and_a_jpeg() {
+        for order in ORDERS {
+            for (code, step) in VIGNETTE_CONTROLS {
+                let tags = |inner: &mut TiffBuilder, ifd: IfdId| {
+                    inner.short(ifd, VIGNETTE_CONTROL, &[code]);
+                };
+                let expected = step.map(VignettingCorrection::VignetteControl);
+                let raw = settings_of(order, tags);
+                assert_eq!(raw.vignetting_correction, expected, "{order:?}, {code}");
+                let jpeg = jpeg_settings(order, tags, |_, _| {});
+                assert_eq!(jpeg.vignetting_correction, expected, "{order:?}, {code}");
+            }
+        }
+    }
+
+    #[test]
+    fn a_vignette_control_of_another_shape_gives_none_and_costs_nothing_else() {
+        for order in ORDERS {
+            // One LONG, two SHORTs, and two UNDEFINED bytes.
+            for place in 0..3 {
+                let settings = settings_of(order, |inner, ifd| {
+                    match place {
+                        0 => inner.long(ifd, VIGNETTE_CONTROL, &[3]),
+                        1 => inner.short(ifd, VIGNETTE_CONTROL, &[3, 3]),
+                        _ => inner.undefined(ifd, VIGNETTE_CONTROL, &[3, 0]),
+                    };
+                    inner.ascii(ifd, WHITE_BALANCE, &padded("SUNNY"));
+                });
+                assert_eq!(settings.vignetting_correction, None, "{order:?}, {place}");
+                assert_eq!(
+                    settings.white_balance.mode,
+                    Some(WhiteBalanceMode::Daylight),
+                    "{order:?}, {place}"
+                );
+            }
         }
     }
 }

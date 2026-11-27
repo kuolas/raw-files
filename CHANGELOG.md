@@ -435,6 +435,16 @@ does. An entry that can break a caller opens with **Breaking:**.
     half, is not read.
   - Sony's multi-frame noise reduction is read from 0x200B. Nikon has
     no such setting.
+- `CameraSettings::vignetting_correction` gives how the camera
+  corrected the drop in brightness toward the picture's edges, a
+  `VignettingCorrection` under its maker's own name.
+  `with_vignetting_correction` sets it
+  ([#230](https://github.com/kuolas/raw-files/issues/230)).
+  - Its first variant is Nikon's `VignetteControl`, read from 0x002A:
+    off, low, normal or high.
+  - `VignettingCorrection::setting_name` gives the maker's word for the
+    setting, and `name` the step's name. Each maker's type converts
+    into it with `From`.
 
 ### Changed
 

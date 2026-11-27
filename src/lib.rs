@@ -428,8 +428,8 @@ pub use camera_settings::{
     HighDynamicRange, HighIsoNoiseReduction, ImageArea, JpegCompression, JpegQuality, MeteringMode,
     PictureControl, PictureControlAdjustment, PictureControlFilterEffect, PictureControlToning,
     PictureControlValue, PictureStyle, RawCompression, RawImageSize, ReleaseMode, Saturation,
-    SceneCaptureType, Sharpness, Shutter, Stabilization, StabilizationMode, WhiteBalance,
-    WhiteBalanceFineTune, WhiteBalanceMode,
+    SceneCaptureType, Sharpness, Shutter, Stabilization, StabilizationMode, VignetteControl,
+    VignettingCorrection, WhiteBalance, WhiteBalanceFineTune, WhiteBalanceMode,
 };
 pub use datetime::DateTime;
 pub use entries::{Directory, Entries, Entry, FieldType, SkippedDirectory, Value, ValueDisplay};

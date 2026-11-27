@@ -18,7 +18,7 @@ use std::io::{Cursor, Read, Seek};
 
 use crate::camera_settings::{
     AutoHdrExposureDifference, DynamicRangeOptimization, HdrExposureDifferential, HighDynamicRange,
-    PictureControlValue, PictureStyle,
+    PictureControlValue, PictureStyle, VignettingCorrection,
 };
 use crate::container::jpeg::{mpf, probe, segments};
 use crate::container::tiff::{Block, FieldType, First, Held, Rule, Text, Tree, walk};
@@ -464,6 +464,9 @@ fn read_metadata(metadata: &Metadata) {
         .map(|step| step.to_string());
     let _ = settings.long_exposure_noise_reduction();
     let _ = settings.multi_frame_noise_reduction();
+    if let Some(correction) = settings.vignetting_correction() {
+        read_vignetting_correction(correction);
+    }
     let tiny = Size {
         width: 1,
         height: 1,
@@ -605,6 +608,17 @@ fn read_dynamic_range_optimization(optimization: DynamicRangeOptimization) {
             let _ = step.to_string();
         }
         DynamicRangeOptimization::DRangeOptimizer(step) => {
+            let _ = step.to_string();
+        }
+    }
+}
+
+/// Calls every getter of the vignetting correction `correction`,
+/// whichever maker's it is.
+fn read_vignetting_correction(correction: VignettingCorrection) {
+    let _ = (correction.setting_name(), correction.name());
+    match correction {
+        VignettingCorrection::VignetteControl(step) => {
             let _ = step.to_string();
         }
     }
