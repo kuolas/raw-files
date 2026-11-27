@@ -74,6 +74,8 @@ Linux and Windows alike.
     one too.
   - the vignetting correction, under its maker's own name: on Nikon
     files vignette control.
+  - the distortion correction, under its maker's own name: on Nikon
+    files auto distortion control.
   - [`CameraSettings`](https://docs.rs/raw-files/latest/raw_files/struct.CameraSettings.html)
     says which a maker's files leave out: Sony's give no shutter, image
     area or raw image size.

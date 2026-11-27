@@ -421,12 +421,13 @@ mod value_error;
 pub use authorship::Authorship;
 pub use camera::{Camera, Make};
 pub use camera_settings::{
-    ActiveDLighting, AfFineTune, AutoHdr, AutoHdrExposureDifference, Bracketing, CameraSettings,
-    ColorSpace, Contrast, CreativeLook, CreativeStyle, DRangeOptimizer, DynamicRangeOptimization,
-    ExposureProgram, Flash, FlashControl, FlashMode, FlashSource, FlashSync, FluorescentLamp,
-    FocusAreaMode, FocusMode, GainControl, Hdr, HdrExposureDifferential, HdrSmoothing, HdrStrength,
-    HighDynamicRange, HighIsoNoiseReduction, ImageArea, JpegCompression, JpegQuality, MeteringMode,
-    PictureControl, PictureControlAdjustment, PictureControlFilterEffect, PictureControlToning,
+    ActiveDLighting, AfFineTune, AutoDistortionControl, AutoHdr, AutoHdrExposureDifference,
+    Bracketing, CameraSettings, ColorSpace, Contrast, CreativeLook, CreativeStyle, DRangeOptimizer,
+    DistortionCorrection, DynamicRangeOptimization, ExposureProgram, Flash, FlashControl,
+    FlashMode, FlashSource, FlashSync, FluorescentLamp, FocusAreaMode, FocusMode, GainControl, Hdr,
+    HdrExposureDifferential, HdrSmoothing, HdrStrength, HighDynamicRange, HighIsoNoiseReduction,
+    ImageArea, JpegCompression, JpegQuality, MeteringMode, PictureControl,
+    PictureControlAdjustment, PictureControlFilterEffect, PictureControlToning,
     PictureControlValue, PictureStyle, RawCompression, RawImageSize, ReleaseMode, Saturation,
     SceneCaptureType, Sharpness, Shutter, Stabilization, StabilizationMode, VignetteControl,
     VignettingCorrection, WhiteBalance, WhiteBalanceFineTune, WhiteBalanceMode,

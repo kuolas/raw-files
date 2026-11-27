@@ -907,6 +907,7 @@ fn camera_settings<R: Read + Seek>(
         multi_frame_noise_reduction: None,
         // Only a maker's MakerNote records the lens corrections.
         vignetting_correction: None,
+        distortion_correction: None,
     })
 }
 
