@@ -47,8 +47,9 @@ use std::io::{Read, Seek};
 use crate::authorship::Authorship;
 use crate::camera::Camera;
 use crate::camera_settings::{
-    Bracketing, CameraSettings, ColorSpace, ExposureProgram, Flash, FlashMode, FluorescentLamp,
-    MeteringMode, RawCompression, WhiteBalance, WhiteBalanceMode,
+    Bracketing, CameraSettings, ColorSpace, Contrast, ExposureProgram, Flash, FlashMode,
+    FluorescentLamp, MeteringMode, RawCompression, Saturation, Sharpness, WhiteBalance,
+    WhiteBalanceMode,
 };
 use crate::container::tiff::tags::COLOR_SPACE;
 use crate::container::tiff::{First, Ifd, Rule, Text, Tree};
@@ -141,6 +142,9 @@ mod rules {
     pub(super) const WHITE_BALANCE: Held<[u32; 1]> = Held::new(tags::WHITE_BALANCE, SHORT);
     pub(super) const LIGHT_SOURCE: Held<[u32; 1]> = Held::new(tags::LIGHT_SOURCE, SHORT);
     pub(super) const COLOR_SPACE: Held<[u32; 1]> = Held::new(tags::COLOR_SPACE, SHORT);
+    pub(super) const CONTRAST: Held<[u32; 1]> = Held::new(tags::CONTRAST, SHORT);
+    pub(super) const SATURATION: Held<[u32; 1]> = Held::new(tags::SATURATION, SHORT);
+    pub(super) const SHARPNESS: Held<[u32; 1]> = Held::new(tags::SHARPNESS, SHORT);
 
     // The Interoperability IFD.
     pub(super) const INTEROP_INDEX: Rule<Text> = Rule::new(tags::INTEROP_INDEX, ASCII);
@@ -778,9 +782,11 @@ const DCF_OPTION_FILE: &str = "R03";
 /// How the camera was set for the picture, as the Exif IFD `exif` records
 /// it: the exposure program, the metering mode, the flash, the white
 /// balance mode and, for a manual one, its kind of fluorescent lamp
-/// ([`fluorescent_lamp`]), the color space, and exposure bracketing
-/// ([`bracketing`]). The color space also reads the Interoperability IFD
-/// `interop`, when the tree has one.
+/// ([`fluorescent_lamp`]), the color space, exposure bracketing
+/// ([`bracketing`]), and the directions of contrast ([`contrast`]),
+/// saturation ([`saturation`]) and sharpness ([`sharpness`]). The color
+/// space also reads the Interoperability IFD `interop`, when the tree has
+/// one.
 ///
 /// Each tag must be exactly one SHORT, as the standard gives it. Each code
 /// Exif defines and a variant names gives that variant. Every other code,
@@ -790,7 +796,9 @@ const DCF_OPTION_FILE: &str = "R03";
 /// The other settings, which only a maker's MakerNote records, are `None`.
 /// A format's MakerNote reader fills them where its MakerNote records them.
 /// It also puts the MakerNote's white balance setting, finer than Exif's,
-/// in place of the mode read here, when the MakerNote names one.
+/// in place of the mode read here, when the MakerNote names one. No
+/// MakerNote reader touches the directions of contrast, saturation and
+/// sharpness: a maker's finer values belong to its picture style (ADR011).
 ///
 /// # Errors
 ///
@@ -862,6 +870,53 @@ fn camera_settings<R: Read + Seek>(
         // JPEG was compressed.
         jpeg_quality: None,
         jpeg_compression: None,
+        contrast: exif.held(rules::CONTRAST).and_then(|[code]| contrast(code)),
+        saturation: exif
+            .held(rules::SATURATION)
+            .and_then(|[code]| saturation(code)),
+        sharpness: exif
+            .held(rules::SHARPNESS)
+            .and_then(|[code]| sharpness(code)),
+    })
+}
+
+/// The direction an Exif Contrast `code` names: 0
+/// [`Normal`](Contrast::Normal), 1 [`Soft`](Contrast::Soft) and 2
+/// [`Hard`](Contrast::Hard) (Exif 3.1, 4.6.6.7.42). `None` for every code
+/// Exif reserves, 3 and above.
+fn contrast(code: u32) -> Option<Contrast> {
+    Some(match code {
+        0 => Contrast::Normal,
+        1 => Contrast::Soft,
+        2 => Contrast::Hard,
+        _ => return None,
+    })
+}
+
+/// The direction an Exif Saturation `code` names: 0
+/// [`Normal`](Saturation::Normal), 1, low saturation,
+/// [`Low`](Saturation::Low), and 2, high saturation,
+/// [`High`](Saturation::High) (Exif 3.1, 4.6.6.7.43). `None` for every
+/// code Exif reserves, 3 and above.
+fn saturation(code: u32) -> Option<Saturation> {
+    Some(match code {
+        0 => Saturation::Normal,
+        1 => Saturation::Low,
+        2 => Saturation::High,
+        _ => return None,
+    })
+}
+
+/// The direction an Exif Sharpness `code` names: 0
+/// [`Normal`](Sharpness::Normal), 1 [`Soft`](Sharpness::Soft) and 2
+/// [`Hard`](Sharpness::Hard) (Exif 3.1, 4.6.6.7.44). `None` for every code
+/// Exif reserves, 3 and above.
+fn sharpness(code: u32) -> Option<Sharpness> {
+    Some(match code {
+        0 => Sharpness::Normal,
+        1 => Sharpness::Soft,
+        2 => Sharpness::Hard,
+        _ => return None,
     })
 }
 
@@ -4056,8 +4111,10 @@ mod tests {
     /// aperture priority, multi-segment metering, a flash that fired in
     /// fill mode, a manual white balance for shade, a color space that is
     /// "uncalibrated", which the InteropIndex `R03` beside it makes Adobe
-    /// RGB, and auto bracket, exposure bracketing.
-    const FULL_SETTINGS: [(u16, u16); 7] = [
+    /// RGB, and auto bracket, exposure bracketing; then how the camera
+    /// processed the picture: hard contrast, low saturation and soft
+    /// sharpness.
+    const FULL_SETTINGS: [(u16, u16); 10] = [
         (EXPOSURE_PROGRAM, 3),
         (METERING_MODE, 5),
         // Fired in fill mode, the return light detected, red-eye
@@ -4067,6 +4124,9 @@ mod tests {
         (LIGHT_SOURCE, 11),
         (COLOR_SPACE, 65535),
         (EXPOSURE_MODE, 2),
+        (CONTRAST, 2),
+        (SATURATION, 1),
+        (SHARPNESS, 1),
     ];
 
     /// The metadata of a file whose IFD0 holds the Make `SONY`, whose Exif
@@ -4114,6 +4174,9 @@ mod tests {
             },
             color_space: Some(ColorSpace::AdobeRgb),
             bracketing: Some(Bracketing::Exposure),
+            contrast: Some(Contrast::Hard),
+            saturation: Some(Saturation::Low),
+            sharpness: Some(Sharpness::Soft),
             ..CameraSettings::default()
         };
         change(&mut settings);
@@ -4139,7 +4202,7 @@ mod tests {
     #[test]
     fn a_setting_missing_or_of_another_type_or_count_is_none_and_costs_no_other() {
         type Unset = fn(&mut CameraSettings);
-        let settings: [(u16, Unset); 7] = [
+        let settings: [(u16, Unset); 10] = [
             (EXPOSURE_PROGRAM, |settings| {
                 settings.exposure_program = None
             }),
@@ -4149,6 +4212,9 @@ mod tests {
             (LIGHT_SOURCE, |settings| settings.white_balance.mode = None),
             (COLOR_SPACE, |settings| settings.color_space = None),
             (EXPOSURE_MODE, |settings| settings.bracketing = None),
+            (CONTRAST, |settings| settings.contrast = None),
+            (SATURATION, |settings| settings.saturation = None),
+            (SHARPNESS, |settings| settings.sharpness = None),
         ];
         // Each with the code that gives a value as one SHORT.
         type Damage = fn(&mut TiffBuilder, IfdId, u16, u16);
@@ -4201,6 +4267,30 @@ mod tests {
                 expected,
                 "{code}"
             );
+        }
+    }
+
+    #[test]
+    fn every_contrast_saturation_and_sharpness_exif_defines_gives_its_direction() {
+        for (code, contrast, saturation, sharpness) in [
+            (0, Contrast::Normal, Saturation::Normal, Sharpness::Normal),
+            (1, Contrast::Soft, Saturation::Low, Sharpness::Soft),
+            (2, Contrast::Hard, Saturation::High, Sharpness::Hard),
+        ] {
+            assert_eq!(settings_of(CONTRAST, code).contrast, Some(contrast));
+            assert_eq!(settings_of(SATURATION, code).saturation, Some(saturation));
+            assert_eq!(settings_of(SHARPNESS, code).sharpness, Some(sharpness));
+        }
+    }
+
+    #[test]
+    fn a_contrast_saturation_or_sharpness_exif_reserves_is_none() {
+        // Exif reserves every code from 3 on; no camera file measured
+        // holds one.
+        for code in [3, 4, 255, 65535] {
+            assert_eq!(settings_of(CONTRAST, code).contrast, None, "{code}");
+            assert_eq!(settings_of(SATURATION, code).saturation, None, "{code}");
+            assert_eq!(settings_of(SHARPNESS, code).sharpness, None, "{code}");
         }
     }
 

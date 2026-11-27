@@ -426,11 +426,14 @@ fn lookup<R: Read + Seek>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::camera_settings::{CameraSettings, ColorSpace, FocusMode, MeteringMode};
+    use crate::camera_settings::{
+        CameraSettings, ColorSpace, Contrast, FocusMode, MeteringMode, Saturation, Sharpness,
+    };
     use crate::container::jpeg::segments;
     use crate::container::tiff::tags::{
-        BITS_PER_SAMPLE, COLOR_SPACE, COMPRESSION, IMAGE_LENGTH, IMAGE_WIDTH, INTEROP_INDEX, MAKE,
-        MAKER_NOTE, METERING_MODE, PHOTOMETRIC_INTERPRETATION,
+        BITS_PER_SAMPLE, COLOR_SPACE, COMPRESSION, CONTRAST, IMAGE_LENGTH, IMAGE_WIDTH,
+        INTEROP_INDEX, MAKE, MAKER_NOTE, METERING_MODE, PHOTOMETRIC_INTERPRETATION, SATURATION,
+        SHARPNESS,
     };
     use crate::entries::Directory;
     use crate::error::ErrorKind;
@@ -622,6 +625,9 @@ mod tests {
                 .interop(exif, interop)
                 .short(exif, METERING_MODE, &[5])
                 .short(exif, COLOR_SPACE, &[65535])
+                .short(exif, CONTRAST, &[1])
+                .short(exif, SATURATION, &[2])
+                .short(exif, SHARPNESS, &[2])
                 .ascii(interop, INTEROP_INDEX, "R03");
             if !block.is_empty() {
                 let makernote = tiff.blob(block);
@@ -634,7 +640,10 @@ mod tests {
             let parsed = parse(&mut src, &found, &Limits::default()).unwrap();
             let exif = CameraSettings::default()
                 .with_metering_mode(MeteringMode::MultiSegment)
-                .with_color_space(ColorSpace::AdobeRgb);
+                .with_color_space(ColorSpace::AdobeRgb)
+                .with_contrast(Contrast::Soft)
+                .with_saturation(Saturation::High)
+                .with_sharpness(Sharpness::Hard);
             let expected = match make {
                 "SONY" => exif.with_focus_mode(FocusMode::Continuous),
                 _ => exif,

@@ -438,6 +438,11 @@ fn read_metadata(metadata: &Metadata) {
     let _ = settings
         .jpeg_compression()
         .map(|compression| compression.to_string());
+    let _ = settings.contrast().map(|contrast| contrast.to_string());
+    let _ = settings
+        .saturation()
+        .map(|saturation| saturation.to_string());
+    let _ = settings.sharpness().map(|sharpness| sharpness.to_string());
     let tiny = Size {
         width: 1,
         height: 1,

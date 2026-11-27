@@ -421,10 +421,11 @@ mod value_error;
 pub use authorship::Authorship;
 pub use camera::{Camera, Make};
 pub use camera_settings::{
-    AfFineTune, Bracketing, CameraSettings, ColorSpace, ExposureProgram, Flash, FlashControl,
-    FlashMode, FlashSource, FlashSync, FluorescentLamp, FocusAreaMode, FocusMode, ImageArea,
-    JpegCompression, JpegQuality, MeteringMode, RawCompression, RawImageSize, ReleaseMode, Shutter,
-    Stabilization, StabilizationMode, WhiteBalance, WhiteBalanceFineTune, WhiteBalanceMode,
+    AfFineTune, Bracketing, CameraSettings, ColorSpace, Contrast, ExposureProgram, Flash,
+    FlashControl, FlashMode, FlashSource, FlashSync, FluorescentLamp, FocusAreaMode, FocusMode,
+    ImageArea, JpegCompression, JpegQuality, MeteringMode, RawCompression, RawImageSize,
+    ReleaseMode, Saturation, Sharpness, Shutter, Stabilization, StabilizationMode, WhiteBalance,
+    WhiteBalanceFineTune, WhiteBalanceMode,
 };
 pub use datetime::DateTime;
 pub use entries::{Directory, Entries, Entry, FieldType, SkippedDirectory, Value, ValueDisplay};
