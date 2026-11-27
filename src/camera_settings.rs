@@ -32,7 +32,7 @@
 //! compensation, and [`DistortionCorrection`] Nikon's
 //! [`AutoDistortionControl`] or Sony's distortion compensation, each of
 //! Sony's a [`LensCompensation`]; and [`Scene`] holds Nikon's scene mode,
-//! its own text.
+//! its own text, or Sony's [`SceneSelection`].
 //!
 //! Every value is optional. A file may not record it, or may record it in
 //! a way that cannot be read, such as a code no variant names; either way
@@ -72,9 +72,10 @@
 //!   and its compensation, the JPEG quality, the Creative Style or
 //!   Creative Look, Sony's picture style, the D-Range Optimizer, Auto HDR,
 //!   the high ISO noise reduction, which a raw file's 0 does not give, the
-//!   long exposure and multi-frame noise reductions, and the shading,
-//!   distortion and chromatic aberration compensations. A Sony raw file
-//!   says how a compressed raw is compressed in codes of Sony's own.
+//!   long exposure and multi-frame noise reductions, the shading,
+//!   distortion and chromatic aberration compensations, and the Scene
+//!   Selection. A Sony raw file says how a compressed raw is compressed
+//!   in codes of Sony's own.
 //!
 //! Where a Nikon MakerNote records its crop as "off", or holds no crop,
 //! raw-files gives the body's sensor format from a table of its own, for
@@ -1709,46 +1710,65 @@ impl CameraSettings {
 
     /// The scene the photographer set the camera for, or its auto mode,
     /// under its maker's own name: Nikon's scene mode, the camera's own
-    /// text ([`Scene`]). Exif's [`scene_capture_type`](Self::scene_capture_type)
-    /// is a value of its own.
+    /// text, or Sony's [`SceneSelection`] ([`Scene`]). Exif's
+    /// [`scene_capture_type`](Self::scene_capture_type) is a value of its
+    /// own.
     ///
-    /// Read from Nikon's MakerNote, in a raw file and a JPEG alike: the
-    /// text of 0x00AB, which ExifTool's documentation calls VariProgram
-    /// and the DSLR and Z bodies write, or, in a file without it, of
-    /// SceneMode (0x008F), which the Coolpix bodies write. No measured
-    /// file holds both. The text is given as the camera writes it,
-    /// cleaned as every text, such as `PORTRAIT`, `CLOSE UP`, or an effect
-    /// such as `TOY CAMERA`; the auto modes too, `AUTO` and
-    /// `AUTO(FLASH OFF)`. raw-files keeps no list of the texts. On the
-    /// measured files a text is set exactly where Exif's ExposureProgram
-    /// is 0, "not defined", so that
-    /// [`exposure_program`](Self::exposure_program) is `None`.
+    /// Read from the maker's MakerNote, in a raw file and a JPEG alike:
+    ///
+    /// - Nikon's scene mode from the text of 0x00AB, which ExifTool's
+    ///   documentation calls VariProgram and the DSLR and Z bodies write,
+    ///   or, in a file without it, of SceneMode (0x008F), which the
+    ///   Coolpix bodies write. No measured file holds both. The text is
+    ///   given as the camera writes it, cleaned as every text, such as
+    ///   `PORTRAIT`, `CLOSE UP`, or an effect such as `TOY CAMERA`; the
+    ///   auto modes too, `AUTO` and `AUTO(FLASH OFF)`. raw-files keeps no
+    ///   list of the texts. On the measured files a text is set exactly
+    ///   where Exif's ExposureProgram is 0, "not defined", so that
+    ///   [`exposure_program`](Self::exposure_program) is `None`.
+    /// - Sony's Scene Selection from 0xB023, which the documentation calls
+    ///   SceneMode, one LONG, by the list the documentation gives, read
+    ///   whole, since files hold part of it: the scenes, such as 1
+    ///   portrait and 5 sports action, and the auto modes, 16 Intelligent
+    ///   Auto, 22 Auto+ and 24 Superior Auto. [`SceneSelection`] lists
+    ///   them all.
     ///
     /// `None` when:
     ///
     /// - the file records none, as every file of another maker does, and
     ///   every file of the D300S measured;
-    /// - the text is blank, as it is under the program, priority and
-    ///   manual modes;
-    /// - the text is not ASCII, or is longer than 255 bytes; a 0x00AB that
-    ///   gives none does not give way to 0x008F.
+    /// - Nikon's text is blank, as it is under the program, priority and
+    ///   manual modes, and Sony's code is 0, which the documentation calls
+    ///   "Standard" and the files hold under those modes;
+    /// - Nikon's text is not ASCII, or is longer than 255 bytes; a 0x00AB
+    ///   that gives none does not give way to 0x008F;
+    /// - Sony's code is one its list lacks, such as 10, or 65535, which the
+    ///   documentation calls "n/a";
+    /// - Sony's tag is not one LONG.
     ///
     /// What files record is in the NEF notes on
-    /// [the scene mode](https://github.com/kuolas/raw-files/blob/master/docs/formats/nef/makernote-and-metadata.md#811-picture-style-and-processing).
+    /// [the scene mode](https://github.com/kuolas/raw-files/blob/master/docs/formats/nef/makernote-and-metadata.md#811-picture-style-and-processing)
+    /// and the ARW notes on
+    /// [the scene](https://github.com/kuolas/raw-files/blob/master/docs/formats/arw/makernote-and-metadata.md#911-picture-style-and-processing).
     ///
     /// # Examples
     ///
     /// ```no_run
-    /// use raw_files::{CameraFile, Scene};
+    /// use raw_files::{CameraFile, Scene, SceneSelection};
     ///
     /// # fn main() -> raw_files::Result<()> {
-    /// let file = CameraFile::open("photo.nef")?;
+    /// let file = CameraFile::open("photo.arw")?;
     /// if let Some(scene) = file.metadata().camera_settings().scene() {
     ///     println!("{}: {}", scene.setting_name(), scene.name());
     ///     match scene {
     ///         Scene::SceneMode(text) if text.starts_with("AUTO") => {
     ///             println!("one of Nikon's auto modes");
     ///         }
+    ///         Scene::SceneSelection(
+    ///             SceneSelection::IntelligentAuto
+    ///             | SceneSelection::AutoPlus
+    ///             | SceneSelection::SuperiorAuto,
+    ///         ) => println!("one of Sony's auto modes"),
     ///         _ => {}
     ///     }
     /// }
@@ -5473,9 +5493,9 @@ impl From<DRangeOptimizer> for DynamicRangeOptimization {
 ///   photographer chose, from the weakest to the strongest.
 ///
 /// `DRangeOptimizer` is `#[non_exhaustive]`, so match on it with a
-/// wildcard arm. It orders as its variants are listed, which is the order
-/// of Sony's codes, and a new variant is added after the existing ones,
-/// so an order once observed holds. Its [`name`](Self::name)s, which
+/// wildcard arm. It orders as its variants are listed, first in the order
+/// of Sony's codes; a new variant is added after the existing ones,
+/// whatever its code, so an order once observed holds. Its [`name`](Self::name)s, which
 /// `Display` writes too, are "Off", "Standard", "Advanced auto", "Auto",
 /// "Advanced level 1" to "Advanced level 5" and "Level 1" to "Level 8".
 ///
@@ -6496,7 +6516,9 @@ impl fmt::Display for LensCompensation {
 /// keeps its own value:
 ///
 /// - [`SceneMode`](Self::SceneMode), Nikon's scene mode, the camera's
-///   own text, as it writes it.
+///   own text, as it writes it;
+/// - [`SceneSelection`](Self::SceneSelection), Sony's Scene Selection,
+///   from its documented list of codes.
 ///
 /// [`setting_name`](Self::setting_name) gives the maker's word for the
 /// setting, for a viewer's label, and [`name`](Self::name) the scene's
@@ -6511,24 +6533,32 @@ impl fmt::Display for LensCompensation {
 /// `Copy`, since Nikon's holds a text, and has no `Default`: a setting is
 /// always one maker's. It has no `Display` either, as
 /// [`DynamicRangeOptimization`] has none: a viewer writes the setting's
-/// name and the scene's together.
+/// name and the scene's together. Sony's type converts into it with
+/// `From`; Nikon's text does not, since a text is not always a scene.
 ///
 /// # Examples
 ///
-/// A maker's setting, labeled for a viewer and read by its variant:
+/// Each maker's setting, labeled for a viewer and read by its variant:
 ///
 /// ```
-/// use raw_files::Scene;
+/// use raw_files::{Scene, SceneSelection};
 ///
-/// let nikon = Scene::SceneMode("AUTO(FLASH OFF)".to_owned());
-/// println!("{}: {}", nikon.setting_name(), nikon.name());
-/// let flash_off = match &nikon {
-///     Scene::SceneMode(text) => text == "AUTO(FLASH OFF)",
-///     _ => false,
-/// };
-/// assert!(flash_off);
+/// let nikon = Scene::SceneMode("PORTRAIT".to_owned());
+/// let sony = Scene::from(SceneSelection::Portrait);
+///
+/// for scene in [&nikon, &sony] {
+///     println!("{}: {}", scene.setting_name(), scene.name());
+///     let portrait = match scene {
+///         Scene::SceneMode(text) => text == "PORTRAIT",
+///         Scene::SceneSelection(selection) => *selection == SceneSelection::Portrait,
+///         _ => false,
+///     };
+///     assert!(portrait);
+/// }
 /// assert_eq!(nikon.setting_name(), "Scene mode");
-/// assert_eq!(nikon.name(), "AUTO(FLASH OFF)");
+/// assert_eq!(nikon.name(), "PORTRAIT");
+/// assert_eq!(sony.setting_name(), "Scene Selection");
+/// assert_eq!(sony.name(), "Portrait");
 /// ```
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[non_exhaustive]
@@ -6536,23 +6566,161 @@ pub enum Scene {
     /// Nikon's scene mode: the camera's text, as it writes it, such as
     /// `PORTRAIT` or `AUTO`.
     SceneMode(String),
+    /// Sony's Scene Selection.
+    SceneSelection(SceneSelection),
 }
 
 impl Scene {
     /// The maker's word for the setting, for a viewer's label: "Scene
-    /// mode".
+    /// mode" or "Scene Selection".
     pub fn setting_name(&self) -> &'static str {
         match self {
             Scene::SceneMode(_) => "Scene mode",
+            Scene::SceneSelection(_) => "Scene Selection",
         }
     }
 
     /// The scene's name, whichever maker's setting it is: Nikon's text,
-    /// as the camera writes it, such as `PORTRAIT`.
+    /// as the camera writes it, such as `PORTRAIT`, or the
+    /// [`name`](SceneSelection::name) of Sony's, such as "Portrait".
     pub fn name(&self) -> &str {
         match self {
             Scene::SceneMode(text) => text,
+            Scene::SceneSelection(selection) => selection.name(),
         }
+    }
+}
+
+impl From<SceneSelection> for Scene {
+    /// Sony's Scene Selection as a scene, its
+    /// [`SceneSelection`](Scene::SceneSelection) variant.
+    fn from(selection: SceneSelection) -> Self {
+        Scene::SceneSelection(selection)
+    }
+}
+
+/// Sony's Scene Selection: the scene the photographer set the camera for,
+/// or the auto mode the camera was in.
+///
+/// The variants follow ExifTool's documentation, with Sony's own word
+/// where the SLT-A99's manual has one: Sports Action for the
+/// documentation's Sports, Hand-held Twilight for Handheld Night Shot,
+/// Intelligent Auto for Auto. That Sports Action and Hand-held Twilight
+/// are the documentation's Sports and Handheld Night Shot is a reading of
+/// the names. The auto modes are kinds of the scene, as Nikon's scene
+/// mode holds its own: [`IntelligentAuto`](Self::IntelligentAuto),
+/// [`AutoPlus`](Self::AutoPlus) and [`SuperiorAuto`](Self::SuperiorAuto).
+/// Sony's 0, the documentation's "Standard", which the files hold under
+/// the program, priority and manual modes, is no scene, and gives `None`
+/// for [`CameraSettings::scene`].
+///
+/// `SceneSelection` is `#[non_exhaustive]`, so match on it with a
+/// wildcard arm. It orders as its variants are listed, first in the order
+/// of Sony's codes; a new variant is added after the existing ones,
+/// whatever its code, so an order once observed holds. Its [`name`](Self::name)s, which
+/// `Display` writes too, are "Portrait", "Text", "Night scene", "Sunset",
+/// "Sports action", "Landscape", "Night portrait", "Macro", "Super
+/// macro", "Intelligent auto", "Night view/portrait", "Sweep panorama",
+/// "Hand-held twilight", "Anti motion blur", "Continuous priority AE",
+/// "Auto+", "3D sweep panorama", "Superior auto", "High sensitivity",
+/// "Fireworks", "Food", "Pet" and "HDR".
+///
+/// # Examples
+///
+/// ```
+/// use raw_files::SceneSelection;
+///
+/// assert_eq!(SceneSelection::SportsAction.name(), "Sports action");
+/// assert_eq!(SceneSelection::SweepPanorama3d.to_string(), "3D sweep panorama");
+/// assert!(SceneSelection::Portrait < SceneSelection::IntelligentAuto);
+/// ```
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[non_exhaustive]
+pub enum SceneSelection {
+    /// The portrait scene.
+    Portrait,
+    /// The documentation's Text.
+    Text,
+    /// The night scene.
+    NightScene,
+    /// The sunset scene.
+    Sunset,
+    /// Sports Action, the documentation's Sports.
+    SportsAction,
+    /// The landscape scene.
+    Landscape,
+    /// The night portrait scene.
+    NightPortrait,
+    /// The macro scene.
+    Macro,
+    /// The documentation's Super Macro.
+    SuperMacro,
+    /// Intelligent Auto, the documentation's Auto: an auto mode.
+    IntelligentAuto,
+    /// The documentation's Night View/Portrait.
+    NightViewPortrait,
+    /// The documentation's Sweep Panorama.
+    SweepPanorama,
+    /// Hand-held Twilight, the documentation's Handheld Night Shot.
+    HandHeldTwilight,
+    /// The documentation's Anti Motion Blur.
+    AntiMotionBlur,
+    /// The documentation's Cont. Priority AE.
+    ContinuousPriorityAe,
+    /// The documentation's Auto+: an auto mode.
+    AutoPlus,
+    /// The documentation's 3D Sweep Panorama.
+    SweepPanorama3d,
+    /// Superior Auto: an auto mode.
+    SuperiorAuto,
+    /// The documentation's High Sensitivity.
+    HighSensitivity,
+    /// The documentation's Fireworks.
+    Fireworks,
+    /// The documentation's Food.
+    Food,
+    /// The documentation's Pet.
+    Pet,
+    /// The documentation's HDR.
+    Hdr,
+}
+
+impl SceneSelection {
+    /// The scene's name, for an information panel, such as "Sports
+    /// action"; the type's docs list them all.
+    pub fn name(self) -> &'static str {
+        match self {
+            SceneSelection::Portrait => "Portrait",
+            SceneSelection::Text => "Text",
+            SceneSelection::NightScene => "Night scene",
+            SceneSelection::Sunset => "Sunset",
+            SceneSelection::SportsAction => "Sports action",
+            SceneSelection::Landscape => "Landscape",
+            SceneSelection::NightPortrait => "Night portrait",
+            SceneSelection::Macro => "Macro",
+            SceneSelection::SuperMacro => "Super macro",
+            SceneSelection::IntelligentAuto => "Intelligent auto",
+            SceneSelection::NightViewPortrait => "Night view/portrait",
+            SceneSelection::SweepPanorama => "Sweep panorama",
+            SceneSelection::HandHeldTwilight => "Hand-held twilight",
+            SceneSelection::AntiMotionBlur => "Anti motion blur",
+            SceneSelection::ContinuousPriorityAe => "Continuous priority AE",
+            SceneSelection::AutoPlus => "Auto+",
+            SceneSelection::SweepPanorama3d => "3D sweep panorama",
+            SceneSelection::SuperiorAuto => "Superior auto",
+            SceneSelection::HighSensitivity => "High sensitivity",
+            SceneSelection::Fireworks => "Fireworks",
+            SceneSelection::Food => "Food",
+            SceneSelection::Pet => "Pet",
+            SceneSelection::Hdr => "HDR",
+        }
+    }
+}
+
+impl fmt::Display for SceneSelection {
+    /// Writes [`name`](SceneSelection::name).
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.name())
     }
 }
 
@@ -7547,6 +7715,12 @@ mod tests {
             let scene = Scene::SceneMode(text.to_owned());
             assert_eq!(scene.setting_name(), "Scene mode");
             assert_eq!(scene.name(), text);
+        }
+        for selection in all_scene_selections() {
+            let scene = Scene::from(selection);
+            assert_eq!(scene, Scene::SceneSelection(selection));
+            assert_eq!(scene.setting_name(), "Scene Selection");
+            assert_eq!(scene.name(), selection.name());
         }
     }
 
@@ -8641,6 +8815,45 @@ mod tests {
         all
     }
 
+    fn all_scene_selections() -> [SceneSelection; 23] {
+        use SceneSelection::*;
+        let all = [
+            Portrait,
+            Text,
+            NightScene,
+            Sunset,
+            SportsAction,
+            Landscape,
+            NightPortrait,
+            Macro,
+            SuperMacro,
+            IntelligentAuto,
+            NightViewPortrait,
+            SweepPanorama,
+            HandHeldTwilight,
+            AntiMotionBlur,
+            ContinuousPriorityAe,
+            AutoPlus,
+            SweepPanorama3d,
+            SuperiorAuto,
+            HighSensitivity,
+            Fireworks,
+            Food,
+            Pet,
+            Hdr,
+        ];
+        for selection in all {
+            match selection {
+                Portrait | Text | NightScene | Sunset | SportsAction | Landscape
+                | NightPortrait | Macro | SuperMacro | IntelligentAuto | NightViewPortrait
+                | SweepPanorama | HandHeldTwilight | AntiMotionBlur | ContinuousPriorityAe
+                | AutoPlus | SweepPanorama3d | SuperiorAuto | HighSensitivity | Fireworks
+                | Food | Pet | Hdr => {}
+            }
+        }
+        all
+    }
+
     #[test]
     fn every_name_is_the_one_documented_and_display_writes_it() {
         // The names are stable once released: a program may show or store
@@ -8958,6 +9171,35 @@ mod tests {
             LensCompensation::name,
             &["Off", "Auto"],
         );
+        assert_names(
+            &all_scene_selections(),
+            SceneSelection::name,
+            &[
+                "Portrait",
+                "Text",
+                "Night scene",
+                "Sunset",
+                "Sports action",
+                "Landscape",
+                "Night portrait",
+                "Macro",
+                "Super macro",
+                "Intelligent auto",
+                "Night view/portrait",
+                "Sweep panorama",
+                "Hand-held twilight",
+                "Anti motion blur",
+                "Continuous priority AE",
+                "Auto+",
+                "3D sweep panorama",
+                "Superior auto",
+                "High sensitivity",
+                "Fireworks",
+                "Food",
+                "Pet",
+                "HDR",
+            ],
+        );
     }
 
     #[test]
@@ -9000,6 +9242,7 @@ mod tests {
         assert_ordered(&all_vignette_controls());
         assert_ordered(&all_auto_distortion_controls());
         assert_ordered(&all_lens_compensations());
+        assert_ordered(&all_scene_selections());
     }
 
     #[test]

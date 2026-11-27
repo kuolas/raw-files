@@ -1925,9 +1925,8 @@ settings
 - Exif's six processing values;
 - the D-Range Optimizer and Auto HDR;
 - the high ISO, long exposure and multi-frame noise reductions;
-- the three lens compensations.
-
-It will read the scene.
+- the three lens compensations;
+- the scene.
 
 Each setting keeps Sony's own name and kinds. Where Nikon has a setting
 for the same thing, one value of the camera settings holds either
@@ -2172,12 +2171,12 @@ reads the MakerNote's three, in a raw file and a JPEG alike.
 **The scene.** 0xB023, which the documentation calls SceneMode, is one
 LONG [S][1], on 207 public files of 107 bodies and on all of mine.
 Sony's mode dial has an Auto Mode and a Scene Selection among its
-positions [P][33] (p. 35). raw-files will read the code as the
+positions [P][33] (p. 35). raw-files reads the code as the
 `SceneSelection` of a `Scene`:
 
 | Code | The documentation's name [S][1] | Sony's word [P][33] (p. 35) | Mark | Files, public / mine |
 |---|---|---|---|---|
-| 0 | Standard | none | will give none (below) | 194 / 4,865 |
+| 0 | Standard | none | gives none (below) | 194 / 4,865 |
 | 1 | Portrait | Portrait | observed | 1 / 0 |
 | 5 | Sports | Sports Action | observed | 1 / 0 |
 | 6 | Landscape | Landscape | observed | 1 / 0 |
@@ -2189,13 +2188,13 @@ positions [P][33] (p. 35). raw-files will read the code as the
 | 19 | Handheld Night Shot | Hand-held Twilight | documented only | 0 / 0 |
 | 24 | Superior Auto | Superior Auto | documented only | 0 / 0 |
 | 2, 9, 18, 20, 21, 23, 25 to 28, 33 | Text, Super Macro, Sweep Panorama, Anti Motion Blur, Cont. Priority AE, 3D Sweep Panorama, High Sensitivity, Fireworks, Food, Pet, HDR | none | documented only | 0 / 0 |
-| 65535 | n/a | none | will give none | 0 / 0 |
+| 65535 | n/a | none | gives none | 0 / 0 |
 
 **[F]** "Sony's word" is the SLT-A99's menu, for the codes whose
 documented name matches it. That code 19 is its Hand-held Twilight,
 and code 5 its Sports Action, is my reading of the names [I].
 
-- **0 will give `None`.** On every file that holds 0, Exif's
+- **0 gives `None`.** On every file that holds 0, Exif's
   ExposureProgram is 1 to 4: manual, program, aperture priority or
   shutter priority. The photographer chose no scene.
 - **The auto modes are kinds of the scene.** 16 and 22 come with
@@ -2205,9 +2204,9 @@ and code 5 its Sports Action, is my reading of the names [I].
   ExposureProgram codes for portrait, action and landscape. Exif's
   SceneCaptureType says portrait beside 1, landscape beside 6 and
   night scene beside 17.
-- The list will be read whole, since files hold part of it. raw-files
-  will not read 0xB041 or 0xB052, which add no mode that 0xB023 lacks
-  on the measured files.
+- The list is read whole, since files hold part of it. raw-files does
+  not read 0xB041 or 0xB052, which add no mode that 0xB023 lacks on
+  the measured files.
 
 **Exif's six values.** Each is one SHORT in the Exif IFD, with the
 standard's codes [P][30] (4.6.6.7.35, p. 69; 4.6.6.7.40 to 4.6.6.7.44,
@@ -2478,9 +2477,8 @@ For the picture style and the processing settings of
 - the long exposure noise reduction from the low half of 0x2008;
 - the multi-frame noise reduction from 0x200B;
 - the shading, chromatic aberration and distortion compensations from
-  0x2011 to 0x2013, never from the raw SubIFD's codes.
-
-It will read the scene from 0xB023, where 0 will give none.
+  0x2011 to 0x2013, never from the raw SubIFD's codes;
+- the scene from 0xB023, where 0 gives none.
 
 It reads contrast, saturation, sharpness, the scene capture type,
 custom rendering and gain control from Exif alone.

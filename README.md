@@ -79,7 +79,8 @@ Linux and Windows alike.
     compensation.
   - on Sony files the chromatic aberration compensation.
   - the scene, under its maker's own name: on Nikon files the scene
-    mode, the camera's own text, such as `PORTRAIT` or `AUTO`.
+    mode, the camera's own text, such as `PORTRAIT` or `AUTO`, and on
+    Sony files the Scene Selection, such as Intelligent Auto.
   - [`CameraSettings`](https://docs.rs/raw-files/latest/raw_files/struct.CameraSettings.html)
     says which a maker's files leave out: Sony's give no shutter, image
     area or raw image size.

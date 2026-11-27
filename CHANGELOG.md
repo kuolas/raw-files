@@ -480,6 +480,19 @@ does. An entry that can break a caller opens with **Breaking:**.
   - `Scene::setting_name` gives the maker's word for the setting, and
     `name` the scene's name. `Scene` is `Clone` and not `Copy`.
   - Exif's scene capture type stays a value of its own.
+- Sony's Scene Selection is the second variant of `Scene`, a
+  `SceneSelection`, read from 0xB023 in a raw file and a JPEG alike
+  ([#230](https://github.com/kuolas/raw-files/issues/230)).
+  - The variants are the documentation's list, read whole, with Sony's
+    own word where the SLT-A99's manual has one, such as
+    `SportsAction` and `HandHeldTwilight`.
+  - The auto modes are kinds of the scene: `IntelligentAuto`,
+    `AutoPlus` and `SuperiorAuto`.
+  - Sony's 0, "Standard", which the files hold under the program,
+    priority and manual modes, gives `None`, as Nikon's blank text
+    does.
+  - Its `setting_name` is "Scene Selection", and `SceneSelection`
+    converts into `Scene` with `From`.
 
 ### Changed
 

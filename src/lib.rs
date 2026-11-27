@@ -429,8 +429,8 @@ pub use camera_settings::{
     ImageArea, JpegCompression, JpegQuality, LensCompensation, MeteringMode, PictureControl,
     PictureControlAdjustment, PictureControlFilterEffect, PictureControlToning,
     PictureControlValue, PictureStyle, RawCompression, RawImageSize, ReleaseMode, Saturation,
-    Scene, SceneCaptureType, Sharpness, Shutter, Stabilization, StabilizationMode, VignetteControl,
-    VignettingCorrection, WhiteBalance, WhiteBalanceFineTune, WhiteBalanceMode,
+    Scene, SceneCaptureType, SceneSelection, Sharpness, Shutter, Stabilization, StabilizationMode,
+    VignetteControl, VignettingCorrection, WhiteBalance, WhiteBalanceFineTune, WhiteBalanceMode,
 };
 pub use datetime::DateTime;
 pub use entries::{Directory, Entries, Entry, FieldType, SkippedDirectory, Value, ValueDisplay};
