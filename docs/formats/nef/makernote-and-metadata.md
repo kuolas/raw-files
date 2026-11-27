@@ -2186,11 +2186,10 @@ settings
 
 - the picture style, Nikon's Picture Control, with its values;
 - Exif's six processing values;
-- Active D-Lighting.
+- Active D-Lighting and HDR.
 
 It will read:
 
-- HDR;
 - the high ISO and long exposure noise reductions;
 - vignette control and auto distortion control;
 - the scene mode.
@@ -2433,8 +2432,8 @@ numbered steps. The list is read whole, since files hold part of it.
 
 **HDR.** The camera combines two exposures into one JPEG, and cannot
 record a NEF under it [P][25] (pp. 139 to 141). 0x0035 HDRInfo is a
-record that starts with a four-digit version [S][1]. raw-files will
-read it as the `Hdr` of a `HighDynamicRange`, on or off with its parts:
+record that starts with a four-digit version [S][1]. raw-files reads
+it as the `Hdr` of a `HighDynamicRange`, on or off with its parts:
 
 | Version | Length | Byte 4 | The parts | Files, public / mine |
 |---|---|---|---|---|
@@ -2457,16 +2456,17 @@ read it as the `Hdr` of a `HighDynamicRange`, on or off with its parts:
   sets an HDR strength of auto, extra high, high, normal or low
   [P][27] (p. 116). The documentation's "high+" is that manual's extra
   high.
-- **The parts will be read only where HDR is on**, as the mode of
+- **The parts are read only where HDR is on**, as the mode of
   vibration reduction is. With HDR off, my D600's files hold 0 for
   both parts, which reads as a smoothing of off, a step its menu does
   not offer.
 - **Byte 4's 48, "auto"**, names neither on nor off. No file holds it,
-  and it will give no value.
+  and it gives no value: `Hdr` is on or off, so the code stays a named
+  gap, though the rest of its list is read.
 - **Byte 7** of the 8-byte versions, a second level in the
-  documentation, will not be read. It is 0xFF on my D600's files and 0
+  documentation, is not read. It is 0xFF on my D600's files and 0
   on the public ones.
-- **Any other record will give none.** One public file, a COOLPIX P7100's,
+- **Any other record gives none.** One public file, a COOLPIX P7100's,
   holds eight bytes with no version.
 
 **High ISO noise reduction.** 0x00B1 HighISONoiseReduction is one
@@ -2794,11 +2794,11 @@ plain MakerNote tags where Exif has no value, and decrypt nothing [I]:
   at its six versions. In the 108-byte record the adjustment kind and
   Quick sharp lie at bytes 52 and 53;
 - Active D-Lighting from 0x0022;
+- HDR from 0x0035 at its three versions, its parts only where it is
+  on;
 - the other processing settings of
   [section 8.11](#811-picture-style-and-processing), which raw-files
   will read:
-  - HDR from 0x0035 at its three versions, its parts only where it is
-    on;
   - the high ISO noise reduction from 0x00B1;
   - the long exposure noise reduction from 0x0095, where `FPNR` will
     give on and `OFF` none;

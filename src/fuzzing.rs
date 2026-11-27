@@ -16,7 +16,10 @@
 
 use std::io::{Cursor, Read, Seek};
 
-use crate::camera_settings::{DynamicRangeOptimization, PictureControlValue, PictureStyle};
+use crate::camera_settings::{
+    DynamicRangeOptimization, HdrExposureDifferential, HighDynamicRange, PictureControlValue,
+    PictureStyle,
+};
 use crate::container::jpeg::{mpf, probe, segments};
 use crate::container::tiff::{Block, FieldType, First, Held, Rule, Text, Tree, walk};
 use crate::datetime::DateTime;
@@ -453,6 +456,9 @@ fn read_metadata(metadata: &Metadata) {
     if let Some(optimization) = settings.dynamic_range_optimization() {
         read_dynamic_range_optimization(optimization);
     }
+    if let Some(setting) = settings.high_dynamic_range() {
+        read_high_dynamic_range(setting);
+    }
     let tiny = Size {
         width: 1,
         height: 1,
@@ -595,6 +601,22 @@ fn read_dynamic_range_optimization(optimization: DynamicRangeOptimization) {
         }
         DynamicRangeOptimization::DRangeOptimizer(step) => {
             let _ = step.to_string();
+        }
+    }
+}
+
+/// Calls every getter of the high dynamic range setting `setting`,
+/// whichever maker's it is.
+fn read_high_dynamic_range(setting: HighDynamicRange) {
+    let _ = (setting.setting_name(), setting.is_on());
+    match setting {
+        HighDynamicRange::Hdr(hdr) => {
+            let _ = hdr.is_on();
+            let _ = hdr.strength().map(|strength| strength.to_string());
+            let _ = hdr.smoothing().map(|smoothing| smoothing.to_string());
+            if let Some(HdrExposureDifferential::Ev(ev)) = hdr.exposure_differential() {
+                let _ = (ev.to_string(), ev.reduced(), ev.to_f64());
+            }
         }
     }
 }

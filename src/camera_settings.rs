@@ -11,19 +11,20 @@
 //! raw data's bit depth and compression, the JPEG quality and compression,
 //! and how the camera processed the picture: the directions of contrast,
 //! saturation and sharpness, the scene capture type, custom rendering,
-//! gain control, the maker's picture style and its dynamic range
-//! optimization.
+//! gain control, the maker's picture style, its dynamic range
+//! optimization and its high dynamic range setting.
 //! [`CameraSettings`] holds them all, and
 //! [`Metadata::camera_settings`](crate::Metadata::camera_settings) gives
 //! them for a file. [`WhiteBalance`], [`WhiteBalanceFineTune`], [`Flash`],
-//! [`AfFineTune`] and [`Stabilization`] hold the settings made of several
-//! parts; each enum, such as [`ExposureProgram`], names one setting's
-//! choices in words that fit any maker, with a
+//! [`AfFineTune`], [`Stabilization`] and [`Hdr`] hold the settings made of
+//! several parts; each enum, such as [`ExposureProgram`], names one
+//! setting's choices in words that fit any maker, with a
 //! [`name`](ExposureProgram::name) to show. The picture style keeps each
 //! maker's own words instead: [`PictureStyle`] holds Nikon's
 //! [`PictureControl`], Sony's [`CreativeStyle`] or its [`CreativeLook`],
-//! each under its own name, and [`DynamicRangeOptimization`] holds Nikon's
-//! [`ActiveDLighting`] or Sony's [`DRangeOptimizer`].
+//! each under its own name, [`DynamicRangeOptimization`] holds Nikon's
+//! [`ActiveDLighting`] or Sony's [`DRangeOptimizer`], and
+//! [`HighDynamicRange`] Nikon's [`Hdr`].
 //!
 //! Every value is optional. A file may not record it, or may record it in
 //! a way that cannot be read, such as a code no variant names; either way
@@ -49,8 +50,8 @@
 //!   Exif tags record none, as in every Nikon raw file checked; in a raw
 //!   file, the raw image size and how a compressed raw is compressed; and
 //!   in a JPEG, its quality and the choice between size priority and
-//!   optimal quality; the Picture Control, Nikon's picture style; and
-//!   Active D-Lighting.
+//!   optimal quality; the Picture Control, Nikon's picture style; Active
+//!   D-Lighting; and HDR.
 //! - Sony's MakerNote, in ARW files and their family and in the JPEGs of
 //!   Sony cameras, gives the white balance setting in place of Exif's,
 //!   with its fine-tuning and the color temperature of a chosen color
@@ -84,13 +85,13 @@
 //! tests, without a camera file: [`CameraSettings`], [`WhiteBalance`],
 //! [`PictureControl`], [`CreativeStyle`] and [`CreativeLook`] through
 //! their `with_…` methods, and a
-//! [`WhiteBalanceFineTune`], a [`Flash`], an [`AfFineTune`] and a
-//! [`Stabilization`] through their constructors.
+//! [`WhiteBalanceFineTune`], a [`Flash`], an [`AfFineTune`], a
+//! [`Stabilization`] and an [`Hdr`] through their constructors.
 //! [`CameraSettings`]'s docs show how.
 
 use std::fmt;
 
-use crate::rational::SignedRational;
+use crate::rational::{Rational, SignedRational};
 
 /// How the camera was set for a picture: its white balance, exposure
 /// program, metering mode, flash, shutter, image area, raw image size,
@@ -99,8 +100,8 @@ use crate::rational::SignedRational;
 /// time, raw bit depth and compression, JPEG quality and compression, the
 /// directions of contrast, saturation and sharpness it processed the
 /// picture in, the scene capture type, custom rendering, gain control, the
-/// maker's picture style and its dynamic range optimization, for a
-/// viewer's information panel beside the exposure.
+/// maker's picture style, dynamic range optimization and high dynamic
+/// range setting, for a viewer's information panel beside the exposure.
 ///
 /// Every value is `None` when the file does not record it or records it in
 /// a way that cannot be read, such as a code that no variant names. A
@@ -215,6 +216,7 @@ pub struct CameraSettings {
     pub(crate) gain_control: Option<GainControl>,
     pub(crate) picture_style: Option<PictureStyle>,
     pub(crate) dynamic_range_optimization: Option<DynamicRangeOptimization>,
+    pub(crate) high_dynamic_range: Option<HighDynamicRange>,
 }
 
 impl CameraSettings {
@@ -1312,6 +1314,60 @@ impl CameraSettings {
         self.dynamic_range_optimization
     }
 
+    /// Whether the camera combined exposures into one picture of a high
+    /// dynamic range, and how, under its maker's own name: Nikon's
+    /// [`Hdr`] ([`HighDynamicRange`]).
+    ///
+    /// Read from the maker's MakerNote:
+    ///
+    /// - Nikon's HDR from HDRInfo (0x0035), a record that starts with a
+    ///   four-digit version, at the versions and lengths measured files
+    ///   hold: 0100 and 0101, of 8 bytes, and 0200, of 6. Its byte 4 is 0
+    ///   off and 1 on. Under on, byte 5 at 0200 gives the
+    ///   [`strength`](Hdr::strength), and bytes 5 and 6 at 0100 and 0101
+    ///   the [`exposure_differential`](Hdr::exposure_differential) and the
+    ///   [`smoothing`](Hdr::smoothing), each by the list ExifTool's
+    ///   documentation gives; a code its list lacks gives no part. Byte 7
+    ///   of the 8-byte versions is not read. Nikon's DSLRs and Z bodies
+    ///   write the record in their JPEGs alone; Coolpix and Nikon 1 bodies
+    ///   write it in their raw files too.
+    ///
+    /// `None` when:
+    ///
+    /// - the file records none, as every file of another maker does, and
+    ///   every NEF file of a Nikon DSLR or Z body measured;
+    /// - the record is of another version, or of another length than its
+    ///   version's, or starts with no version, as a COOLPIX P7100's does;
+    /// - byte 4 holds any other code, such as 48, which the documentation
+    ///   calls auto and which says neither on nor off; no file holds it;
+    /// - the record is not of type UNDEFINED.
+    ///
+    /// What files record is in the NEF notes on
+    /// [HDR](https://github.com/kuolas/raw-files/blob/master/docs/formats/nef/makernote-and-metadata.md#811-picture-style-and-processing).
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use raw_files::{CameraFile, HighDynamicRange};
+    ///
+    /// # fn main() -> raw_files::Result<()> {
+    /// let file = CameraFile::open("photo.jpg")?;
+    /// if let Some(setting) = file.metadata().camera_settings().high_dynamic_range() {
+    ///     let state = if setting.is_on() { "on" } else { "off" };
+    ///     println!("{}: {state}", setting.setting_name());
+    ///     if let HighDynamicRange::Hdr(hdr) = setting {
+    ///         if let Some(strength) = hdr.strength() {
+    ///             println!("strength: {strength}");
+    ///         }
+    ///     }
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn high_dynamic_range(&self) -> Option<HighDynamicRange> {
+        self.high_dynamic_range
+    }
+
     /// Sets the white balance, in place of the one it had;
     /// [`white_balance`](Self::white_balance) reads it.
     #[must_use]
@@ -1559,6 +1615,15 @@ impl CameraSettings {
         optimization: DynamicRangeOptimization,
     ) -> Self {
         self.dynamic_range_optimization = Some(optimization);
+        self
+    }
+
+    /// Sets the high dynamic range setting, in place of any set before;
+    /// [`high_dynamic_range`](Self::high_dynamic_range) reads it. Each
+    /// maker's type converts into a [`HighDynamicRange`] with `From`.
+    #[must_use]
+    pub fn with_high_dynamic_range(mut self, setting: HighDynamicRange) -> Self {
+        self.high_dynamic_range = Some(setting);
         self
     }
 }
@@ -5038,6 +5103,348 @@ impl fmt::Display for DRangeOptimizer {
     }
 }
 
+/// Whether the camera combined exposures into one picture of a high
+/// dynamic range, and how, under its maker's own name: the variant says
+/// which maker's setting it is, and holds that setting's own type.
+///
+/// Each maker names the setting and records its parts in its own way, so
+/// each keeps its own type:
+///
+/// - [`Hdr`](Self::Hdr), Nikon's HDR (high dynamic range).
+///
+/// [`setting_name`](Self::setting_name) gives the maker's word for the
+/// setting, for a viewer's label, and [`is_on`](Self::is_on) whether it
+/// was on, whichever maker's it is.
+///
+/// `HighDynamicRange` is `#[non_exhaustive]`, so match on it with a
+/// wildcard arm: another maker's setting is added as a variant. It is
+/// `Copy`, and has no `Default`: a setting is always one maker's. It has
+/// no `Display` either: its parts hold numbers, which a viewer writes in
+/// its own way. Each maker's type converts into it with `From`.
+///
+/// # Examples
+///
+/// Nikon's setting, labeled for a viewer and read by its variant:
+///
+/// ```
+/// use raw_files::{Hdr, HdrStrength, HighDynamicRange};
+///
+/// let nikon = HighDynamicRange::from(Hdr::on().with_strength(HdrStrength::Auto));
+/// let state = if nikon.is_on() { "on" } else { "off" };
+/// println!("{}: {state}", nikon.setting_name());
+/// let strength = match nikon {
+///     HighDynamicRange::Hdr(hdr) => hdr.strength(),
+///     _ => None,
+/// };
+/// assert_eq!(nikon.setting_name(), "HDR");
+/// assert_eq!(strength, Some(HdrStrength::Auto));
+/// ```
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum HighDynamicRange {
+    /// Nikon's HDR.
+    Hdr(Hdr),
+}
+
+impl HighDynamicRange {
+    /// The maker's word for the setting, for a viewer's label: "HDR".
+    pub fn setting_name(&self) -> &'static str {
+        match self {
+            HighDynamicRange::Hdr(_) => "HDR",
+        }
+    }
+
+    /// Whether the setting was on, whichever maker's it is: the `is_on`
+    /// of the variant's own type, [`Hdr::is_on`].
+    pub fn is_on(&self) -> bool {
+        match self {
+            HighDynamicRange::Hdr(hdr) => hdr.is_on(),
+        }
+    }
+}
+
+impl From<Hdr> for HighDynamicRange {
+    /// Nikon's HDR as a high dynamic range setting, its
+    /// [`Hdr`](HighDynamicRange::Hdr) variant.
+    fn from(hdr: Hdr) -> Self {
+        HighDynamicRange::Hdr(hdr)
+    }
+}
+
+/// Nikon's HDR (high dynamic range): whether the camera combined two
+/// exposures into one JPEG, and, when it did, the parts of the setting the
+/// file records.
+///
+/// Nikon's DSLRs and Z bodies record no NEF under HDR, so their JPEGs
+/// alone hold it. The parts are Nikon's words, and which a file records
+/// depends on its body:
+///
+/// - the D600 sets an [`exposure_differential`](Self::exposure_differential)
+///   and a [`smoothing`](Self::smoothing);
+/// - the D7100 and later bodies set a [`strength`](Self::strength).
+///
+/// There is no `Default`: a file that records no HDR gives `None` for
+/// [`CameraSettings::high_dynamic_range`]. A file that records it off
+/// gives one that [`is_on`](Self::is_on) says is off, with no parts.
+///
+/// # Examples
+///
+/// HDR on at an auto strength, as a D7100 records it, on as a D600
+/// records it, and off:
+///
+/// ```
+/// use raw_files::{Hdr, HdrExposureDifferential, HdrSmoothing, HdrStrength, Rational};
+///
+/// let d7100 = Hdr::on().with_strength(HdrStrength::Auto);
+/// assert!(d7100.is_on());
+/// assert_eq!(d7100.strength(), Some(HdrStrength::Auto));
+/// assert_eq!(d7100.smoothing(), None);
+///
+/// let two_ev = Rational { numerator: 2, denominator: 1 };
+/// let d600 = Hdr::on()
+///     .with_exposure_differential(HdrExposureDifferential::Ev(two_ev))
+///     .with_smoothing(HdrSmoothing::Normal);
+/// assert_eq!(d600.exposure_differential(), Some(HdrExposureDifferential::Ev(two_ev)));
+///
+/// let off = Hdr::off();
+/// assert!(!off.is_on());
+/// assert_eq!(off.strength(), None);
+/// ```
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct Hdr {
+    pub(crate) on: bool,
+    pub(crate) strength: Option<HdrStrength>,
+    pub(crate) exposure_differential: Option<HdrExposureDifferential>,
+    pub(crate) smoothing: Option<HdrSmoothing>,
+}
+
+impl Hdr {
+    /// HDR that was on, with no parts yet; the `with_…` methods add them.
+    #[must_use]
+    pub fn on() -> Self {
+        Self {
+            on: true,
+            strength: None,
+            exposure_differential: None,
+            smoothing: None,
+        }
+    }
+
+    /// HDR that was off, with no parts.
+    #[must_use]
+    pub fn off() -> Self {
+        Self {
+            on: false,
+            ..Self::on()
+        }
+    }
+
+    /// This HDR with the strength `strength`, in place of any it had. It
+    /// is stored as given, whether or not HDR is on: the readers give a
+    /// part only when it is.
+    #[must_use]
+    pub fn with_strength(self, strength: HdrStrength) -> Self {
+        Self {
+            strength: Some(strength),
+            ..self
+        }
+    }
+
+    /// This HDR with the exposure differential `differential`, in place of
+    /// any it had, stored as given, as
+    /// [`with_strength`](Self::with_strength) stores its part.
+    #[must_use]
+    pub fn with_exposure_differential(self, differential: HdrExposureDifferential) -> Self {
+        Self {
+            exposure_differential: Some(differential),
+            ..self
+        }
+    }
+
+    /// This HDR with the smoothing `smoothing`, in place of any it had,
+    /// stored as given, as [`with_strength`](Self::with_strength) stores
+    /// its part.
+    #[must_use]
+    pub fn with_smoothing(self, smoothing: HdrSmoothing) -> Self {
+        Self {
+            smoothing: Some(smoothing),
+            ..self
+        }
+    }
+
+    /// Whether HDR was on.
+    pub fn is_on(&self) -> bool {
+        self.on
+    }
+
+    /// How strongly the camera combined the exposures, the D7100's HDR
+    /// strength, or `None` when none is recorded: when HDR is off, the
+    /// file records the D600's parts instead, or the record marks the
+    /// strength not available.
+    pub fn strength(&self) -> Option<HdrStrength> {
+        self.strength
+    }
+
+    /// The difference in exposure between the two shots, the D600's
+    /// exposure differential, or `None` when none is recorded: when HDR is
+    /// off, or the file records a strength instead.
+    pub fn exposure_differential(&self) -> Option<HdrExposureDifferential> {
+        self.exposure_differential
+    }
+
+    /// How much the camera smoothed the boundaries between the two shots,
+    /// the D600's smoothing, or `None` when none is recorded: when HDR is
+    /// off, or the file records a strength instead.
+    pub fn smoothing(&self) -> Option<HdrSmoothing> {
+        self.smoothing
+    }
+}
+
+/// How strongly Nikon's HDR combined the exposures, in the steps of the
+/// D7100's menu: low, normal, high, extra high or auto.
+///
+/// ExifTool's documentation calls extra high "High+"; the D7100's manual
+/// names it extra high.
+///
+/// `HdrStrength` is `#[non_exhaustive]`, so match on it with a wildcard
+/// arm. The steps are listed from the weakest to the strongest, then
+/// auto, and `HdrStrength` orders as they are listed. A new step is added
+/// where the ladder puts it, between the existing ones if need be, so two
+/// steps keep the order once observed between them. Its
+/// [`name`](Self::name)s, which `Display` writes too, are "Low",
+/// "Normal", "High", "Extra high" and "Auto".
+///
+/// # Examples
+///
+/// ```
+/// use raw_files::HdrStrength;
+///
+/// assert_eq!(HdrStrength::ExtraHigh.name(), "Extra high");
+/// assert!(HdrStrength::Low < HdrStrength::High);
+/// ```
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[non_exhaustive]
+pub enum HdrStrength {
+    /// The low step.
+    Low,
+    /// The normal step.
+    Normal,
+    /// The high step.
+    High,
+    /// The extra high step, the documentation's "High+".
+    ExtraHigh,
+    /// The camera chose the strength from the scene.
+    Auto,
+}
+
+impl HdrStrength {
+    /// The step's name, for an information panel, such as "Extra high";
+    /// the type's docs list them all.
+    pub fn name(self) -> &'static str {
+        match self {
+            HdrStrength::Low => "Low",
+            HdrStrength::Normal => "Normal",
+            HdrStrength::High => "High",
+            HdrStrength::ExtraHigh => "Extra high",
+            HdrStrength::Auto => "Auto",
+        }
+    }
+}
+
+impl fmt::Display for HdrStrength {
+    /// Writes [`name`](HdrStrength::name).
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.name())
+    }
+}
+
+/// The difference in exposure between the two shots of Nikon's HDR, the
+/// D600's exposure differential: chosen by the camera, or a number of EV.
+///
+/// The D600 offers auto and 1, 2 or 3 EV. The value is one or the other,
+/// as a [`PictureControlValue`] is auto or a count of steps.
+///
+/// `HdrExposureDifferential` is `#[non_exhaustive]`, so match on it with a
+/// wildcard arm. It has no `Display`: how a number of EV is written is the
+/// viewer's choice.
+///
+/// # Examples
+///
+/// ```
+/// use raw_files::{HdrExposureDifferential, Rational};
+///
+/// let differential = HdrExposureDifferential::Ev(Rational { numerator: 3, denominator: 1 });
+/// let text = match differential {
+///     HdrExposureDifferential::Auto => "auto".to_string(),
+///     HdrExposureDifferential::Ev(ev) => format!("{} EV", ev.to_f64()),
+///     _ => String::new(),
+/// };
+/// assert_eq!(text, "3 EV");
+/// ```
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum HdrExposureDifferential {
+    /// The camera chose the differential from the scene.
+    Auto,
+    /// A differential of this many EV, in whole steps, such as `2/1`.
+    Ev(Rational),
+}
+
+/// How much Nikon's HDR smoothed the boundaries between the two shots, in
+/// the steps of the D600's menu: low, normal or high, with auto and off,
+/// which the documentation also lists.
+///
+/// `HdrSmoothing` is `#[non_exhaustive]`, so match on it with a wildcard
+/// arm. The steps are listed from none to the strongest, then auto, and
+/// `HdrSmoothing` orders as they are listed. A new step is added where the
+/// ladder puts it, between the existing ones if need be, so two steps keep
+/// the order once observed between them. Its [`name`](Self::name)s, which
+/// `Display` writes too, are "Off", "Low", "Normal", "High" and "Auto".
+///
+/// # Examples
+///
+/// ```
+/// use raw_files::HdrSmoothing;
+///
+/// assert_eq!(HdrSmoothing::Normal.to_string(), "Normal");
+/// assert!(HdrSmoothing::Off < HdrSmoothing::Low);
+/// ```
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[non_exhaustive]
+pub enum HdrSmoothing {
+    /// No smoothing, which the D600's menu does not offer.
+    Off,
+    /// The low step.
+    Low,
+    /// The normal step.
+    Normal,
+    /// The high step.
+    High,
+    /// The camera chose the smoothing.
+    Auto,
+}
+
+impl HdrSmoothing {
+    /// The step's name, for an information panel, such as "Normal"; the
+    /// type's docs list them all.
+    pub fn name(self) -> &'static str {
+        match self {
+            HdrSmoothing::Off => "Off",
+            HdrSmoothing::Low => "Low",
+            HdrSmoothing::Normal => "Normal",
+            HdrSmoothing::High => "High",
+            HdrSmoothing::Auto => "Auto",
+        }
+    }
+}
+
+impl fmt::Display for HdrSmoothing {
+    /// Writes [`name`](HdrSmoothing::name).
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.name())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -5114,6 +5521,22 @@ mod tests {
             dynamic_range_optimization: Some(DynamicRangeOptimization::ActiveDLighting(
                 ActiveDLighting::High,
             )),
+            high_dynamic_range: Some(HighDynamicRange::Hdr(full_hdr())),
+        }
+    }
+
+    /// Nikon's HDR on, with every part set, each different from what the
+    /// builders set in the tests below. No record holds a strength beside
+    /// the other two.
+    fn full_hdr() -> Hdr {
+        Hdr {
+            on: true,
+            strength: Some(HdrStrength::ExtraHigh),
+            exposure_differential: Some(HdrExposureDifferential::Ev(Rational {
+                numerator: 2,
+                denominator: 1,
+            })),
+            smoothing: Some(HdrSmoothing::High),
         }
     }
 
@@ -5179,6 +5602,7 @@ mod tests {
         assert_eq!(settings.gain_control(), None);
         assert_eq!(settings.picture_style(), None);
         assert_eq!(settings.dynamic_range_optimization(), None);
+        assert_eq!(settings.high_dynamic_range(), None);
 
         let control = PictureControl::default();
         assert_eq!(control.name(), None);
@@ -5289,6 +5713,21 @@ mod tests {
                 ActiveDLighting::High
             ))
         );
+        assert_eq!(
+            settings.high_dynamic_range(),
+            Some(HighDynamicRange::Hdr(full_hdr()))
+        );
+        let hdr = full_hdr();
+        assert!(hdr.is_on());
+        assert_eq!(hdr.strength(), Some(HdrStrength::ExtraHigh));
+        assert_eq!(
+            hdr.exposure_differential(),
+            Some(HdrExposureDifferential::Ev(Rational {
+                numerator: 2,
+                denominator: 1
+            }))
+        );
+        assert_eq!(hdr.smoothing(), Some(HdrSmoothing::High));
 
         let control = full_control();
         assert_eq!(control.name(), Some("VIVID-KR"));
@@ -5580,6 +6019,13 @@ mod tests {
                         ..start.clone()
                     },
                 ),
+                (
+                    start.clone().with_high_dynamic_range(Hdr::off().into()),
+                    CameraSettings {
+                        high_dynamic_range: Some(HighDynamicRange::Hdr(Hdr::off())),
+                        ..start.clone()
+                    },
+                ),
             ];
             for (place, (built, expected)) in cases.into_iter().enumerate() {
                 assert_eq!(built, expected, "builder {place} from {start:?}");
@@ -5839,6 +6285,30 @@ mod tests {
     }
 
     #[test]
+    fn on_and_off_build_an_hdr_that_says_so_with_no_parts() {
+        for (hdr, on) in [(Hdr::on(), true), (Hdr::off(), false)] {
+            assert_eq!(hdr.is_on(), on);
+            assert_eq!(hdr.strength(), None);
+            assert_eq!(hdr.exposure_differential(), None);
+            assert_eq!(hdr.smoothing(), None);
+        }
+        // A part is stored as given, even on an HDR that was off.
+        let off = Hdr::off().with_strength(HdrStrength::Normal);
+        assert!(!off.is_on());
+        assert_eq!(off.strength(), Some(HdrStrength::Normal));
+    }
+
+    #[test]
+    fn a_high_dynamic_range_gives_its_makers_word_and_whether_it_was_on() {
+        for hdr in [Hdr::on(), Hdr::off(), full_hdr()] {
+            let setting = HighDynamicRange::from(hdr);
+            assert_eq!(setting, HighDynamicRange::Hdr(hdr));
+            assert_eq!(setting.setting_name(), "HDR");
+            assert_eq!(setting.is_on(), hdr.is_on());
+        }
+    }
+
+    #[test]
     fn a_creative_style_and_a_creative_look_give_what_was_set() {
         let style = full_creative_style();
         assert_eq!(style.name(), Some("Vivid"));
@@ -6036,7 +6506,16 @@ mod tests {
                     .with_toning(PictureControlToning::Sepia)
                     .with_toning_saturation(steps(5, 4)),
             ))
-            .with_dynamic_range_optimization(DynamicRangeOptimization::from(ActiveDLighting::High));
+            .with_dynamic_range_optimization(DynamicRangeOptimization::from(ActiveDLighting::High))
+            .with_high_dynamic_range(HighDynamicRange::from(
+                Hdr::on()
+                    .with_strength(HdrStrength::ExtraHigh)
+                    .with_exposure_differential(HdrExposureDifferential::Ev(Rational {
+                        numerator: 2,
+                        denominator: 1,
+                    }))
+                    .with_smoothing(HdrSmoothing::High),
+            ));
         assert_eq!(settings, full_settings());
     }
 
@@ -6072,7 +6551,8 @@ mod tests {
             .with_custom_rendered(false)
             .with_gain_control(GainControl::LowGainDown)
             .with_picture_style(PictureControl::default().with_name("FLAT").into())
-            .with_dynamic_range_optimization(ActiveDLighting::Low.into());
+            .with_dynamic_range_optimization(ActiveDLighting::Low.into())
+            .with_high_dynamic_range(Hdr::off().into());
         // Every value of `earlier` differs from the full record's, so each
         // builder below has one to replace.
         let full = full_settings();
@@ -6106,8 +6586,21 @@ mod tests {
             .with_custom_rendered(true)
             .with_gain_control(GainControl::HighGainUp)
             .with_picture_style(full_control().into())
-            .with_dynamic_range_optimization(ActiveDLighting::High.into());
+            .with_dynamic_range_optimization(ActiveDLighting::High.into())
+            .with_high_dynamic_range(full_hdr().into());
         assert_eq!(settings, full);
+
+        let hdr = Hdr::on()
+            .with_strength(HdrStrength::Low)
+            .with_exposure_differential(HdrExposureDifferential::Auto)
+            .with_smoothing(HdrSmoothing::Off)
+            .with_strength(HdrStrength::ExtraHigh)
+            .with_exposure_differential(HdrExposureDifferential::Ev(Rational {
+                numerator: 2,
+                denominator: 1,
+            }))
+            .with_smoothing(HdrSmoothing::High);
+        assert_eq!(hdr, full_hdr());
 
         let control = PictureControl::default()
             .with_name("FLAT")
@@ -6767,6 +7260,28 @@ mod tests {
         all
     }
 
+    fn all_hdr_strengths() -> [HdrStrength; 5] {
+        use HdrStrength::*;
+        let all = [Low, Normal, High, ExtraHigh, Auto];
+        for step in all {
+            match step {
+                Low | Normal | High | ExtraHigh | Auto => {}
+            }
+        }
+        all
+    }
+
+    fn all_hdr_smoothings() -> [HdrSmoothing; 5] {
+        use HdrSmoothing::*;
+        let all = [Off, Low, Normal, High, Auto];
+        for step in all {
+            match step {
+                Off | Low | Normal | High | Auto => {}
+            }
+        }
+        all
+    }
+
     #[test]
     fn every_name_is_the_one_documented_and_display_writes_it() {
         // The names are stable once released: a program may show or store
@@ -7045,6 +7560,16 @@ mod tests {
                 "Level 8",
             ],
         );
+        assert_names(
+            &all_hdr_strengths(),
+            HdrStrength::name,
+            &["Low", "Normal", "High", "Extra high", "Auto"],
+        );
+        assert_names(
+            &all_hdr_smoothings(),
+            HdrSmoothing::name,
+            &["Off", "Low", "Normal", "High", "Auto"],
+        );
     }
 
     #[test]
@@ -7081,6 +7606,8 @@ mod tests {
         assert_ordered(&all_picture_control_tonings());
         assert_ordered(&all_active_d_lightings());
         assert_ordered(&all_d_range_optimizers());
+        assert_ordered(&all_hdr_strengths());
+        assert_ordered(&all_hdr_smoothings());
     }
 
     #[test]

@@ -170,6 +170,13 @@ const WORLD_TIME: u16 = 0x0024;
 /// setting for the shutter the camera chose.
 const SHUTTER_MODE: u16 = 0x0034;
 
+/// The Nikon MakerNote tag that records the HDR setting (HDRInfo): an
+/// UNDEFINED value that starts with its version, four ASCII digits. Its
+/// fifth byte says whether HDR was on; the bytes after it hold the parts
+/// its version sets, the strength or the exposure differential and the
+/// smoothing.
+const HDR_INFO: u16 = 0x0035;
+
 /// The Nikon MakerNote tag that records the raw size the camera was set to
 /// (ImageSizeRAW): one SHORT, 1 large, 2 medium, 3 small. In a JPEG it
 /// follows the JPEG's own size instead.
@@ -293,6 +300,7 @@ mod rules {
     pub(super) const WORLD_TIME: Held<[u8; 4]> =
         Held::new(super::WORLD_TIME, &[FieldType::Undefined]);
     pub(super) const SHUTTER_MODE: Held<[u32; 1]> = Held::new(super::SHUTTER_MODE, SHORT);
+    pub(super) const HDR_INFO: Rule<Vec<u8>> = Rule::new(super::HDR_INFO, &[FieldType::Undefined]);
     pub(super) const IMAGE_SIZE_RAW: Held<[u32; 1]> = Held::new(super::IMAGE_SIZE_RAW, SHORT);
     pub(super) const JPG_COMPRESSION: Held<[u32; 1]> = Held::new(super::JPG_COMPRESSION, SHORT);
     pub(super) const FINE_TUNE: Rule<[SignedRational; 2]> =

@@ -6,7 +6,7 @@
 //! focus mode, the AF-area mode, AF fine-tune, the stabilization, auto ISO,
 //! the exposure fine-tuning, the release mode and bracketing, daylight
 //! saving time, the flash's source, control, sync and compensation, the
-//! Picture Control and Active D-Lighting.
+//! Picture Control, Active D-Lighting and HDR.
 //!
 //! The MakerNote records how the camera was set for the picture beyond
 //! what the Exif tags record (ADR011). [`camera_settings`] reads each
@@ -49,7 +49,8 @@
 //! - the picture style from PictureControlData, else from the Coolpix
 //!   bodies' copy of it ([`picture_control_record`], [`picture_control`]);
 //! - the dynamic range optimization from ActiveD-Lighting
-//!   ([`active_d_lighting`]).
+//!   ([`active_d_lighting`]);
+//! - the high dynamic range setting from HDRInfo ([`hdr`]).
 //!
 //! A code or a text gives a value only where its meaning is known, as the
 //! next paragraph says. Anything else costs that value alone.
@@ -75,7 +76,8 @@ use super::rules;
 use crate::camera::BodyFacts;
 use crate::camera_settings::{
     ActiveDLighting, AfFineTune, Bracketing, CameraSettings, ColorSpace, DynamicRangeOptimization,
-    Flash, FlashControl, FlashSource, FlashSync, FocusAreaMode, FocusMode, ImageArea,
+    Flash, FlashControl, FlashSource, FlashSync, FocusAreaMode, FocusMode, Hdr,
+    HdrExposureDifferential, HdrSmoothing, HdrStrength, HighDynamicRange, ImageArea,
     JpegCompression, JpegQuality, PictureStyle, RawCompression, RawImageSize, ReleaseMode, Shutter,
     Stabilization, StabilizationMode, WhiteBalanceFineTune, WhiteBalanceMode,
 };
@@ -84,7 +86,7 @@ use crate::error::Result;
 use crate::formats::makernote::{Picture, checked_color_temperature};
 use crate::formats::tiff_metadata;
 use crate::io::Source;
-use crate::rational::SignedRational;
+use crate::rational::{Rational, SignedRational};
 
 /// What the standard tags gave that the camera settings build on.
 pub(super) struct FromStandardTags<'a> {
@@ -202,6 +204,8 @@ const NIKON_COMPRESSED: u32 = 34713;
 ///   ([`picture_control`]), in a raw file and a JPEG alike.
 /// - **The dynamic range optimization** is the Active D-Lighting step
 ///   that ActiveD-Lighting's code names ([`active_d_lighting`]).
+/// - **The high dynamic range setting** is the HDR that HDRInfo records
+///   ([`hdr`]), in a raw file and a JPEG alike.
 ///
 /// Nikon records no electronic front curtain setting, so it stays as
 /// `settings` has it, `None`. The exposure program and the metering mode
@@ -328,6 +332,11 @@ pub(super) fn camera_settings<R: Read + Seek>(
         .held(rules::ACTIVE_D_LIGHTING)
         .and_then(|[code]| active_d_lighting(code))
         .map(DynamicRangeOptimization::ActiveDLighting);
+    settings.high_dynamic_range = ifd
+        .get(src, rules::HDR_INFO)?
+        .as_deref()
+        .and_then(hdr)
+        .map(HighDynamicRange::Hdr);
     Ok(settings)
 }
 
@@ -378,6 +387,106 @@ fn active_d_lighting(code: u32) -> Option<ActiveDLighting> {
         10 => ActiveDLighting::ExtraHigh3,
         11 => ActiveDLighting::ExtraHigh4,
         65535 => ActiveDLighting::Auto,
+        _ => return None,
+    })
+}
+
+/// The HDR that HDRInfo's `record` holds, at the versions whose layout
+/// ExifTool's published documentation gives and measured files hold,
+/// each of its length: 0100, on the D600 and a Nikon 1 J2, and 0101, on
+/// Coolpix bodies, of 8 bytes; 0200, on the D7100 and later bodies, of 6
+/// bytes (NEF notes, section 8.11).
+///
+/// Byte 4 is 0 off and 1 on. Under on, the parts are read by the lists
+/// the documentation gives, each read whole, since files hold part of
+/// each: at 0200, byte 5 the strength ([`hdr_strength`]); at 0100 and
+/// 0101, byte 5 the exposure differential
+/// ([`hdr_exposure_differential`]) and byte 6 the smoothing
+/// ([`hdr_smoothing`]). A code a list lacks gives no part. Under off, the
+/// record gives no parts: the D600's files hold 0 in both bytes there,
+/// which would read as a smoothing of off, a step its menu does not
+/// offer.
+///
+/// `None` for any other version, a record of another length than its
+/// version's, and any other byte 4, such as 48, which the documentation
+/// calls auto: it says neither on nor off, and no file holds it. Byte 7 of
+/// the 8-byte versions, which the documentation calls a second level, is
+/// not read.
+fn hdr(record: &[u8]) -> Option<Hdr> {
+    let len = match record.get(..4)? {
+        b"0100" | b"0101" => 8,
+        b"0200" => 6,
+        _ => return None,
+    };
+    if record.len() != len {
+        return None;
+    }
+    let &[_, _, _, _, on, fifth, ref rest @ ..] = record else {
+        return None;
+    };
+    match on {
+        0 => Some(Hdr::off()),
+        1 => {
+            let mut hdr = Hdr::on();
+            if let [sixth, _] = *rest {
+                if let Some(differential) = hdr_exposure_differential(fifth) {
+                    hdr = hdr.with_exposure_differential(differential);
+                }
+                if let Some(smoothing) = hdr_smoothing(sixth) {
+                    hdr = hdr.with_smoothing(smoothing);
+                }
+            } else if let Some(strength) = hdr_strength(fifth) {
+                hdr = hdr.with_strength(strength);
+            }
+            Some(hdr)
+        }
+        _ => None,
+    }
+}
+
+/// The HDR strength that byte 5 of HDRInfo's version 0200, `code`, names:
+/// 1 [`Normal`](HdrStrength::Normal), 2 [`Low`](HdrStrength::Low), 3
+/// [`High`](HdrStrength::High), 4, the documentation's "High+", the
+/// D7100's extra high, [`ExtraHigh`](HdrStrength::ExtraHigh), and 5
+/// [`Auto`](HdrStrength::Auto), which my D7100's files hold. `None` for
+/// 0, which the documentation calls not available, and every other code.
+fn hdr_strength(code: u8) -> Option<HdrStrength> {
+    Some(match code {
+        1 => HdrStrength::Normal,
+        2 => HdrStrength::Low,
+        3 => HdrStrength::High,
+        4 => HdrStrength::ExtraHigh,
+        5 => HdrStrength::Auto,
+        _ => return None,
+    })
+}
+
+/// The exposure differential that byte 5 of HDRInfo's versions 0100 and
+/// 0101, `code`, names: 0 [`Auto`](HdrExposureDifferential::Auto), and 1
+/// to 3 that many EV, [`Ev`](HdrExposureDifferential::Ev) of `1/1` to
+/// `3/1`. `None` for every other code.
+fn hdr_exposure_differential(code: u8) -> Option<HdrExposureDifferential> {
+    match code {
+        0 => Some(HdrExposureDifferential::Auto),
+        1..=3 => Some(HdrExposureDifferential::Ev(Rational {
+            numerator: u32::from(code),
+            denominator: 1,
+        })),
+        _ => None,
+    }
+}
+
+/// The smoothing that byte 6 of HDRInfo's versions 0100 and 0101, `code`,
+/// names: 0 [`Off`](HdrSmoothing::Off), 1 [`Normal`](HdrSmoothing::Normal),
+/// 2 [`Low`](HdrSmoothing::Low), 3 [`High`](HdrSmoothing::High) and 48
+/// [`Auto`](HdrSmoothing::Auto). `None` for every other code.
+fn hdr_smoothing(code: u8) -> Option<HdrSmoothing> {
+    Some(match code {
+        0 => HdrSmoothing::Off,
+        1 => HdrSmoothing::Normal,
+        2 => HdrSmoothing::Low,
+        3 => HdrSmoothing::High,
+        48 => HdrSmoothing::Auto,
         _ => return None,
     })
 }
@@ -1157,7 +1266,7 @@ mod tests {
     use super::super::{
         ACTIVE_D_LIGHTING, AF_INFO, AF_INFO2, AF_TUNE, COLOR_SPACE, COLOR_TEMPERATURE,
         COMPRESSION_RECORD, COOLPIX_PICTURE_CONTROL, CROP_HI_SPEED, EXPOSURE_TUNING, FINE_TUNE,
-        FINE_TUNE_STEPS, FLASH_EXPOSURE_COMP, FLASH_SETTING, FLASH_TYPE, FOCUS_MODE,
+        FINE_TUNE_STEPS, FLASH_EXPOSURE_COMP, FLASH_SETTING, FLASH_TYPE, FOCUS_MODE, HDR_INFO,
         IMAGE_SIZE_RAW, ISO_SELECTION, JPG_COMPRESSION, NEF_COMPRESSION, PICTURE_CONTROL, QUALITY,
         SHOOTING_MODE, SHUTTER_MODE, VR_INFO, WHITE_BALANCE, WORLD_TIME, metadata,
     };
@@ -4128,6 +4237,164 @@ mod tests {
                     "{order:?}, {place}"
                 );
             }
+        }
+    }
+
+    // HDR.
+
+    /// An HDRInfo record of version `version`, `len` bytes long, whose
+    /// bytes 4 to 6 are `on`, `fifth` and `sixth`, padded with zeros.
+    fn hdr_info(version: &[u8; 4], on: u8, fifth: u8, sixth: u8, len: usize) -> Vec<u8> {
+        let mut record = version.to_vec();
+        record.extend_from_slice(&[on, fifth, sixth]);
+        record.resize(len, 0);
+        record
+    }
+
+    /// The high dynamic range setting of a raw file and a JPEG in byte
+    /// order `order` whose MakerNote's HDRInfo is `record`, of type
+    /// UNDEFINED, checked to be the same in both.
+    fn hdr_of(order: Order, record: &[u8]) -> Option<HighDynamicRange> {
+        let tags = |inner: &mut TiffBuilder, ifd: IfdId| {
+            inner.undefined(ifd, HDR_INFO, record);
+        };
+        let raw = settings_of(order, tags).high_dynamic_range;
+        let jpeg = jpeg_settings(order, tags, |_, _| {}).high_dynamic_range;
+        assert_eq!(raw, jpeg, "{order:?}, {record:?}");
+        raw
+    }
+
+    fn ev(numerator: u32) -> HdrExposureDifferential {
+        HdrExposureDifferential::Ev(Rational {
+            numerator,
+            denominator: 1,
+        })
+    }
+
+    #[test]
+    fn hdr_info_0200_gives_on_or_off_and_the_strength_where_on() {
+        use HdrStrength::{Auto, ExtraHigh, High, Low, Normal};
+        let on = Hdr::on;
+        let cases = [
+            // My D7100's four JPEGs under HDR, `01 05`, and the rest of the
+            // list; 0, "not available", and 6, which it lacks, name none.
+            (hdr_info(b"0200", 1, 5, 0, 6), on().with_strength(Auto)),
+            (hdr_info(b"0200", 1, 1, 0, 6), on().with_strength(Normal)),
+            (hdr_info(b"0200", 1, 2, 0, 6), on().with_strength(Low)),
+            (hdr_info(b"0200", 1, 3, 0, 6), on().with_strength(High)),
+            (hdr_info(b"0200", 1, 4, 0, 6), on().with_strength(ExtraHigh)),
+            (hdr_info(b"0200", 1, 0, 0, 6), on()),
+            (hdr_info(b"0200", 1, 6, 0, 6), on()),
+            // Off, whatever byte 5 holds.
+            (hdr_info(b"0200", 0, 0, 0, 6), Hdr::off()),
+            (hdr_info(b"0200", 0, 5, 0, 6), Hdr::off()),
+        ];
+        for order in ORDERS {
+            for (record, expected) in &cases {
+                assert_eq!(
+                    hdr_of(order, record),
+                    Some(HighDynamicRange::Hdr(*expected)),
+                    "{order:?}, {record:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn hdr_info_0100_and_0101_give_the_exposure_differential_and_smoothing_where_on() {
+        use HdrSmoothing::{Auto, High, Low, Normal, Off};
+        let on = Hdr::on;
+        for version in [b"0100", b"0101"] {
+            let cases = [
+                (
+                    hdr_info(version, 1, 0, 48, 8),
+                    on().with_exposure_differential(HdrExposureDifferential::Auto)
+                        .with_smoothing(Auto),
+                ),
+                (
+                    hdr_info(version, 1, 1, 0, 8),
+                    on().with_exposure_differential(ev(1)).with_smoothing(Off),
+                ),
+                (
+                    hdr_info(version, 1, 2, 1, 8),
+                    on().with_exposure_differential(ev(2))
+                        .with_smoothing(Normal),
+                ),
+                (
+                    hdr_info(version, 1, 3, 2, 8),
+                    on().with_exposure_differential(ev(3)).with_smoothing(Low),
+                ),
+                (
+                    hdr_info(version, 1, 3, 3, 8),
+                    on().with_exposure_differential(ev(3)).with_smoothing(High),
+                ),
+                // A code a list lacks costs its part alone.
+                (hdr_info(version, 1, 4, 3, 8), on().with_smoothing(High)),
+                (
+                    hdr_info(version, 1, 2, 4, 8),
+                    on().with_exposure_differential(ev(2)),
+                ),
+                // Off, as on my D600's JPEGs, `00 00 00 FF` after the
+                // version, and on the public files: no parts.
+                ([version.as_slice(), &[0, 0, 0, 0xFF]].concat(), Hdr::off()),
+                (hdr_info(version, 0, 2, 1, 8), Hdr::off()),
+            ];
+            for order in ORDERS {
+                for (record, expected) in &cases {
+                    assert_eq!(
+                        hdr_of(order, record),
+                        Some(HighDynamicRange::Hdr(*expected)),
+                        "{order:?}, {record:?}"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn hdr_info_of_another_byte_4_version_or_length_is_none() {
+        let records = [
+            // Byte 4's 48, "auto", which says neither on nor off, and 2.
+            hdr_info(b"0100", 48, 0, 0, 8),
+            hdr_info(b"0101", 48, 0, 0, 8),
+            hdr_info(b"0200", 2, 5, 0, 6),
+            // One byte short and one too many, at each version.
+            hdr_info(b"0100", 0, 0, 0, 7),
+            hdr_info(b"0101", 0, 0, 0, 9),
+            hdr_info(b"0200", 1, 5, 0, 5),
+            hdr_info(b"0200", 1, 5, 0, 7),
+            // The other versions' lengths swapped.
+            hdr_info(b"0100", 1, 2, 1, 6),
+            hdr_info(b"0200", 1, 5, 0, 8),
+            // Versions no measured file holds, and eight bytes with no
+            // version, as a COOLPIX P7100's.
+            hdr_info(b"0102", 1, 2, 1, 8),
+            hdr_info(b"0201", 1, 5, 0, 6),
+            hdr_info(b"0300", 1, 5, 0, 6),
+            vec![0, 0, 0, 0, 0, 0, 0, 0],
+            b"020".to_vec(),
+        ];
+        for order in ORDERS {
+            for record in &records {
+                assert_eq!(hdr_of(order, record), None, "{order:?}, {record:?}");
+            }
+        }
+    }
+
+    #[test]
+    fn an_hdr_info_of_another_type_gives_none_and_costs_nothing_else() {
+        for order in ORDERS {
+            let settings = settings_of(order, |inner, ifd| {
+                inner
+                    .byte(ifd, HDR_INFO, &hdr_info(b"0200", 1, 5, 0, 6))
+                    .ascii(ifd, WHITE_BALANCE, &padded("SUNNY"));
+            });
+            assert_eq!(settings.high_dynamic_range, None, "{order:?}");
+            assert_eq!(
+                settings.white_balance.mode,
+                Some(WhiteBalanceMode::Daylight),
+                "{order:?}"
+            );
         }
     }
 }
