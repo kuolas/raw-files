@@ -13,8 +13,8 @@
 //! saturation and sharpness, the scene capture type, custom rendering,
 //! gain control, the maker's picture style, its dynamic range
 //! optimization and its high dynamic range setting, the high ISO, long
-//! exposure and multi-frame noise reductions, and its vignetting
-//! correction.
+//! exposure and multi-frame noise reductions, and its vignetting and
+//! distortion corrections.
 //! [`CameraSettings`] holds them all, and
 //! [`Metadata::camera_settings`](crate::Metadata::camera_settings) gives
 //! them for a file. [`WhiteBalance`], [`WhiteBalanceFineTune`], [`Flash`],
@@ -26,8 +26,9 @@
 //! [`PictureControl`], Sony's [`CreativeStyle`] or its [`CreativeLook`],
 //! each under its own name, [`DynamicRangeOptimization`] holds Nikon's
 //! [`ActiveDLighting`] or Sony's [`DRangeOptimizer`],
-//! [`HighDynamicRange`] Nikon's [`Hdr`] or Sony's [`AutoHdr`], and
-//! [`VignettingCorrection`] Nikon's [`VignetteControl`].
+//! [`HighDynamicRange`] Nikon's [`Hdr`] or Sony's [`AutoHdr`],
+//! [`VignettingCorrection`] Nikon's [`VignetteControl`], and
+//! [`DistortionCorrection`] Nikon's [`AutoDistortionControl`].
 //!
 //! Every value is optional. A file may not record it, or may record it in
 //! a way that cannot be read, such as a code no variant names; either way
@@ -55,8 +56,8 @@
 //!   in a JPEG, its quality and the choice between size priority and
 //!   optimal quality; the Picture Control, Nikon's picture style; Active
 //!   D-Lighting; HDR; the high ISO noise reduction; whether the long
-//!   exposure noise reduction ran, which says it was on; and vignette
-//!   control.
+//!   exposure noise reduction ran, which says it was on; vignette
+//!   control; and auto distortion control.
 //! - Sony's MakerNote, in ARW files and their family and in the JPEGs of
 //!   Sony cameras, gives the white balance setting in place of Exif's,
 //!   with its fine-tuning and the color temperature of a chosen color
@@ -108,8 +109,8 @@ use crate::rational::{Rational, SignedRational};
 /// directions of contrast, saturation and sharpness it processed the
 /// picture in, the scene capture type, custom rendering, gain control, the
 /// maker's picture style, dynamic range optimization and high dynamic
-/// range setting, the noise reductions, and the vignetting correction, for
-/// a viewer's information panel beside the exposure.
+/// range setting, the noise reductions, and the vignetting and distortion
+/// corrections, for a viewer's information panel beside the exposure.
 ///
 /// Every value is `None` when the file does not record it or records it in
 /// a way that cannot be read, such as a code that no variant names. A
@@ -231,6 +232,7 @@ pub struct CameraSettings {
     pub(crate) long_exposure_noise_reduction: Option<bool>,
     pub(crate) multi_frame_noise_reduction: Option<bool>,
     pub(crate) vignetting_correction: Option<VignettingCorrection>,
+    pub(crate) distortion_correction: Option<DistortionCorrection>,
 }
 
 impl CameraSettings {
@@ -1584,6 +1586,52 @@ impl CameraSettings {
         self.vignetting_correction
     }
 
+    /// How the camera corrected the lens's distortion, the bending of
+    /// straight lines toward or away from the picture's center, under its
+    /// maker's own name: Nikon's [`AutoDistortionControl`]
+    /// ([`DistortionCorrection`]).
+    ///
+    /// Read from Nikon's MakerNote, in a raw file and a JPEG alike, from
+    /// DistortInfo (0x002B), a record of 16 bytes that starts with its
+    /// version, at the one version measured files hold, 0100. Its byte 4
+    /// is read by the list ExifTool's documentation gives, read whole,
+    /// since files hold part of it: 0 off, 1 on and 2 on for underwater.
+    /// Bytes 5 to 7, which vary with the lens, are not read.
+    ///
+    /// `None` when:
+    ///
+    /// - the file records none, as every file of another maker does, and
+    ///   every file of the D300S measured;
+    /// - the record is of another version, or of another length than 16
+    ///   bytes, or is not of type UNDEFINED, as the D3000's one SHORT;
+    /// - byte 4 holds a code the list lacks, such as 3.
+    ///
+    /// What files record is in the NEF notes on
+    /// [auto distortion control](https://github.com/kuolas/raw-files/blob/master/docs/formats/nef/makernote-and-metadata.md#811-picture-style-and-processing).
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use raw_files::{AutoDistortionControl, CameraFile, DistortionCorrection};
+    ///
+    /// # fn main() -> raw_files::Result<()> {
+    /// let file = CameraFile::open("photo.nef")?;
+    /// if let Some(correction) = file.metadata().camera_settings().distortion_correction() {
+    ///     println!("{}: {}", correction.setting_name(), correction.name());
+    ///     match correction {
+    ///         DistortionCorrection::AutoDistortionControl(AutoDistortionControl::Off) => {
+    ///             println!("the lines left as the lens drew them");
+    ///         }
+    ///         _ => {}
+    ///     }
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn distortion_correction(&self) -> Option<DistortionCorrection> {
+        self.distortion_correction
+    }
+
     /// Sets the white balance, in place of the one it had;
     /// [`white_balance`](Self::white_balance) reads it.
     #[must_use]
@@ -1877,6 +1925,14 @@ impl CameraSettings {
     #[must_use]
     pub fn with_vignetting_correction(mut self, correction: VignettingCorrection) -> Self {
         self.vignetting_correction = Some(correction);
+        self
+    }
+
+    /// Sets the distortion correction, in place of any set before;
+    /// [`distortion_correction`](Self::distortion_correction) reads it.
+    #[must_use]
+    pub fn with_distortion_correction(mut self, correction: DistortionCorrection) -> Self {
+        self.distortion_correction = Some(correction);
         self
     }
 }
@@ -6052,6 +6108,135 @@ impl fmt::Display for VignetteControl {
     }
 }
 
+/// How the camera corrected the lens's distortion, the bending of
+/// straight lines toward or away from the picture's center, under its
+/// maker's own name: the variant says which maker's setting it is, and
+/// holds that setting's own type.
+///
+/// Each maker names the setting and its choices in its own way, so each
+/// keeps its own type:
+///
+/// - [`AutoDistortionControl`](Self::AutoDistortionControl), Nikon's
+///   auto distortion control.
+///
+/// [`setting_name`](Self::setting_name) gives the maker's word for the
+/// setting, for a viewer's label, and [`name`](Self::name) the choice's
+/// name, whichever maker's it is.
+///
+/// `DistortionCorrection` is `#[non_exhaustive]`, so match on it with a
+/// wildcard arm: another maker's setting is added as a variant. It is
+/// `Copy`, and has no `Default`: a setting is always one maker's. It has
+/// no `Display` either, as [`DynamicRangeOptimization`] has none: a
+/// viewer writes the setting's name and the choice's together. Each
+/// maker's type converts into it with `From`.
+///
+/// # Examples
+///
+/// A maker's setting, labeled for a viewer and read by its variant:
+///
+/// ```
+/// use raw_files::{AutoDistortionControl, DistortionCorrection};
+///
+/// let nikon = DistortionCorrection::from(AutoDistortionControl::On);
+/// println!("{}: {}", nikon.setting_name(), nikon.name());
+/// let corrected = match nikon {
+///     DistortionCorrection::AutoDistortionControl(control) => {
+///         control != AutoDistortionControl::Off
+///     }
+///     _ => false,
+/// };
+/// assert!(corrected);
+/// assert_eq!(nikon.setting_name(), "Auto distortion control");
+/// assert_eq!(nikon.name(), "On");
+/// ```
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum DistortionCorrection {
+    /// Nikon's auto distortion control.
+    AutoDistortionControl(AutoDistortionControl),
+}
+
+impl DistortionCorrection {
+    /// The maker's word for the setting, for a viewer's label: "Auto
+    /// distortion control".
+    pub fn setting_name(&self) -> &'static str {
+        match self {
+            DistortionCorrection::AutoDistortionControl(_) => "Auto distortion control",
+        }
+    }
+
+    /// The choice's name, whichever maker's setting it is, such as "On":
+    /// the `name` of the variant's own type,
+    /// [`AutoDistortionControl::name`].
+    pub fn name(&self) -> &'static str {
+        match self {
+            DistortionCorrection::AutoDistortionControl(control) => control.name(),
+        }
+    }
+}
+
+impl From<AutoDistortionControl> for DistortionCorrection {
+    /// The auto distortion control as a distortion correction, its
+    /// [`AutoDistortionControl`](DistortionCorrection::AutoDistortionControl)
+    /// variant.
+    fn from(control: AutoDistortionControl) -> Self {
+        DistortionCorrection::AutoDistortionControl(control)
+    }
+}
+
+/// Nikon's auto distortion control: whether the camera corrected the
+/// lens's barrel and pin-cushion distortion, and for which conditions.
+///
+/// The D600's manual offers on and off. ExifTool's documentation also
+/// gives on for underwater, which no Nikon manual read for raw-files
+/// names; its variant rests on the documentation's words.
+///
+/// `AutoDistortionControl` is `#[non_exhaustive]`, so match on it with a
+/// wildcard arm. It orders as its variants are listed, and a new variant
+/// is added after the existing ones, so an order once observed holds. Its
+/// [`name`](Self::name)s, which `Display` writes too, are "Off", "On" and
+/// "On (underwater)".
+///
+/// # Examples
+///
+/// ```
+/// use raw_files::AutoDistortionControl;
+///
+/// assert_eq!(AutoDistortionControl::On.name(), "On");
+/// assert_eq!(AutoDistortionControl::OnUnderwater.to_string(), "On (underwater)");
+/// assert!(AutoDistortionControl::Off < AutoDistortionControl::On);
+/// ```
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[non_exhaustive]
+pub enum AutoDistortionControl {
+    /// Auto distortion control off.
+    Off,
+    /// Auto distortion control on.
+    On,
+    /// The documentation's on for underwater: on, corrected for a picture
+    /// taken under water.
+    OnUnderwater,
+}
+
+impl AutoDistortionControl {
+    /// The choice's name, for an information panel, such as "On"; the
+    /// type's docs list them all.
+    pub fn name(self) -> &'static str {
+        match self {
+            AutoDistortionControl::Off => "Off",
+            AutoDistortionControl::On => "On",
+            AutoDistortionControl::OnUnderwater => "On (underwater)",
+        }
+    }
+}
+
+impl fmt::Display for AutoDistortionControl {
+    /// Writes [`name`](AutoDistortionControl::name).
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.name())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -6134,6 +6319,9 @@ mod tests {
             multi_frame_noise_reduction: Some(false),
             vignetting_correction: Some(VignettingCorrection::VignetteControl(
                 VignetteControl::Low,
+            )),
+            distortion_correction: Some(DistortionCorrection::AutoDistortionControl(
+                AutoDistortionControl::OnUnderwater,
             )),
         }
     }
@@ -6220,6 +6408,7 @@ mod tests {
         assert_eq!(settings.long_exposure_noise_reduction(), None);
         assert_eq!(settings.multi_frame_noise_reduction(), None);
         assert_eq!(settings.vignetting_correction(), None);
+        assert_eq!(settings.distortion_correction(), None);
 
         let control = PictureControl::default();
         assert_eq!(control.name(), None);
@@ -6354,6 +6543,12 @@ mod tests {
         assert_eq!(
             settings.vignetting_correction(),
             Some(VignettingCorrection::VignetteControl(VignetteControl::Low))
+        );
+        assert_eq!(
+            settings.distortion_correction(),
+            Some(DistortionCorrection::AutoDistortionControl(
+                AutoDistortionControl::OnUnderwater
+            ))
         );
 
         let control = full_control();
@@ -6687,6 +6882,17 @@ mod tests {
                         ..start.clone()
                     },
                 ),
+                (
+                    start
+                        .clone()
+                        .with_distortion_correction(AutoDistortionControl::Off.into()),
+                    CameraSettings {
+                        distortion_correction: Some(DistortionCorrection::AutoDistortionControl(
+                            AutoDistortionControl::Off,
+                        )),
+                        ..start.clone()
+                    },
+                ),
             ];
             for (place, (built, expected)) in cases.into_iter().enumerate() {
                 assert_eq!(built, expected, "builder {place} from {start:?}");
@@ -6956,6 +7162,19 @@ mod tests {
     }
 
     #[test]
+    fn a_distortion_correction_gives_its_makers_word_and_its_choice() {
+        for control in all_auto_distortion_controls() {
+            let correction = DistortionCorrection::from(control);
+            assert_eq!(
+                correction,
+                DistortionCorrection::AutoDistortionControl(control)
+            );
+            assert_eq!(correction.setting_name(), "Auto distortion control");
+            assert_eq!(correction.name(), control.name());
+        }
+    }
+
+    #[test]
     fn on_and_off_build_an_hdr_that_says_so_with_no_parts() {
         for (hdr, on) in [(Hdr::on(), true), (Hdr::off(), false)] {
             assert_eq!(hdr.is_on(), on);
@@ -7216,7 +7435,10 @@ mod tests {
             .with_high_iso_noise_reduction(HighIsoNoiseReduction::MediumHigh)
             .with_long_exposure_noise_reduction(true)
             .with_multi_frame_noise_reduction(false)
-            .with_vignetting_correction(VignettingCorrection::from(VignetteControl::Low));
+            .with_vignetting_correction(VignettingCorrection::from(VignetteControl::Low))
+            .with_distortion_correction(DistortionCorrection::from(
+                AutoDistortionControl::OnUnderwater,
+            ));
         assert_eq!(settings, full_settings());
     }
 
@@ -7257,7 +7479,8 @@ mod tests {
             .with_high_iso_noise_reduction(HighIsoNoiseReduction::Off)
             .with_long_exposure_noise_reduction(false)
             .with_multi_frame_noise_reduction(true)
-            .with_vignetting_correction(VignetteControl::Normal.into());
+            .with_vignetting_correction(VignetteControl::Normal.into())
+            .with_distortion_correction(AutoDistortionControl::On.into());
         // Every value of `earlier` differs from the full record's, so each
         // builder below has one to replace.
         let full = full_settings();
@@ -7296,7 +7519,8 @@ mod tests {
             .with_high_iso_noise_reduction(HighIsoNoiseReduction::MediumHigh)
             .with_long_exposure_noise_reduction(true)
             .with_multi_frame_noise_reduction(false)
-            .with_vignetting_correction(VignetteControl::Low.into());
+            .with_vignetting_correction(VignetteControl::Low.into())
+            .with_distortion_correction(AutoDistortionControl::OnUnderwater.into());
         assert_eq!(settings, full);
 
         let hdr = Hdr::on()
@@ -8013,6 +8237,17 @@ mod tests {
         all
     }
 
+    fn all_auto_distortion_controls() -> [AutoDistortionControl; 3] {
+        use AutoDistortionControl::*;
+        let all = [Off, On, OnUnderwater];
+        for control in all {
+            match control {
+                Off | On | OnUnderwater => {}
+            }
+        }
+        all
+    }
+
     #[test]
     fn every_name_is_the_one_documented_and_display_writes_it() {
         // The names are stable once released: a program may show or store
@@ -8320,6 +8555,11 @@ mod tests {
             VignetteControl::name,
             &["Off", "Low", "Normal", "High"],
         );
+        assert_names(
+            &all_auto_distortion_controls(),
+            AutoDistortionControl::name,
+            &["Off", "On", "On (underwater)"],
+        );
     }
 
     #[test]
@@ -8360,6 +8600,7 @@ mod tests {
         assert_ordered(&all_hdr_smoothings());
         assert_ordered(&all_high_iso_noise_reductions());
         assert_ordered(&all_vignette_controls());
+        assert_ordered(&all_auto_distortion_controls());
     }
 
     #[test]

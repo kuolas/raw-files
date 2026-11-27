@@ -445,6 +445,16 @@ does. An entry that can break a caller opens with **Breaking:**.
   - `VignettingCorrection::setting_name` gives the maker's word for the
     setting, and `name` the step's name. Each maker's type converts
     into it with `From`.
+- `CameraSettings::distortion_correction` gives how the camera
+  corrected the lens's distortion, a `DistortionCorrection` under its
+  maker's own name. `with_distortion_correction` sets it
+  ([#230](https://github.com/kuolas/raw-files/issues/230)).
+  - Its first variant is Nikon's `AutoDistortionControl`, read from
+    byte 4 of the record DistortInfo (0x002B) at version 0100, of 16
+    bytes: off, on, or on for underwater.
+  - `DistortionCorrection::setting_name` gives the maker's word for the
+    setting, and `name` the choice's name. Each maker's type converts
+    into it with `From`.
 
 ### Changed
 

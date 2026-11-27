@@ -2188,12 +2188,9 @@ settings
 - Exif's six processing values;
 - Active D-Lighting and HDR;
 - the high ISO and long exposure noise reductions;
-- vignette control.
+- vignette control and auto distortion control.
 
-It will read:
-
-- auto distortion control;
-- the scene mode.
+It will read the scene mode.
 
 Each setting keeps Nikon's own name and kinds. Where Sony has a
 setting for the same thing, one value of the camera settings holds
@@ -2540,7 +2537,7 @@ D3200, D3300 and D7100 write no 0x002A, and give none.
 **Auto distortion control.** It reduces barrel and pin-cushion
 distortion [P][25] (p. 217). 0x002B DistortInfo is a record of 16
 bytes at version `0100`, whose byte 4 is the setting [S][1]. It is on
-219 public files and 46,747 of mine. raw-files will read it as the
+219 public files and 46,747 of mine. raw-files reads it as the
 `AutoDistortionControl` of a `DistortionCorrection`:
 
 | Byte 4 | The documentation's name [S][1] | Mark | Files, public / mine |
@@ -2550,7 +2547,7 @@ bytes at version `0100`, whose byte 4 is the setting [S][1]. It is on
 | 2 | On (underwater) | documented only | 0 / 0 |
 
 **[F]** Bytes 5 to 7 vary with the lens and are not documented. A
-record of another shape will give none. Two files hold one: a public
+record of another shape gives none. Two files hold one: a public
 D3000's holds one SHORT, and one JPEG of mine a text that an editor
 left. My D300S writes no 0x002B.
 
@@ -2800,13 +2797,12 @@ plain MakerNote tags where Exif has no value, and decrypt nothing [I]:
 - the high ISO noise reduction from 0x00B1;
 - the long exposure noise reduction from 0x0095, where `FPNR` gives on
   and `OFF` none;
-- vignette control from 0x002A;
-- the other processing settings of
+- vignette control from 0x002A, and auto distortion control from byte
+  4 of 0x002B;
+- the scene mode of
   [section 8.11](#811-picture-style-and-processing), which raw-files
-  will read:
-  - auto distortion control from byte 4 of 0x002B;
-  - the scene mode from 0x00AB, else 0x008F, where a blank text will
-    give none.
+  will read from 0x00AB, else 0x008F, where a blank text will give
+  none.
 
 ShotInfo's firmware version and image area, NikonSettings, and the
 digits that 0x0051 and 0x0056 start with stay unread: the first two are

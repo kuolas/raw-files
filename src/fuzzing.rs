@@ -17,8 +17,9 @@
 use std::io::{Cursor, Read, Seek};
 
 use crate::camera_settings::{
-    AutoHdrExposureDifference, DynamicRangeOptimization, HdrExposureDifferential, HighDynamicRange,
-    PictureControlValue, PictureStyle, VignettingCorrection,
+    AutoHdrExposureDifference, DistortionCorrection, DynamicRangeOptimization,
+    HdrExposureDifferential, HighDynamicRange, PictureControlValue, PictureStyle,
+    VignettingCorrection,
 };
 use crate::container::jpeg::{mpf, probe, segments};
 use crate::container::tiff::{Block, FieldType, First, Held, Rule, Text, Tree, walk};
@@ -467,6 +468,9 @@ fn read_metadata(metadata: &Metadata) {
     if let Some(correction) = settings.vignetting_correction() {
         read_vignetting_correction(correction);
     }
+    if let Some(correction) = settings.distortion_correction() {
+        read_distortion_correction(correction);
+    }
     let tiny = Size {
         width: 1,
         height: 1,
@@ -620,6 +624,17 @@ fn read_vignetting_correction(correction: VignettingCorrection) {
     match correction {
         VignettingCorrection::VignetteControl(step) => {
             let _ = step.to_string();
+        }
+    }
+}
+
+/// Calls every getter of the distortion correction `correction`,
+/// whichever maker's it is.
+fn read_distortion_correction(correction: DistortionCorrection) {
+    let _ = (correction.setting_name(), correction.name());
+    match correction {
+        DistortionCorrection::AutoDistortionControl(control) => {
+            let _ = control.to_string();
         }
     }
 }

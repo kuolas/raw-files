@@ -7,7 +7,7 @@
 //! the exposure fine-tuning, the release mode and bracketing, daylight
 //! saving time, the flash's source, control, sync and compensation, the
 //! Picture Control, Active D-Lighting, HDR, the high ISO and long exposure
-//! noise reductions, and vignette control.
+//! noise reductions, vignette control and auto distortion control.
 //!
 //! The MakerNote records how the camera was set for the picture beyond
 //! what the Exif tags record (ADR011). [`camera_settings`] reads each
@@ -57,7 +57,9 @@
 //! - the long exposure noise reduction from NoiseReduction's text
 //!   ([`long_exposure_noise_reduction_of_text`]);
 //! - the vignetting correction from VignetteControl
-//!   ([`vignette_control`]).
+//!   ([`vignette_control`]);
+//! - the distortion correction from DistortInfo
+//!   ([`auto_distortion_control`]).
 //!
 //! A code or a text gives a value only where its meaning is known, as the
 //! next paragraph says. Anything else costs that value alone.
@@ -82,12 +84,12 @@ use super::picture_control::picture_control;
 use super::rules;
 use crate::camera::BodyFacts;
 use crate::camera_settings::{
-    ActiveDLighting, AfFineTune, Bracketing, CameraSettings, ColorSpace, DynamicRangeOptimization,
-    Flash, FlashControl, FlashSource, FlashSync, FocusAreaMode, FocusMode, Hdr,
-    HdrExposureDifferential, HdrSmoothing, HdrStrength, HighDynamicRange, HighIsoNoiseReduction,
-    ImageArea, JpegCompression, JpegQuality, PictureStyle, RawCompression, RawImageSize,
-    ReleaseMode, Shutter, Stabilization, StabilizationMode, VignetteControl, VignettingCorrection,
-    WhiteBalanceFineTune, WhiteBalanceMode,
+    ActiveDLighting, AfFineTune, AutoDistortionControl, Bracketing, CameraSettings, ColorSpace,
+    DistortionCorrection, DynamicRangeOptimization, Flash, FlashControl, FlashSource, FlashSync,
+    FocusAreaMode, FocusMode, Hdr, HdrExposureDifferential, HdrSmoothing, HdrStrength,
+    HighDynamicRange, HighIsoNoiseReduction, ImageArea, JpegCompression, JpegQuality, PictureStyle,
+    RawCompression, RawImageSize, ReleaseMode, Shutter, Stabilization, StabilizationMode,
+    VignetteControl, VignettingCorrection, WhiteBalanceFineTune, WhiteBalanceMode,
 };
 use crate::container::tiff::Ifd;
 use crate::error::Result;
@@ -223,6 +225,9 @@ const NIKON_COMPRESSED: u32 = 34713;
 /// - **The vignetting correction** is the vignette control step that
 ///   VignetteControl's code names ([`vignette_control`]), in a raw file
 ///   and a JPEG alike.
+/// - **The distortion correction** is the auto distortion control that
+///   DistortInfo records ([`auto_distortion_control`]), in a raw file and
+///   a JPEG alike.
 ///
 /// Nikon records no multi-frame noise reduction, so it stays `None`.
 ///
@@ -365,6 +370,11 @@ pub(super) fn camera_settings<R: Read + Seek>(
         .held(rules::VIGNETTE_CONTROL)
         .and_then(|[code]| vignette_control(code))
         .map(VignettingCorrection::VignetteControl);
+    settings.distortion_correction = ifd
+        .get(src, rules::DISTORT_INFO)?
+        .as_deref()
+        .and_then(auto_distortion_control)
+        .map(DistortionCorrection::AutoDistortionControl);
     Ok(settings)
 }
 
@@ -575,6 +585,33 @@ fn vignette_control(code: u32) -> Option<VignetteControl> {
         1 => VignetteControl::Low,
         3 => VignetteControl::Normal,
         5 => VignetteControl::High,
+        _ => return None,
+    })
+}
+
+/// The auto distortion control that DistortInfo's `record` holds, at the
+/// one version whose layout ExifTool's published documentation gives and
+/// measured files hold: 0100, of 16 bytes (NEF notes, section 8.11). Its
+/// byte 4 is read by the documentation's list, read whole, since files
+/// hold part of it: 0 [`Off`](AutoDistortionControl::Off) and 1
+/// [`On`](AutoDistortionControl::On), each on files, and 2
+/// [`OnUnderwater`](AutoDistortionControl::OnUnderwater), documented only.
+/// Bytes 5 to 7 vary with the lens and are not documented, and are not
+/// read.
+///
+/// `None` for any other version, a record of another length, and any
+/// other byte 4, such as 3.
+fn auto_distortion_control(record: &[u8]) -> Option<AutoDistortionControl> {
+    let &[b'0', b'1', b'0', b'0', setting, ..] = record else {
+        return None;
+    };
+    if record.len() != 16 {
+        return None;
+    }
+    Some(match setting {
+        0 => AutoDistortionControl::Off,
+        1 => AutoDistortionControl::On,
+        2 => AutoDistortionControl::OnUnderwater,
         _ => return None,
     })
 }
@@ -1353,11 +1390,11 @@ mod tests {
     };
     use super::super::{
         ACTIVE_D_LIGHTING, AF_INFO, AF_INFO2, AF_TUNE, COLOR_SPACE, COLOR_TEMPERATURE,
-        COMPRESSION_RECORD, COOLPIX_PICTURE_CONTROL, CROP_HI_SPEED, EXPOSURE_TUNING, FINE_TUNE,
-        FINE_TUNE_STEPS, FLASH_EXPOSURE_COMP, FLASH_SETTING, FLASH_TYPE, FOCUS_MODE, HDR_INFO,
-        HIGH_ISO_NOISE_REDUCTION, IMAGE_SIZE_RAW, ISO_SELECTION, JPG_COMPRESSION, NEF_COMPRESSION,
-        NOISE_REDUCTION, PICTURE_CONTROL, QUALITY, SHOOTING_MODE, SHUTTER_MODE, VIGNETTE_CONTROL,
-        VR_INFO, WHITE_BALANCE, WORLD_TIME, metadata,
+        COMPRESSION_RECORD, COOLPIX_PICTURE_CONTROL, CROP_HI_SPEED, DISTORT_INFO, EXPOSURE_TUNING,
+        FINE_TUNE, FINE_TUNE_STEPS, FLASH_EXPOSURE_COMP, FLASH_SETTING, FLASH_TYPE, FOCUS_MODE,
+        HDR_INFO, HIGH_ISO_NOISE_REDUCTION, IMAGE_SIZE_RAW, ISO_SELECTION, JPG_COMPRESSION,
+        NEF_COMPRESSION, NOISE_REDUCTION, PICTURE_CONTROL, QUALITY, SHOOTING_MODE, SHUTTER_MODE,
+        VIGNETTE_CONTROL, VR_INFO, WHITE_BALANCE, WORLD_TIME, metadata,
     };
     use super::*;
     use crate::camera_settings::{
@@ -4643,6 +4680,97 @@ mod tests {
                     inner.ascii(ifd, WHITE_BALANCE, &padded("SUNNY"));
                 });
                 assert_eq!(settings.vignetting_correction, None, "{order:?}, {place}");
+                assert_eq!(
+                    settings.white_balance.mode,
+                    Some(WhiteBalanceMode::Daylight),
+                    "{order:?}, {place}"
+                );
+            }
+        }
+    }
+
+    // Auto distortion control.
+
+    /// A DistortInfo record of version `version`, `len` bytes long, whose
+    /// byte 4 is `setting`, followed by three bytes of a lens, padded with
+    /// zeros.
+    fn distort_info(version: &[u8; 4], setting: u8, len: usize) -> Vec<u8> {
+        let mut record = version.to_vec();
+        record.extend_from_slice(&[setting, 0x2D, 0x02, 0xA0]);
+        record.resize(len, 0);
+        record
+    }
+
+    /// The distortion correction of a raw file and a JPEG in byte order
+    /// `order` whose MakerNote's DistortInfo is `record`, of type
+    /// UNDEFINED, checked to be the same in both.
+    fn distortion_correction_of(order: Order, record: &[u8]) -> Option<DistortionCorrection> {
+        let tags = |inner: &mut TiffBuilder, ifd: IfdId| {
+            inner.undefined(ifd, DISTORT_INFO, record);
+        };
+        let raw = settings_of(order, tags).distortion_correction;
+        let jpeg = jpeg_settings(order, tags, |_, _| {}).distortion_correction;
+        assert_eq!(raw, jpeg, "{order:?}, {record:?}");
+        raw
+    }
+
+    #[test]
+    fn distort_info_0100_gives_auto_distortion_control_from_byte_4() {
+        let cases = [
+            (0, Some(AutoDistortionControl::Off)),
+            (1, Some(AutoDistortionControl::On)),
+            (2, Some(AutoDistortionControl::OnUnderwater)),
+            (3, None),
+            (0xFF, None),
+        ];
+        for order in ORDERS {
+            for (setting, expected) in cases {
+                assert_eq!(
+                    distortion_correction_of(order, &distort_info(b"0100", setting, 16)),
+                    expected.map(DistortionCorrection::AutoDistortionControl),
+                    "{order:?}, {setting}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn distort_info_of_another_version_or_length_is_none() {
+        let records = [
+            // One byte short and one too many.
+            distort_info(b"0100", 1, 15),
+            distort_info(b"0100", 1, 17),
+            // Versions no measured file holds.
+            distort_info(b"0101", 1, 16),
+            distort_info(b"0200", 1, 16),
+            // No version, and a version with no byte 4.
+            vec![1; 16],
+            b"0100".to_vec(),
+        ];
+        for order in ORDERS {
+            for record in &records {
+                assert_eq!(
+                    distortion_correction_of(order, record),
+                    None,
+                    "{order:?}, {record:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn a_distort_info_of_another_type_gives_none_and_costs_nothing_else() {
+        for order in ORDERS {
+            // One SHORT, as the D3000 writes, and the record as BYTEs.
+            for place in 0..2 {
+                let settings = settings_of(order, |inner, ifd| {
+                    match place {
+                        0 => inner.short(ifd, DISTORT_INFO, &[1]),
+                        _ => inner.byte(ifd, DISTORT_INFO, &distort_info(b"0100", 1, 16)),
+                    };
+                    inner.ascii(ifd, WHITE_BALANCE, &padded("SUNNY"));
+                });
+                assert_eq!(settings.distortion_correction, None, "{order:?}, {place}");
                 assert_eq!(
                     settings.white_balance.mode,
                     Some(WhiteBalanceMode::Daylight),

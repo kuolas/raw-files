@@ -156,6 +156,13 @@ const ACTIVE_D_LIGHTING: u16 = 0x0022;
 /// normal and 5 high.
 const VIGNETTE_CONTROL: u16 = 0x002A;
 
+/// The Nikon MakerNote tag that records the lens's distortion and its
+/// correction (DistortInfo): an UNDEFINED value that starts with its
+/// version, four ASCII digits. At version 0100, of 16 bytes, its fifth
+/// byte is auto distortion control; the bytes after it vary with the lens
+/// and are not documented.
+const DISTORT_INFO: u16 = 0x002B;
+
 /// The Nikon MakerNote tag that records the Picture Control, Nikon's
 /// picture style (PictureControlData): an UNDEFINED value that starts with
 /// its version, four ASCII digits, then the control's name and base and
@@ -311,6 +318,8 @@ mod rules {
     pub(super) const VR_INFO: Rule<Vec<u8>> = Rule::new(super::VR_INFO, &[FieldType::Undefined]);
     pub(super) const ACTIVE_D_LIGHTING: Held<[u32; 1]> = Held::new(super::ACTIVE_D_LIGHTING, SHORT);
     pub(super) const VIGNETTE_CONTROL: Held<[u32; 1]> = Held::new(super::VIGNETTE_CONTROL, SHORT);
+    pub(super) const DISTORT_INFO: Rule<Vec<u8>> =
+        Rule::new(super::DISTORT_INFO, &[FieldType::Undefined]);
     pub(super) const PICTURE_CONTROL: Rule<Vec<u8>> =
         Rule::new(super::PICTURE_CONTROL, &[FieldType::Undefined]);
     pub(super) const WORLD_TIME: Held<[u8; 4]> =
