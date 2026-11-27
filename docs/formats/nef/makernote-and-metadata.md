@@ -2180,16 +2180,19 @@ standard's code wherever both exist.
 ### 8.11 Picture style and processing
 
 How the camera made its JPEG from the shot, which a maker's own
-software shows beside the capture settings. raw-files will read, as
-camera settings
+software shows beside the capture settings. raw-files reads, as camera
+settings
 ([ADR011](../../architecture-decisions/adr011-metadata-from-standard-tags.md)):
 
 - the picture style, Nikon's Picture Control, with its values;
+- Exif's six processing values.
+
+It will read:
+
 - Active D-Lighting and HDR;
 - the high ISO and long exposure noise reductions;
 - vignette control and auto distortion control;
-- the scene mode;
-- Exif's six processing values.
+- the scene mode.
 
 Each setting will keep Nikon's own name and kinds. Where Sony has a
 setting for the same thing, one value of the camera settings will hold
@@ -2227,7 +2230,7 @@ sharpening, contrast, brightness, saturation and hue. The photographer
 picks one and may adjust it [P][25] (pp. 129 to 133). 0x0023
 PictureControlData records it, as UNDEFINED bytes that start with a
 four-digit version. The Coolpix bodies write the same record under
-0x00BD [S][1]. No measured file holds both tags. raw-files will read
+0x00BD [S][1]. No measured file holds both tags. raw-files reads
 0x0023, else 0x00BD.
 
 The documentation gives three layouts, and does not say which version
@@ -2244,9 +2247,9 @@ each length fits one layout. **[F]**
 | `0302` | 108 | third | the Z 8 | 3 / 0 |
 | `0310` | 108 | third | the Z f, Z5II, Z50II and Z6III; my Z 9 | 35 / 17,211 |
 
-raw-files will read the record at these six versions, each at its one
+raw-files reads the record at these six versions, each at its one
 length. A record of another version, or of another length than its
-version's, will give no picture style: no file shows which layout it
+version's, gives no picture style: no file shows which layout it
 takes.
 
 The three layouts, as offsets from the record's first byte. The fields'
@@ -2307,8 +2310,8 @@ and quick adjust at byte 55 [S][1]. The files contradict it:
   Mid-range sharpening +3.5 and Clarity +2. It shows 0 for contrast,
   brightness, saturation and hue. **[F]**
 
-So raw-files will read the adjustment kind at byte 52 and Quick sharp
-at byte 53. NX Studio shows Quick sharp there on that one file, and
+So raw-files reads the adjustment kind at byte 52 and Quick sharp at
+byte 53. NX Studio shows Quick sharp there on that one file, and
 with it the quarter steps of sharpening, mid-range sharpening and
 clarity. It does not show the adjustment kind. Byte 52 rests on the
 files, and on its place before quick adjust in all three layouts [I].
@@ -2319,10 +2322,10 @@ D7200's Quick adjust mutes or heightens the whole Picture Control
 three sharpening values. Its guide gives the older description to
 another setting, the effect level of the Creative Picture Controls
 [P][26] (p. 181). The documentation names the field quick adjust in
-all three layouts [S][1]. raw-files will give each under Nikon's word:
+all three layouts [S][1]. raw-files gives each under Nikon's word:
 quick adjust from the first and second layouts, Quick sharp from the
 third. Bytes 55 and 56 of the third layout hold `FF 0A` on every file.
-They may hold the effect level [I], and will not be read.
+They may hold the effect level [I], and are not read.
 
 **Reading a value.** A value is one byte in all three layouts.
 **[F]**
@@ -2335,8 +2338,10 @@ They may hold the effect level [I], and will not be read.
 - **0x00 is "auto".** It stands only in sharpening, contrast and
   saturation, and in clarity in the second layout. Those are the
   settings that Nikon's manuals offer an "A" for [P][25] (p. 132) [28]
-  (p. 133). No 108-byte record holds it.
-- **0xFF is "not available"**, and will give `None`. It stands:
+  (p. 133). No 108-byte record holds it. There raw-files reads it as
+  auto where the Z 9 offers an "A": Quick sharp, contrast and
+  saturation, and not sharpening or clarity [P][26] (pp. 181 to 183).
+- **0xFF is "not available"**, and gives `None`. It stands:
   - in quick adjust on every file under `NEUTRAL`, `FLAT`, `MONOCHROME`
     and a typed name, where the manuals say it is not available
     [P][25] (p. 132) [28] (p. 133);
@@ -2354,10 +2359,10 @@ They may hold the effect level [I], and will not be read.
 |---|---|---|---|
 | Adjustment kind | 0 on 16,147, 12,067 and 13,109 files of the three layouts; 2 on 2,374, 794 and 4,184; 1 on 15, all JPEGs of my Z 9 | the documentation's 0 default settings, 1 quick adjust, 2 full control [S][1] | observed; 1 in my files only |
 | Quick adjust | 0, or not available | steps | observed, for 0 alone |
-| Quick sharp | 0, +1 and +2, or not available | steps | observed; NX Studio shows the +1 of one file |
-| Sharpening | 1 to 8 in the first layout, 0 to 7 in the second, 1 to 9 in the third; auto in the first two | steps, or auto | observed; NX Studio shows the +5 of one file of the third layout |
+| Quick sharp | 0, +1 and +2, or not available | steps, or auto | observed; NX Studio shows the +1 of one file |
+| Sharpening | 1 to 8 in the first layout, 0 to 7 in the second, 1 to 9 in the third; auto in the first two | steps, or auto in the first two layouts | observed; NX Studio shows the +5 of one file of the third layout |
 | Mid-range sharpening | 0 to 4.5 | steps | observed; NX Studio shows the +3.5 of one file |
-| Clarity | 0 and 1 in the second layout, 0 to 3 in the third; auto in the second | steps, or auto | observed; NX Studio shows the +2 of one file of the third layout |
+| Clarity | 0 and 1 in the second layout, 0 to 3 in the third; auto in the second | steps, or auto in the second layout | observed; NX Studio shows the +2 of one file of the third layout |
 | Contrast | -1 to 3; auto in the first two layouts | steps, or auto | observed |
 | Brightness | -1 to 1 | steps | observed |
 | Saturation | 0 to 3; auto in the first two layouts | steps, or auto | observed |
@@ -2370,9 +2375,8 @@ They may hold the effect level [I], and will not be read.
 lists [P][25] (p. 132).
 
 **The name and the base.** Each is 20 bytes of ASCII, ended by a NUL.
-The base is the preset a control was made from. raw-files will give
-both as recorded, cleaned as every text, and will keep no list of
-names.
+The base is the preset a control was made from. raw-files gives both
+as recorded, cleaned as every text, and keeps no list of names.
 
 | Name | Files, public / mine |
 |---|---|
@@ -2391,7 +2395,7 @@ on a D5300 and `VIVID-KR` on a Z 6II, with the bases `STANDARD` and
 `VIVID`. Mine are 229 files of one name, with the base `VIVID`. On
 every other file the name equals the base.
 
-**What the record holds beside these.** None of it will be read:
+**What the record holds beside these.** None of it is read:
 
 - **The control's number.** Of the four bytes before the adjustment
   kind, two hold a number for each preset, in the MakerNote's byte
@@ -2786,12 +2790,12 @@ plain MakerNote tags where Exif has no value, and decrypt nothing [I]:
   its fluorescent lamp from Exif's LightSource 12 to 16;
 - contrast, saturation, sharpness, the scene capture type, custom
   rendering and gain control from Exif alone;
-- the picture style and the processing settings of
+- the picture style, the Picture Control, from 0x0023, else 0x00BD,
+  at its six versions. In the 108-byte record the adjustment kind and
+  Quick sharp lie at bytes 52 and 53;
+- the processing settings of
   [section 8.11](#811-picture-style-and-processing), which raw-files
   will read:
-  - the Picture Control from 0x0023, else 0x00BD, at its six versions.
-    In the 108-byte record the adjustment kind and Quick sharp lie at
-    bytes 52 and 53;
   - Active D-Lighting from 0x0022;
   - HDR from 0x0035 at its three versions, its parts only where it is
     on;

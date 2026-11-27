@@ -1205,7 +1205,8 @@ impl CameraSettings {
     /// record PictureControlData (0x0023), or the same record under
     /// 0x00BD, which the Coolpix bodies write, where a file holds no
     /// 0x0023. The record is read at the versions and lengths that
-    /// measured files hold: 0100, of 58 bytes, and 0200, of 68.
+    /// measured files hold: 0100, of 58 bytes; 0200, of 68; 0300, 0301,
+    /// 0302 and 0310, of 108.
     ///
     /// `None` when:
     ///
@@ -3874,9 +3875,9 @@ impl From<PictureControl> for PictureStyle {
 /// (0x0023), or from the same record under 0x00BD, which the Coolpix
 /// bodies write, where a file holds no 0x0023. The record is read at the
 /// versions and lengths that measured files hold: 0100, of 58 bytes, whose
-/// values count whole steps, and 0200, of 68, whose values count quarter
-/// steps. A record of another version, or of another length than its
-/// version's, gives no Picture Control.
+/// values count whole steps; 0200, of 68, and 0300, 0301, 0302 and 0310,
+/// of 108, whose values count quarter steps. A record of another version,
+/// or of another length than its version's, gives no Picture Control.
 ///
 /// Every part is `None` when the record marks it not available, as Nikon
 /// does for quick adjust under `NEUTRAL` and for the filter effect
@@ -3972,21 +3973,22 @@ impl PictureControl {
     /// - the record marks it not available, as under `NEUTRAL`, `FLAT`,
     ///   `MONOCHROME` and a name the photographer typed;
     /// - the record holds 0, which this value cannot hold;
-    /// - the record is of a version that has Quick sharp in its place.
+    /// - the record is of a version that has Quick sharp in its place,
+    ///   0300, 0301, 0302 or 0310.
     pub fn quick_adjust(&self) -> Option<PictureControlValue> {
         self.quick_adjust
     }
 
     /// Quick sharp, which raises or lowers sharpening, mid-range
-    /// sharpening and clarity together, in whole steps.
+    /// sharpening and clarity together, in whole steps, or
+    /// [`Auto`](PictureControlValue::Auto).
     ///
     /// `None` when:
     ///
     /// - the record marks it not available, as under a name the
     ///   photographer typed;
-    /// - the record holds 0, which this value cannot hold;
     /// - the record is of a version that has quick adjust in its place,
-    ///   as every version read so far is.
+    ///   0100 or 0200.
     pub fn quick_sharp(&self) -> Option<PictureControlValue> {
         self.quick_sharp
     }
@@ -3994,7 +3996,8 @@ impl PictureControl {
     /// Sharpening, in steps, or [`Auto`](PictureControlValue::Auto).
     ///
     /// `None` when the record marks it not available, as under the
-    /// `AUTO` control of the later bodies.
+    /// `AUTO` control of the later bodies, or holds 0 at the 108-byte
+    /// versions: the Z bodies offer no auto sharpening.
     pub fn sharpening(&self) -> Option<PictureControlValue> {
         self.sharpening
     }
@@ -4002,15 +4005,16 @@ impl PictureControl {
     /// Mid-range sharpening, in steps.
     ///
     /// `None` when the record marks it not available, holds 0, or is of a
-    /// version that records none, as every version read so far is.
+    /// version that records none, 0100 or 0200.
     pub fn mid_range_sharpening(&self) -> Option<PictureControlValue> {
         self.mid_range_sharpening
     }
 
     /// Clarity, in steps, or [`Auto`](PictureControlValue::Auto).
     ///
-    /// `None` when the record marks it not available, or is of a version
-    /// that records none, as 0100 is.
+    /// `None` when the record marks it not available, holds 0 at the
+    /// 108-byte versions, whose bodies offer no auto clarity, or is of a
+    /// version that records none, as 0100 is.
     pub fn clarity(&self) -> Option<PictureControlValue> {
         self.clarity
     }
