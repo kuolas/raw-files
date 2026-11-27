@@ -556,12 +556,14 @@ Every text and GPS value counted lies inside the blocks raw-files'
 ## 5. Other application segments
 
 - **XMP** is another APP1 segment, whose payload starts with
-  `http://ns.adobe.com/xap/1.0/` and a zero byte. [F] (Its specification,
-  Adobe's XMP Part 3, was not read for these notes. [I]) Three of the
-  camera files write one, holding only a rating of 0: the ILCE-7M3
-  (57,346 bytes, nearly all padding), the D5300 (2,046 bytes) and the
-  G7 X (3,996 bytes). [F] raw-files does not read XMP (see
-  [ADR014](../../architecture-decisions/adr014-jpeg-files-as-a-format-of-their-own.md)).
+  `http://ns.adobe.com/xap/1.0/` and a zero byte. [F] Three of the
+  camera files write one, holding only a rating of 0. They are the
+  ILCE-7M3 (57,346 bytes, nearly all padding), the D5300 (2,046 bytes)
+  and the G7 X (3,996 bytes). [F] An APP13 segment that starts with
+  `Photoshop 3.0` holds the IPTC block, which none of the eight camera
+  files writes. [F] raw-files will read both as the
+  [XMP and IPTC notes](../xmp-and-iptc.md) describe them, with the
+  standards they cite.
 - **APP2** segments of two kinds may follow the Exif segment: FlashPix
   extension data (`FPXR`) and the Multi-Picture Format (`MPF`), section 7.
   [P][3] (4.7.3, pp. 106 to 107; 4.7.4, p. 110) Exif also places JUMBF
@@ -1188,8 +1190,9 @@ them
 - **Segments that are not TIFF directories** (section 5): XMP (3
   public files, 2,122 of mine), FlashPix extensions (2,139 of mine),
   ICC profiles (16), Photoshop segments holding IPTC resources (10),
-  JFIF (2 public, 142 of mine), Adobe (4) and comments (1). XMP and
-  IPTC are for full metadata's group for them. **[F]**
+  JFIF (2 public, 142 of mine), Adobe (4) and comments (1). raw-files
+  will read XMP and IPTC as the [XMP and IPTC notes](../xmp-and-iptc.md)
+  describe them. **[F]**
 - **Other makers' MakerNotes**, on 2,837 files: the view gives their
   bytes through the Exif IFD's 0x927C entry, and walks none of them
   until notes describe them.

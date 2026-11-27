@@ -94,6 +94,8 @@ and, as counts only, 166,339 of my own. They showed:
   second. A packet holds 357 values at most, nested 22 elements deep
   at most.
 
+[The XMP and IPTC notes](../formats/xmp-and-iptc.md) give every count.
+
 XMP Part 1 leaves out how to choose between two packets about one
 file (§6.1, p. 4). The Metadata Working Group's guidelines give a
 reader a rule for a value that Exif, XMP and IIM all record (§4.2.3,
