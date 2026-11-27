@@ -903,6 +903,8 @@ fn camera_settings<R: Read + Seek>(
         high_dynamic_range: None,
         // Only a maker's MakerNote records the noise reductions.
         high_iso_noise_reduction: None,
+        long_exposure_noise_reduction: None,
+        multi_frame_noise_reduction: None,
     })
 }
 

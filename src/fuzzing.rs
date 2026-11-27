@@ -462,6 +462,8 @@ fn read_metadata(metadata: &Metadata) {
     let _ = settings
         .high_iso_noise_reduction()
         .map(|step| step.to_string());
+    let _ = settings.long_exposure_noise_reduction();
+    let _ = settings.multi_frame_noise_reduction();
     let tiny = Size {
         width: 1,
         height: 1,

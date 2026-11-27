@@ -237,6 +237,11 @@ const SHOOTING_MODE: u16 = 0x0089;
 /// write the same code in [`COMPRESSION_RECORD`].
 const NEF_COMPRESSION: u16 = 0x0093;
 
+/// The Nikon MakerNote tag that says whether the long exposure noise
+/// reduction ran on the picture (NoiseReduction): ASCII text, `FPNR`
+/// where it ran and `OFF` where it did not.
+const NOISE_REDUCTION: u16 = 0x0095;
+
 /// The Nikon MakerNote tag that records the high ISO noise reduction
 /// (HighISONoiseReduction): one SHORT, a code for its step, such as 0
 /// off and 4 normal.
@@ -323,6 +328,7 @@ mod rules {
         Held::new(super::HIGH_ISO_NOISE_REDUCTION, SHORT);
     pub(super) const AF_INFO2: Rule<Vec<u8>> = Rule::new(super::AF_INFO2, &[FieldType::Undefined]);
     pub(super) const NEF_COMPRESSION: Held<[u32; 1]> = Held::new(super::NEF_COMPRESSION, SHORT);
+    pub(super) const NOISE_REDUCTION: Rule<Text> = Rule::new(super::NOISE_REDUCTION, ASCII);
     pub(super) const COMPRESSION_RECORD: Rule<Vec<u8>> =
         Rule::new(super::COMPRESSION_RECORD, &[FieldType::Undefined]);
 

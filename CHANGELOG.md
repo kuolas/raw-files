@@ -422,6 +422,19 @@ does. An entry that can break a caller opens with **Breaking:**.
   - Sony's is read from 0x2009: off, low, normal, high or auto. A Sony
     raw file's 0 gives `None`, since it holds 0 where its JPEG holds
     the step.
+- `CameraSettings::long_exposure_noise_reduction` says whether the
+  camera was set to subtract a dark frame from long exposures, and
+  `multi_frame_noise_reduction` whether Sony's camera combined a burst
+  into one picture. Each has its `with_…` builder
+  ([#230](https://github.com/kuolas/raw-files/issues/230)).
+  - Nikon's text in 0x0095 says whether the reduction ran on the
+    picture, not how the camera was set. So its `FPNR` gives on, and
+    its `OFF` gives `None`.
+  - Sony's long exposure setting is the low half of 0x2008, read from
+    a LONG or an SLONG. Whether the dark frame was taken, its high
+    half, is not read.
+  - Sony's multi-frame noise reduction is read from 0x200B. Nikon has
+    no such setting.
 
 ### Changed
 
