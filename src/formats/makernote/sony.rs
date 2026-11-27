@@ -59,8 +59,8 @@ use super::{MakerNoteBlock, Picture, Reader, checked_color_temperature};
 use crate::camera_settings::{
     AutoHdr, AutoHdrExposureDifference, Bracketing, CameraSettings, CreativeLook, CreativeStyle,
     DRangeOptimizer, DynamicRangeOptimization, FlashSource, FocusAreaMode, FocusMode,
-    HighDynamicRange, JpegQuality, PictureStyle, RawCompression, ReleaseMode, Stabilization,
-    WhiteBalanceFineTune, WhiteBalanceMode,
+    HighDynamicRange, HighIsoNoiseReduction, JpegQuality, PictureStyle, RawCompression,
+    ReleaseMode, Stabilization, WhiteBalanceFineTune, WhiteBalanceMode,
 };
 use crate::container::tiff::{Ifd, Rule, Tree};
 use crate::entries::{Directory, Entries, Lookup};
@@ -129,6 +129,12 @@ pub(in crate::formats) const FOCUS_LOCATION: u16 = 0x2027;
 /// the camera's metering (ExposureStandardAdjustment): one SRATIONAL, in
 /// EV, `0/6` on every file checked.
 pub(in crate::formats) const EXPOSURE_FINE_TUNE: u16 = 0x202D;
+
+/// The Sony MakerNote tag that records the high ISO noise reduction
+/// (HighISONoiseReduction): one SHORT, a code for its step, such as 0
+/// off, 2 normal and 256 auto. A raw file holds 0 where its JPEG holds
+/// the step.
+const HIGH_ISO_NOISE_REDUCTION: u16 = 0x2009;
 
 /// The Sony MakerNote tag that records Auto HDR (HDR): one LONG, which
 /// the documentation reads as two 16-bit numbers. The first is the
@@ -238,6 +244,8 @@ mod rules {
     pub(super) const DYNAMIC_RANGE_OPTIMIZER: Held<[u32; 1]> =
         Held::new(super::DYNAMIC_RANGE_OPTIMIZER, LONG);
     pub(super) const AUTO_HDR: Held<[u32; 1]> = Held::new(super::AUTO_HDR, LONG);
+    pub(super) const HIGH_ISO_NOISE_REDUCTION: Held<[u32; 1]> =
+        Held::new(super::HIGH_ISO_NOISE_REDUCTION, SHORT);
     pub(super) const IMAGE_STABILIZATION: Held<[u32; 1]> =
         Held::new(super::IMAGE_STABILIZATION, LONG);
     pub(super) const RELEASE_MODE: Held<[u32; 1]> = Held::new(super::RELEASE_MODE, SHORT);
@@ -578,6 +586,10 @@ fn area<R: Read + Seek>(src: &mut Source<R>, makernote: &MakerNote) -> Result<Op
 /// - **The high dynamic range setting** is the Auto HDR that the first
 ///   16-bit number of HDR records ([`auto_hdr`]). The second, whether the
 ///   camera made the HDR picture, is not read.
+/// - **The high ISO noise reduction** is the step HighISONoiseReduction's
+///   code names in the file that `picture` says it is
+///   ([`high_iso_noise_reduction`]): a raw file's 0 gives none. 0xB050,
+///   the DSC bodies' second tag, is not read.
 ///
 /// The shutter used, the image area and the raw image size stay as
 /// `settings` has them, `None`. Sony records the first two only in
@@ -640,6 +652,9 @@ fn camera_settings<R: Read + Seek>(
         .held(rules::AUTO_HDR)
         .and_then(|[value]| auto_hdr(first_half(value, ifd.order())))
         .map(HighDynamicRange::AutoHdr);
+    settings.high_iso_noise_reduction = ifd
+        .held(rules::HIGH_ISO_NOISE_REDUCTION)
+        .and_then(|[code]| high_iso_noise_reduction(code, picture));
     if let Some(flash) = settings.flash.as_mut() {
         if let Some(source) = ifd
             .held(rules::FLASH_ACTION)
@@ -776,6 +791,34 @@ fn auto_hdr(code: u32) -> Option<AutoHdr> {
         ),
         _ => None,
     }
+}
+
+/// The high ISO noise reduction step a HighISONoiseReduction `code` names
+/// in the file that `picture` says it is, in the list ExifTool's
+/// published documentation gives, read whole, since files hold part of it
+/// (ARW notes, section 9.11):
+///
+/// - 0 [`Off`](HighIsoNoiseReduction::Off), in a JPEG alone, documented
+///   only there;
+/// - 1 [`Low`](HighIsoNoiseReduction::Low), documented only;
+/// - 2 [`Normal`](HighIsoNoiseReduction::Normal) and 3
+///   [`High`](HighIsoNoiseReduction::High), on files;
+/// - 256 [`Auto`](HighIsoNoiseReduction::Auto), documented only.
+///
+/// A raw file's 0 gives `None`. On all 2,024 shots of my ILCE-7M2 with
+/// one raw file and one JPEG, the raw file holds 0 and the JPEG 2, so the
+/// file contradicts the code's meaning there, and the rest of the list
+/// stands. `None` too for every other code, the documentation's 65535,
+/// "n/a", among them.
+fn high_iso_noise_reduction(code: u32, picture: Picture) -> Option<HighIsoNoiseReduction> {
+    Some(match code {
+        0 if picture == Picture::Jpeg => HighIsoNoiseReduction::Off,
+        1 => HighIsoNoiseReduction::Low,
+        2 => HighIsoNoiseReduction::Normal,
+        3 => HighIsoNoiseReduction::High,
+        256 => HighIsoNoiseReduction::Auto,
+        _ => return None,
+    })
 }
 
 /// The JPEG quality step that the MakerNote's IFD `ifd` records, from the
@@ -3303,7 +3346,8 @@ mod tests {
             .slong(ifd, SATURATION, &[0])
             .slong(ifd, SHARPNESS, &[0])
             .long(ifd, DYNAMIC_RANGE_OPTIMIZER, &[3])
-            .long(ifd, AUTO_HDR, &[0]);
+            .long(ifd, AUTO_HDR, &[0])
+            .short(ifd, HIGH_ISO_NOISE_REDUCTION, &[0]);
     }
 
     /// What [`settings_tags`] gives, from `settings`, for an E-mount body
@@ -3311,7 +3355,9 @@ mod tests {
     /// the stabilization on, a single frame and no bracketing, and, where
     /// `settings` holds a flash, a compensation of zero, a Creative Style
     /// at 0, with no name, the D-Range Optimizer on auto and Auto HDR off.
-    /// FlashAction's 0 names no source, and
+    /// The high ISO noise reduction's 0, which a raw file holds where its
+    /// JPEG holds the step, gives none. FlashAction's 0 names no source,
+    /// and
     /// Quality's 6 and JPEGQuality's 65535 no JPEG quality.
     fn with_settings_tags(settings: CameraSettings) -> CameraSettings {
         let white_balance = WhiteBalance::default()
@@ -3457,8 +3503,18 @@ mod tests {
                 makernote.metadata(src, standard, picture).unwrap()
             };
             let found = read(&mut src, Picture::Raw);
-            // The same for a JPEG's picture.
-            assert_eq!(read(&mut src, Picture::Jpeg), found, "{order:?}");
+            // The same for a JPEG's picture, but for the high ISO noise
+            // reduction's 0, which a JPEG gives as off and a raw file as
+            // none.
+            let jpeg_settings = found
+                .camera_settings()
+                .clone()
+                .with_high_iso_noise_reduction(HighIsoNoiseReduction::Off);
+            assert_eq!(
+                read(&mut src, Picture::Jpeg),
+                found.clone().with_camera_settings(jpeg_settings),
+                "{order:?}"
+            );
             let expected = standard
                 .with_camera_settings(with_settings_tags(exif_settings()))
                 .with_focus(focus_7m4());
@@ -4182,6 +4238,73 @@ mod tests {
                     builder.long(ifd, WHITE_BALANCE, &[16]);
                 });
                 assert_eq!(settings.high_dynamic_range, None, "{order:?}, {place}");
+                assert_eq!(
+                    settings.white_balance.mode,
+                    Some(WhiteBalanceMode::Daylight),
+                    "{order:?}, {place}"
+                );
+            }
+        }
+    }
+
+    // The high ISO noise reduction.
+
+    #[test]
+    fn each_high_iso_noise_reduction_code_gives_its_step_and_a_raw_files_0_none() {
+        use HighIsoNoiseReduction::{Auto, High, Low, Normal, Off};
+        let cases = [
+            (0, None, Some(Off)),
+            (1, Some(Low), Some(Low)),
+            (2, Some(Normal), Some(Normal)),
+            (3, Some(High), Some(High)),
+            (256, Some(Auto), Some(Auto)),
+            // Codes the list lacks, and 65535, "n/a".
+            (4, None, None),
+            (255, None, None),
+            (257, None, None),
+            (65535, None, None),
+        ];
+        for order in ORDERS {
+            for (code, raw, jpeg) in cases {
+                for (picture, expected) in [(Picture::Raw, raw), (Picture::Jpeg, jpeg)] {
+                    let settings = picture_settings_of(order, picture, |builder, ifd| {
+                        builder.short(ifd, HIGH_ISO_NOISE_REDUCTION, &[code]);
+                    });
+                    assert_eq!(
+                        settings.high_iso_noise_reduction, expected,
+                        "{order:?}, {picture:?}, {code}"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn a_high_iso_noise_reduction_of_another_shape_gives_none_and_costs_nothing_else() {
+        for order in ORDERS {
+            // One LONG, two SHORTs, and one SSHORT.
+            for place in 0..3 {
+                let settings = picture_settings_of(order, Picture::Jpeg, |builder, ifd| {
+                    match place {
+                        0 => builder.long(ifd, HIGH_ISO_NOISE_REDUCTION, &[2]),
+                        1 => builder.short(ifd, HIGH_ISO_NOISE_REDUCTION, &[2, 2]),
+                        _ => {
+                            let [first, second] = order.u16(2);
+                            builder.raw(
+                                ifd,
+                                HIGH_ISO_NOISE_REDUCTION,
+                                SSHORT,
+                                1,
+                                RawValue::Inline([first, second, 0, 0]),
+                            )
+                        }
+                    };
+                    builder.long(ifd, WHITE_BALANCE, &[16]);
+                });
+                assert_eq!(
+                    settings.high_iso_noise_reduction, None,
+                    "{order:?}, {place}"
+                );
                 assert_eq!(
                     settings.white_balance.mode,
                     Some(WhiteBalanceMode::Daylight),

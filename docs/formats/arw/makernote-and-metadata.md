@@ -1923,11 +1923,12 @@ settings
 - the picture style, Sony's Creative Style or Creative Look, with its
   contrast, saturation and sharpness;
 - Exif's six processing values;
-- the D-Range Optimizer and Auto HDR.
+- the D-Range Optimizer and Auto HDR;
+- the high ISO noise reduction.
 
 It will read:
 
-- the high ISO, long exposure and multi-frame noise reductions;
+- the long exposure and multi-frame noise reductions;
 - the three lens compensations;
 - the scene.
 
@@ -2080,8 +2081,8 @@ raw-files reads the first number as the `AutoHdr` of a
 
 **High ISO noise reduction.** 0x2009 HighISONoiseReduction is one SHORT
 [S][1], on 203 public files of 103 bodies and on all of mine. raw-files
-will read it as a `HighIsoNoiseReduction`, the list of steps that
-Nikon's code shares:
+reads it as a `HighIsoNoiseReduction`, the list of steps that Nikon's
+code shares:
 
 | Code | The documentation's name [S][1] | Mark | Raw files, public / mine | My JPEGs |
 |---|---|---|---|---|
@@ -2090,7 +2091,7 @@ Nikon's code shares:
 | 2 | Normal | observed | 48 / 0 | 2,024 |
 | 3 | High | observed | 1 / 0 | 0 |
 | 256 | Auto | documented only | 0 / 0 | 0 |
-| 65535 | n/a | will give none | 0 / 0 | 0 |
+| 65535 | n/a | gives none | 0 / 0 | 0 |
 
 **[F]** Sony's menu offers normal, low and off [P][33] (p. 38).
 
@@ -2098,7 +2099,7 @@ Nikon's code shares:
   ILCE-7M2 have one ARW file and one JPEG. On every one the ARW file
   holds 0 and the JPEG holds 2. A shot is a file name and a capture
   time that both files share. **[F]**
-- **So a raw file's 0 will give `None`**, by the rule on a code that a
+- **So a raw file's 0 gives `None`**, by the rule on a code that a
   file contradicts. The rest of the list stands, in a raw file as in a
   JPEG.
 - **Other raw files hold a step.** The 2 is on eight bodies from 2023
@@ -2108,7 +2109,7 @@ Nikon's code shares:
   rests on the documentation alone.
 - **A setting of off reads as none in a raw file.** No measured file
   shows a JPEG with 0.
-- 0xB050, a second high ISO tag of the compact bodies, will not be
+- 0xB050, a second high ISO tag of the compact bodies, is not
   read ([section 14.5](#145-what-the-view-leaves-out)).
 
 **Long exposure noise reduction.** With the setting on, the camera
@@ -2474,12 +2475,12 @@ For the picture style and the processing settings of
   Look;
 - the D-Range Optimizer from 0xB025, never from 0xB04F, which repeats
   it in three steps;
-- Auto HDR from the first half of 0x200A.
+- Auto HDR from the first half of 0x200A;
+- the high ISO noise reduction from 0x2009, where a raw file's 0 gives
+  none.
 
 It will read:
 
-- the high ISO noise reduction from 0x2009, where a raw file's 0 will
-  give none;
 - the long exposure noise reduction from the low half of 0x2008;
 - the multi-frame noise reduction from 0x200B;
 - the shading, chromatic aberration and distortion compensations from

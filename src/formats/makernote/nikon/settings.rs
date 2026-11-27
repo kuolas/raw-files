@@ -6,7 +6,8 @@
 //! focus mode, the AF-area mode, AF fine-tune, the stabilization, auto ISO,
 //! the exposure fine-tuning, the release mode and bracketing, daylight
 //! saving time, the flash's source, control, sync and compensation, the
-//! Picture Control, Active D-Lighting and HDR.
+//! Picture Control, Active D-Lighting, HDR and the high ISO noise
+//! reduction.
 //!
 //! The MakerNote records how the camera was set for the picture beyond
 //! what the Exif tags record (ADR011). [`camera_settings`] reads each
@@ -50,7 +51,9 @@
 //!   bodies' copy of it ([`picture_control_record`], [`picture_control`]);
 //! - the dynamic range optimization from ActiveD-Lighting
 //!   ([`active_d_lighting`]);
-//! - the high dynamic range setting from HDRInfo ([`hdr`]).
+//! - the high dynamic range setting from HDRInfo ([`hdr`]);
+//! - the high ISO noise reduction from HighISONoiseReduction
+//!   ([`high_iso_noise_reduction`]).
 //!
 //! A code or a text gives a value only where its meaning is known, as the
 //! next paragraph says. Anything else costs that value alone.
@@ -77,9 +80,9 @@ use crate::camera::BodyFacts;
 use crate::camera_settings::{
     ActiveDLighting, AfFineTune, Bracketing, CameraSettings, ColorSpace, DynamicRangeOptimization,
     Flash, FlashControl, FlashSource, FlashSync, FocusAreaMode, FocusMode, Hdr,
-    HdrExposureDifferential, HdrSmoothing, HdrStrength, HighDynamicRange, ImageArea,
-    JpegCompression, JpegQuality, PictureStyle, RawCompression, RawImageSize, ReleaseMode, Shutter,
-    Stabilization, StabilizationMode, WhiteBalanceFineTune, WhiteBalanceMode,
+    HdrExposureDifferential, HdrSmoothing, HdrStrength, HighDynamicRange, HighIsoNoiseReduction,
+    ImageArea, JpegCompression, JpegQuality, PictureStyle, RawCompression, RawImageSize,
+    ReleaseMode, Shutter, Stabilization, StabilizationMode, WhiteBalanceFineTune, WhiteBalanceMode,
 };
 use crate::container::tiff::Ifd;
 use crate::error::Result;
@@ -206,6 +209,9 @@ const NIKON_COMPRESSED: u32 = 34713;
 ///   that ActiveD-Lighting's code names ([`active_d_lighting`]).
 /// - **The high dynamic range setting** is the HDR that HDRInfo records
 ///   ([`hdr`]), in a raw file and a JPEG alike.
+/// - **The high ISO noise reduction** is the step HighISONoiseReduction's
+///   code names ([`high_iso_noise_reduction`]), in a raw file and a JPEG
+///   alike.
 ///
 /// Nikon records no electronic front curtain setting, so it stays as
 /// `settings` has it, `None`. The exposure program and the metering mode
@@ -337,6 +343,9 @@ pub(super) fn camera_settings<R: Read + Seek>(
         .as_deref()
         .and_then(hdr)
         .map(HighDynamicRange::Hdr);
+    settings.high_iso_noise_reduction = ifd
+        .held(rules::HIGH_ISO_NOISE_REDUCTION)
+        .and_then(|[code]| high_iso_noise_reduction(code));
     Ok(settings)
 }
 
@@ -487,6 +496,33 @@ fn hdr_smoothing(code: u8) -> Option<HdrSmoothing> {
         2 => HdrSmoothing::Low,
         3 => HdrSmoothing::High,
         48 => HdrSmoothing::Auto,
+        _ => return None,
+    })
+}
+
+/// The high ISO noise reduction step a HighISONoiseReduction `code`
+/// names, in the list ExifTool's published documentation gives, read
+/// whole, since files hold part of it (NEF notes, section 8.11):
+///
+/// - 0 [`Off`](HighIsoNoiseReduction::Off), 1
+///   [`Minimal`](HighIsoNoiseReduction::Minimal), 2
+///   [`Low`](HighIsoNoiseReduction::Low), 4
+///   [`Normal`](HighIsoNoiseReduction::Normal) and 6
+///   [`High`](HighIsoNoiseReduction::High), each on files, 6 on mine
+///   alone;
+/// - 3 [`MediumLow`](HighIsoNoiseReduction::MediumLow) and 5
+///   [`MediumHigh`](HighIsoNoiseReduction::MediumHigh), documented only.
+///
+/// `None` for every other code.
+fn high_iso_noise_reduction(code: u32) -> Option<HighIsoNoiseReduction> {
+    Some(match code {
+        0 => HighIsoNoiseReduction::Off,
+        1 => HighIsoNoiseReduction::Minimal,
+        2 => HighIsoNoiseReduction::Low,
+        3 => HighIsoNoiseReduction::MediumLow,
+        4 => HighIsoNoiseReduction::Normal,
+        5 => HighIsoNoiseReduction::MediumHigh,
+        6 => HighIsoNoiseReduction::High,
         _ => return None,
     })
 }
@@ -1267,8 +1303,9 @@ mod tests {
         ACTIVE_D_LIGHTING, AF_INFO, AF_INFO2, AF_TUNE, COLOR_SPACE, COLOR_TEMPERATURE,
         COMPRESSION_RECORD, COOLPIX_PICTURE_CONTROL, CROP_HI_SPEED, EXPOSURE_TUNING, FINE_TUNE,
         FINE_TUNE_STEPS, FLASH_EXPOSURE_COMP, FLASH_SETTING, FLASH_TYPE, FOCUS_MODE, HDR_INFO,
-        IMAGE_SIZE_RAW, ISO_SELECTION, JPG_COMPRESSION, NEF_COMPRESSION, PICTURE_CONTROL, QUALITY,
-        SHOOTING_MODE, SHUTTER_MODE, VR_INFO, WHITE_BALANCE, WORLD_TIME, metadata,
+        HIGH_ISO_NOISE_REDUCTION, IMAGE_SIZE_RAW, ISO_SELECTION, JPG_COMPRESSION, NEF_COMPRESSION,
+        PICTURE_CONTROL, QUALITY, SHOOTING_MODE, SHUTTER_MODE, VR_INFO, WHITE_BALANCE, WORLD_TIME,
+        metadata,
     };
     use super::*;
     use crate::camera_settings::{
@@ -4395,6 +4432,64 @@ mod tests {
                 Some(WhiteBalanceMode::Daylight),
                 "{order:?}"
             );
+        }
+    }
+
+    // The high ISO noise reduction.
+
+    /// Each code of HighISONoiseReduction's list with the step it names,
+    /// and codes the list lacks.
+    const HIGH_ISO_NOISE_REDUCTIONS: [(u16, Option<HighIsoNoiseReduction>); 10] = [
+        (0, Some(HighIsoNoiseReduction::Off)),
+        (1, Some(HighIsoNoiseReduction::Minimal)),
+        (2, Some(HighIsoNoiseReduction::Low)),
+        (3, Some(HighIsoNoiseReduction::MediumLow)),
+        (4, Some(HighIsoNoiseReduction::Normal)),
+        (5, Some(HighIsoNoiseReduction::MediumHigh)),
+        (6, Some(HighIsoNoiseReduction::High)),
+        (7, None),
+        (256, None),
+        (65535, None),
+    ];
+
+    #[test]
+    fn each_high_iso_noise_reduction_code_gives_its_step_in_a_raw_file_and_a_jpeg() {
+        for order in ORDERS {
+            for (code, expected) in HIGH_ISO_NOISE_REDUCTIONS {
+                let tags = |inner: &mut TiffBuilder, ifd: IfdId| {
+                    inner.short(ifd, HIGH_ISO_NOISE_REDUCTION, &[code]);
+                };
+                let raw = settings_of(order, tags);
+                assert_eq!(raw.high_iso_noise_reduction, expected, "{order:?}, {code}");
+                let jpeg = jpeg_settings(order, tags, |_, _| {});
+                assert_eq!(jpeg.high_iso_noise_reduction, expected, "{order:?}, {code}");
+            }
+        }
+    }
+
+    #[test]
+    fn a_high_iso_noise_reduction_of_another_shape_gives_none_and_costs_nothing_else() {
+        for order in ORDERS {
+            // One LONG, two SHORTs, and two UNDEFINED bytes.
+            for place in 0..3 {
+                let settings = settings_of(order, |inner, ifd| {
+                    match place {
+                        0 => inner.long(ifd, HIGH_ISO_NOISE_REDUCTION, &[4]),
+                        1 => inner.short(ifd, HIGH_ISO_NOISE_REDUCTION, &[4, 4]),
+                        _ => inner.undefined(ifd, HIGH_ISO_NOISE_REDUCTION, &[4, 0]),
+                    };
+                    inner.ascii(ifd, WHITE_BALANCE, &padded("SUNNY"));
+                });
+                assert_eq!(
+                    settings.high_iso_noise_reduction, None,
+                    "{order:?}, {place}"
+                );
+                assert_eq!(
+                    settings.white_balance.mode,
+                    Some(WhiteBalanceMode::Daylight),
+                    "{order:?}, {place}"
+                );
+            }
         }
     }
 }

@@ -237,6 +237,11 @@ const SHOOTING_MODE: u16 = 0x0089;
 /// write the same code in [`COMPRESSION_RECORD`].
 const NEF_COMPRESSION: u16 = 0x0093;
 
+/// The Nikon MakerNote tag that records the high ISO noise reduction
+/// (HighISONoiseReduction): one SHORT, a code for its step, such as 0
+/// off and 4 normal.
+const HIGH_ISO_NOISE_REDUCTION: u16 = 0x00B1;
+
 /// The Nikon MakerNote tag that records where the camera's autofocus
 /// aimed (AFInfo2): an UNDEFINED value that starts with its version, four
 /// ASCII digits. At offsets each version sets, it holds the size of a
@@ -314,6 +319,8 @@ mod rules {
     pub(super) const AF_TUNE: Held<[u8; 4]> = Held::new(super::AF_TUNE, &[FieldType::Undefined]);
     pub(super) const COOLPIX_PICTURE_CONTROL: Rule<Vec<u8>> =
         Rule::new(super::COOLPIX_PICTURE_CONTROL, &[FieldType::Undefined]);
+    pub(super) const HIGH_ISO_NOISE_REDUCTION: Held<[u32; 1]> =
+        Held::new(super::HIGH_ISO_NOISE_REDUCTION, SHORT);
     pub(super) const AF_INFO2: Rule<Vec<u8>> = Rule::new(super::AF_INFO2, &[FieldType::Undefined]);
     pub(super) const NEF_COMPRESSION: Held<[u32; 1]> = Held::new(super::NEF_COMPRESSION, SHORT);
     pub(super) const COMPRESSION_RECORD: Rule<Vec<u8>> =

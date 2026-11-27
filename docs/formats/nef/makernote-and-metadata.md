@@ -2186,11 +2186,12 @@ settings
 
 - the picture style, Nikon's Picture Control, with its values;
 - Exif's six processing values;
-- Active D-Lighting and HDR.
+- Active D-Lighting and HDR;
+- the high ISO noise reduction.
 
 It will read:
 
-- the high ISO and long exposure noise reductions;
+- the long exposure noise reduction;
 - vignette control and auto distortion control;
 - the scene mode.
 
@@ -2471,7 +2472,7 @@ it as the `Hdr` of a `HighDynamicRange`, on or off with its parts:
 
 **High ISO noise reduction.** 0x00B1 HighISONoiseReduction is one
 SHORT [S][1], on 270 public files of 80 bodies and on all 48,428 of
-mine. raw-files will read it as a `HighIsoNoiseReduction`, one list of
+mine. raw-files reads it as a `HighIsoNoiseReduction`, one list of
 steps for both makers:
 
 | Code | The documentation's name [S][1] | Mark | Files, public / mine |
@@ -2796,10 +2797,10 @@ plain MakerNote tags where Exif has no value, and decrypt nothing [I]:
 - Active D-Lighting from 0x0022;
 - HDR from 0x0035 at its three versions, its parts only where it is
   on;
+- the high ISO noise reduction from 0x00B1;
 - the other processing settings of
   [section 8.11](#811-picture-style-and-processing), which raw-files
   will read:
-  - the high ISO noise reduction from 0x00B1;
   - the long exposure noise reduction from 0x0095, where `FPNR` will
     give on and `OFF` none;
   - vignette control from 0x002A, and auto distortion control from

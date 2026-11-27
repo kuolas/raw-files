@@ -459,6 +459,9 @@ fn read_metadata(metadata: &Metadata) {
     if let Some(setting) = settings.high_dynamic_range() {
         read_high_dynamic_range(setting);
     }
+    let _ = settings
+        .high_iso_noise_reduction()
+        .map(|step| step.to_string());
     let tiny = Size {
         width: 1,
         height: 1,

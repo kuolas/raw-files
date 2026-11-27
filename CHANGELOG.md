@@ -411,6 +411,17 @@ does. An entry that can break a caller opens with **Breaking:**.
   - `HighDynamicRange::setting_name` gives the maker's word for the
     setting, and `is_on` whether it was on. Each maker's type converts
     into it with `From`.
+- `CameraSettings::high_iso_noise_reduction` gives how strongly the
+  camera reduced the noise of pictures at high sensitivities, a
+  `HighIsoNoiseReduction`. `with_high_iso_noise_reduction` sets it
+  ([#230](https://github.com/kuolas/raw-files/issues/230)).
+  - Both makers call the setting High ISO NR, so one list holds both
+    makers' steps, as `JpegQuality` does.
+  - Nikon's is read from 0x00B1: off, minimal, low, medium low, normal,
+    medium high or high.
+  - Sony's is read from 0x2009: off, low, normal, high or auto. A Sony
+    raw file's 0 gives `None`, since it holds 0 where its JPEG holds
+    the step.
 
 ### Changed
 
