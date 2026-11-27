@@ -189,10 +189,12 @@ fn parse<R: Read + Seek>(src: &mut Source<R>, tree: &Tree, limits: &Limits) -> R
 mod tests {
     use super::*;
     use crate::camera_settings::{
-        CameraSettings, WhiteBalance, WhiteBalanceFineTune, WhiteBalanceMode,
+        CameraSettings, Contrast, FocusMode, Saturation, Sharpness, WhiteBalance,
+        WhiteBalanceFineTune, WhiteBalanceMode,
     };
     use crate::container::tiff::tags::{
-        DNG_PRIVATE_DATA, DNG_VERSION, MAKE, MAKER_NOTE, WHITE_BALANCE as EXIF_WHITE_BALANCE,
+        CONTRAST, DNG_PRIVATE_DATA, DNG_VERSION, MAKE, MAKER_NOTE, SATURATION, SHARPNESS,
+        WHITE_BALANCE as EXIF_WHITE_BALANCE,
     };
     use crate::container::tiff::{Block, walk};
     use crate::entries::Value;
@@ -405,6 +407,32 @@ mod tests {
         let expected = CameraSettings::default()
             .with_white_balance(white_balance)
             .with_electronic_front_curtain_setting(true);
+        assert_eq!(parsed.metadata.camera_settings(), &expected);
+    }
+
+    #[test]
+    fn the_standard_processing_values_stand_beside_the_makernotes_settings() {
+        // Exif's directions of contrast, saturation and sharpness beside a
+        // MakerNote whose FocusMode says AF-C: the MakerNote's reader adds
+        // its setting and leaves Exif's values as they are.
+        let (mut src, tree) = file(|builder, ifd| {
+            let exif = builder.ifd();
+            let makernote = builder.ifd();
+            builder
+                .ascii(ifd, MAKE, "SONY")
+                .exif(ifd, exif)
+                .short(exif, CONTRAST, &[2])
+                .short(exif, SATURATION, &[1])
+                .short(exif, SHARPNESS, &[1])
+                .byte(makernote, FOCUS_MODE, &[3])
+                .undefined_ifd(exif, MAKER_NOTE, makernote);
+        });
+        let parsed = parse(&mut src, &tree, &Limits::default()).unwrap();
+        let expected = CameraSettings::default()
+            .with_focus_mode(FocusMode::Continuous)
+            .with_contrast(Contrast::Hard)
+            .with_saturation(Saturation::Low)
+            .with_sharpness(Sharpness::Soft);
         assert_eq!(parsed.metadata.camera_settings(), &expected);
     }
 

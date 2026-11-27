@@ -296,6 +296,19 @@ pub(crate) const WHITE_BALANCE: u16 = crate::tags::exif::WHITE_BALANCE;
 /// know.
 pub(crate) const FOCAL_LENGTH_IN_35MM_FILM: u16 = crate::tags::exif::FOCAL_LENGTH_IN_35MM_FILM;
 
+/// The direction of the contrast processing the camera applied, as a
+/// SHORT (Contrast), read from the Exif IFD: 0 normal, 1 soft and 2 hard.
+pub(crate) const CONTRAST: u16 = crate::tags::exif::CONTRAST;
+
+/// The direction of the saturation processing the camera applied, as a
+/// SHORT (Saturation), read from the Exif IFD: 0 normal, 1 low saturation
+/// and 2 high saturation.
+pub(crate) const SATURATION: u16 = crate::tags::exif::SATURATION;
+
+/// The direction of the sharpening the camera applied, as a SHORT
+/// (Sharpness), read from the Exif IFD: 0 normal, 1 soft and 2 hard.
+pub(crate) const SHARPNESS: u16 = crate::tags::exif::SHARPNESS;
+
 /// The owner of the camera, as text (CameraOwnerName), read from the Exif
 /// IFD: set in the camera, and in principle never rewritten.
 pub(crate) const CAMERA_OWNER_NAME: u16 = crate::tags::exif::CAMERA_OWNER_NAME;

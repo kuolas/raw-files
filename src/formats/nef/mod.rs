@@ -79,7 +79,10 @@ fn parse<R: Read + Seek>(src: &mut Source<R>, tree: &Tree, limits: &Limits) -> R
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::container::tiff::tags::{DNG_PRIVATE_DATA, DNG_VERSION, MAKE, MAKER_NOTE};
+    use crate::camera_settings::{CameraSettings, Contrast, FocusMode, Saturation, Sharpness};
+    use crate::container::tiff::tags::{
+        CONTRAST, DNG_PRIVATE_DATA, DNG_VERSION, MAKE, MAKER_NOTE, SATURATION, SHARPNESS,
+    };
     use crate::entries::Directory;
     use crate::formats::testing::file;
     use crate::tiff_builder::{IfdId, TiffBuilder};
@@ -203,5 +206,30 @@ mod tests {
                 .entry(Directory::MakerNoteSub(0x0011), 0x0103)
                 .is_some()
         );
+    }
+
+    #[test]
+    fn the_standard_processing_values_stand_beside_the_makernotes_settings() {
+        // Exif's directions of contrast, saturation and sharpness beside a
+        // MakerNote whose FocusMode (0x0007) says AF-C: the MakerNote's
+        // reader adds its setting and leaves Exif's values as they are.
+        let (mut src, tree) = file(|builder, ifd0| {
+            let (exif, makernote) = (builder.ifd(), builder.ifd());
+            builder
+                .ascii(ifd0, MAKE, "NIKON CORPORATION")
+                .exif(ifd0, exif)
+                .short(exif, CONTRAST, &[1])
+                .short(exif, SATURATION, &[2])
+                .short(exif, SHARPNESS, &[2])
+                .ascii(makernote, 0x0007, "AF-C  ")
+                .undefined_ifd(exif, MAKER_NOTE, makernote);
+        });
+        let parsed = parse(&mut src, &tree, &Limits::default()).unwrap();
+        let expected = CameraSettings::default()
+            .with_focus_mode(FocusMode::Continuous)
+            .with_contrast(Contrast::Soft)
+            .with_saturation(Saturation::High)
+            .with_sharpness(Sharpness::Hard);
+        assert_eq!(parsed.metadata.camera_settings, expected);
     }
 }

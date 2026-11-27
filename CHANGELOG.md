@@ -309,6 +309,17 @@ does. An entry that can break a caller opens with **Breaking:**.
   from daylight to warm white, under a manual white balance, as the mode
   reads it; a MakerNote that names a mode other than fluorescent drops
   it. Sony's MakerNote tag 0x0112, which repeats it, is not read.
+- `CameraSettings::contrast`, `saturation` and `sharpness` give the
+  direction of the contrast, saturation and sharpening the camera
+  applied, as Exif records them
+  ([#230](https://github.com/kuolas/raw-files/issues/230)). Each has its
+  `with_…` builder and its enum:
+  - `Contrast` and `Sharpness`: normal, soft or hard;
+  - `Saturation`: normal, low or high.
+
+  They are read from Exif's tags of the same names for every maker, raw
+  and JPEG alike, and a code Exif reserves gives `None`. Each gives a
+  direction only: a maker's finer value belongs to its picture style.
 
 ### Changed
 

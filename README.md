@@ -58,7 +58,9 @@ Linux and Windows alike.
     series;
   - whether the clock was on daylight saving time, on Nikon files;
   - the raw data's bit depth and compression, on raw files;
-  - the JPEG quality, and on Nikon files the JPEG compression.
+  - the JPEG quality, and on Nikon files the JPEG compression;
+  - how the camera processed the picture, in Exif's words: the
+    directions of contrast, saturation and sharpness.
   - [`CameraSettings`](https://docs.rs/raw-files/latest/raw_files/struct.CameraSettings.html)
     says which a maker's files leave out: Sony's give no shutter, image
     area or raw image size.

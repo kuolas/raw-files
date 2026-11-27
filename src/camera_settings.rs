@@ -8,8 +8,9 @@
 //! size, the color space, the focus mode, the AF-area mode, AF fine-tune,
 //! the stabilization, auto ISO, the exposure fine-tuning, the release
 //! mode, bracketing, whether the clock was on daylight saving time, the
-//! raw data's bit depth and compression, and the JPEG quality and
-//! compression.
+//! raw data's bit depth and compression, the JPEG quality and compression,
+//! and how the camera processed the picture: the directions of contrast,
+//! saturation and sharpness.
 //! [`CameraSettings`] holds them all, and
 //! [`Metadata::camera_settings`](crate::Metadata::camera_settings) gives
 //! them for a file. [`WhiteBalance`], [`WhiteBalanceFineTune`], [`Flash`],
@@ -25,9 +26,10 @@
 //! NEF, ARW and JPEG files give the settings that their standard Exif tags
 //! record: the exposure program, the metering mode, the flash, the white
 //! balance mode and the kind of fluorescent lamp it was set for, the color
-//! space and exposure bracketing. Raw files give the raw data's bit depth
-//! from its own standard tags, and its compression where those tags say it
-//! is uncompressed. The others are recorded only in a maker's own tags, its
+//! space and exposure bracketing, and the directions of contrast,
+//! saturation and sharpness. Raw files give the raw data's bit depth from
+//! its own standard tags, and its compression where those tags say it is
+//! uncompressed. The others are recorded only in a maker's own tags, its
 //! MakerNote, or in a maker's own codes:
 //!
 //! - Nikon's MakerNote, in NEF files and in the JPEGs of Nikon cameras,
@@ -83,8 +85,9 @@ use crate::rational::SignedRational;
 /// program, metering mode, flash, shutter, image area, raw image size,
 /// color space, focus mode, AF-area mode, AF fine-tune, stabilization, auto
 /// ISO, exposure fine-tuning, release mode, bracketing, daylight saving
-/// time, raw bit depth and compression, and JPEG quality and compression,
-/// for a viewer's information panel beside the exposure.
+/// time, raw bit depth and compression, JPEG quality and compression, and
+/// the directions of contrast, saturation and sharpness it processed the
+/// picture in, for a viewer's information panel beside the exposure.
 ///
 /// Every value is `None` when the file does not record it or records it in
 /// a way that cannot be read, such as a code that no variant names. A
@@ -92,9 +95,10 @@ use crate::rational::SignedRational;
 /// [`Metadata::camera_settings`](crate::Metadata::camera_settings) gives
 /// the values a file's standard Exif tags record: the exposure program,
 /// the metering mode, the flash, the white balance mode and its kind of
-/// fluorescent lamp, the color space and exposure bracketing, and the raw
-/// bit depth and an uncompressed raw's compression that the standard tags
-/// of a raw file's raw data record. The others, which only a maker's
+/// fluorescent lamp, the color space and exposure bracketing, the
+/// directions of contrast, saturation and sharpness, and the raw bit depth
+/// and an uncompressed raw's compression that the standard tags of a raw
+/// file's raw data record. The others, which only a maker's
 /// MakerNote or its own codes record, it gives from Nikon's MakerNote and
 /// Sony's, each those its MakerNote records in plain tags, and from each
 /// maker's compression codes; the shutter, the image area, the raw image
@@ -189,6 +193,9 @@ pub struct CameraSettings {
     pub(crate) raw_compression: Option<RawCompression>,
     pub(crate) jpeg_quality: Option<JpegQuality>,
     pub(crate) jpeg_compression: Option<JpegCompression>,
+    pub(crate) contrast: Option<Contrast>,
+    pub(crate) saturation: Option<Saturation>,
+    pub(crate) sharpness: Option<Sharpness>,
 }
 
 impl CameraSettings {
@@ -942,6 +949,121 @@ impl CameraSettings {
         self.jpeg_compression
     }
 
+    /// The direction of the contrast processing the camera applied, as
+    /// Exif records it: [`Normal`](Contrast::Normal),
+    /// [`Soft`](Contrast::Soft) or [`Hard`](Contrast::Hard).
+    ///
+    /// It gives a direction only. A maker's finer value, such as the steps
+    /// of a Nikon Picture Control's contrast, is part of the maker's picture
+    /// style.
+    ///
+    /// Read from Exif's Contrast, one SHORT: 0 normal, 1 soft and 2 hard,
+    /// for every maker, in a raw file and a JPEG alike. No MakerNote fills
+    /// it.
+    ///
+    /// `None` when:
+    ///
+    /// - the file records none, as Sony's DSC-F828 does;
+    /// - the code is one Exif reserves, 3 or above;
+    /// - the tag is not one SHORT.
+    ///
+    /// What files record is in the notes on
+    /// [the Exif segment](https://github.com/kuolas/raw-files/blob/master/docs/formats/jpeg/container-and-metadata.md#4-exif-the-app1-segment).
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use raw_files::{CameraFile, Contrast};
+    ///
+    /// # fn main() -> raw_files::Result<()> {
+    /// let file = CameraFile::open("photo.jpg")?;
+    /// match file.metadata().camera_settings().contrast() {
+    ///     Some(Contrast::Normal) | None => {}
+    ///     Some(contrast) => println!("contrast: {contrast}"),
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn contrast(&self) -> Option<Contrast> {
+        self.contrast
+    }
+
+    /// The direction of the saturation processing the camera applied, as
+    /// Exif records it: [`Normal`](Saturation::Normal),
+    /// [`Low`](Saturation::Low) or [`High`](Saturation::High).
+    ///
+    /// It gives a direction only. A maker's finer value, such as the steps
+    /// of a Nikon Picture Control's saturation, is part of the maker's
+    /// picture style.
+    ///
+    /// Read from Exif's Saturation, one SHORT: 0 normal, 1 low saturation
+    /// and 2 high saturation, for every maker, in a raw file and a JPEG
+    /// alike. No MakerNote fills it.
+    ///
+    /// `None` when:
+    ///
+    /// - the file records none, as Sony's DSC-F828 does;
+    /// - the code is one Exif reserves, 3 or above;
+    /// - the tag is not one SHORT.
+    ///
+    /// What files record is in the notes on
+    /// [the Exif segment](https://github.com/kuolas/raw-files/blob/master/docs/formats/jpeg/container-and-metadata.md#4-exif-the-app1-segment).
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use raw_files::{CameraFile, Saturation};
+    ///
+    /// # fn main() -> raw_files::Result<()> {
+    /// let file = CameraFile::open("photo.jpg")?;
+    /// if file.metadata().camera_settings().saturation() == Some(Saturation::High) {
+    ///     println!("colors heightened in the camera");
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn saturation(&self) -> Option<Saturation> {
+        self.saturation
+    }
+
+    /// The direction of the sharpening the camera applied, as Exif
+    /// records it: [`Normal`](Sharpness::Normal),
+    /// [`Soft`](Sharpness::Soft) or [`Hard`](Sharpness::Hard).
+    ///
+    /// It gives a direction only. A maker's finer value, such as the steps
+    /// of a Nikon Picture Control's sharpening, is part of the maker's
+    /// picture style.
+    ///
+    /// Read from Exif's Sharpness, one SHORT: 0 normal, 1 soft and 2 hard,
+    /// for every maker, in a raw file and a JPEG alike. No MakerNote fills
+    /// it.
+    ///
+    /// `None` when:
+    ///
+    /// - the file records none, as Sony's DSC-F828 does;
+    /// - the code is one Exif reserves, 3 or above;
+    /// - the tag is not one SHORT.
+    ///
+    /// What files record is in the notes on
+    /// [the Exif segment](https://github.com/kuolas/raw-files/blob/master/docs/formats/jpeg/container-and-metadata.md#4-exif-the-app1-segment).
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use raw_files::CameraFile;
+    ///
+    /// # fn main() -> raw_files::Result<()> {
+    /// let file = CameraFile::open("photo.nef")?;
+    /// if let Some(sharpness) = file.metadata().camera_settings().sharpness() {
+    ///     println!("sharpness: {sharpness}");
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn sharpness(&self) -> Option<Sharpness> {
+        self.sharpness
+    }
+
     /// Sets the white balance, in place of the one it had;
     /// [`white_balance`](Self::white_balance) reads it.
     #[must_use]
@@ -1118,6 +1240,30 @@ impl CameraSettings {
     #[must_use]
     pub fn with_jpeg_compression(mut self, compression: JpegCompression) -> Self {
         self.jpeg_compression = Some(compression);
+        self
+    }
+
+    /// Sets the contrast, in place of any set before;
+    /// [`contrast`](Self::contrast) reads it.
+    #[must_use]
+    pub fn with_contrast(mut self, contrast: Contrast) -> Self {
+        self.contrast = Some(contrast);
+        self
+    }
+
+    /// Sets the saturation, in place of any set before;
+    /// [`saturation`](Self::saturation) reads it.
+    #[must_use]
+    pub fn with_saturation(mut self, saturation: Saturation) -> Self {
+        self.saturation = Some(saturation);
+        self
+    }
+
+    /// Sets the sharpness, in place of any set before;
+    /// [`sharpness`](Self::sharpness) reads it.
+    #[must_use]
+    pub fn with_sharpness(mut self, sharpness: Sharpness) -> Self {
+        self.sharpness = Some(sharpness);
         self
     }
 }
@@ -3173,6 +3319,147 @@ impl fmt::Display for FluorescentLamp {
     }
 }
 
+/// The direction of the contrast processing the camera applied, as Exif's
+/// Contrast names it (Exif 3.1, 4.6.6.7.42): 0 normal, 1 soft and 2 hard.
+/// A code Exif reserves gives `None`.
+///
+/// `Contrast` is `#[non_exhaustive]`, so match on it with a wildcard arm. It
+/// orders as its variants are listed, and a new variant is added after the
+/// existing ones, so an order once observed holds. Its [`name`](Self::name)s,
+/// which `Display` writes too, are "Normal", "Soft" and "Hard".
+///
+/// # Examples
+///
+/// ```
+/// use raw_files::Contrast;
+///
+/// assert_eq!(Contrast::Soft.name(), "Soft");
+/// assert_eq!(Contrast::Hard.to_string(), "Hard");
+/// ```
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[non_exhaustive]
+pub enum Contrast {
+    /// The camera's normal contrast.
+    Normal,
+    /// Lower contrast than normal.
+    Soft,
+    /// Higher contrast than normal.
+    Hard,
+}
+
+impl Contrast {
+    /// The direction's name, for an information panel: "Normal", "Soft" or
+    /// "Hard".
+    pub fn name(self) -> &'static str {
+        match self {
+            Contrast::Normal => "Normal",
+            Contrast::Soft => "Soft",
+            Contrast::Hard => "Hard",
+        }
+    }
+}
+
+impl fmt::Display for Contrast {
+    /// Writes [`name`](Contrast::name).
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.name())
+    }
+}
+
+/// The direction of the saturation processing the camera applied, as
+/// Exif's Saturation names it (Exif 3.1, 4.6.6.7.43): 0 normal, 1 low
+/// saturation and 2 high saturation. A code Exif reserves gives `None`.
+///
+/// `Saturation` is `#[non_exhaustive]`, so match on it with a wildcard arm.
+/// It orders as its variants are listed, and a new variant is added after the
+/// existing ones, so an order once observed holds. Its [`name`](Self::name)s,
+/// which `Display` writes too, are "Normal", "Low" and "High".
+///
+/// # Examples
+///
+/// ```
+/// use raw_files::Saturation;
+///
+/// assert_eq!(Saturation::Low.name(), "Low");
+/// assert_eq!(Saturation::High.to_string(), "High");
+/// ```
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[non_exhaustive]
+pub enum Saturation {
+    /// The camera's normal saturation.
+    Normal,
+    /// Lower saturation than normal: Exif's "low saturation".
+    Low,
+    /// Higher saturation than normal: Exif's "high saturation".
+    High,
+}
+
+impl Saturation {
+    /// The direction's name, for an information panel: "Normal", "Low" or
+    /// "High".
+    pub fn name(self) -> &'static str {
+        match self {
+            Saturation::Normal => "Normal",
+            Saturation::Low => "Low",
+            Saturation::High => "High",
+        }
+    }
+}
+
+impl fmt::Display for Saturation {
+    /// Writes [`name`](Saturation::name).
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.name())
+    }
+}
+
+/// The direction of the sharpening the camera applied, as Exif's Sharpness
+/// names it (Exif 3.1, 4.6.6.7.44): 0 normal, 1 soft and 2 hard. A code
+/// Exif reserves gives `None`.
+///
+/// `Sharpness` is `#[non_exhaustive]`, so match on it with a wildcard arm. It
+/// orders as its variants are listed, and a new variant is added after the
+/// existing ones, so an order once observed holds. Its [`name`](Self::name)s,
+/// which `Display` writes too, are "Normal", "Soft" and "Hard".
+///
+/// # Examples
+///
+/// ```
+/// use raw_files::Sharpness;
+///
+/// assert_eq!(Sharpness::Soft.name(), "Soft");
+/// assert_eq!(Sharpness::Hard.to_string(), "Hard");
+/// ```
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[non_exhaustive]
+pub enum Sharpness {
+    /// The camera's normal sharpening.
+    Normal,
+    /// Less sharpening than normal.
+    Soft,
+    /// More sharpening than normal.
+    Hard,
+}
+
+impl Sharpness {
+    /// The direction's name, for an information panel: "Normal", "Soft" or
+    /// "Hard".
+    pub fn name(self) -> &'static str {
+        match self {
+            Sharpness::Normal => "Normal",
+            Sharpness::Soft => "Soft",
+            Sharpness::Hard => "Hard",
+        }
+    }
+}
+
+impl fmt::Display for Sharpness {
+    /// Writes [`name`](Sharpness::name).
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.name())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -3239,6 +3526,9 @@ mod tests {
             raw_compression: Some(RawCompression::Lossless),
             jpeg_quality: Some(JpegQuality::Fine),
             jpeg_compression: Some(JpegCompression::OptimalQuality),
+            contrast: Some(Contrast::Hard),
+            saturation: Some(Saturation::Low),
+            sharpness: Some(Sharpness::Soft),
         }
     }
 
@@ -3267,6 +3557,9 @@ mod tests {
         assert_eq!(settings.raw_compression(), None);
         assert_eq!(settings.jpeg_quality(), None);
         assert_eq!(settings.jpeg_compression(), None);
+        assert_eq!(settings.contrast(), None);
+        assert_eq!(settings.saturation(), None);
+        assert_eq!(settings.sharpness(), None);
 
         let white_balance = WhiteBalance::default();
         assert_eq!(white_balance.mode(), None);
@@ -3341,6 +3634,9 @@ mod tests {
             settings.jpeg_compression(),
             Some(JpegCompression::OptimalQuality)
         );
+        assert_eq!(settings.contrast(), Some(Contrast::Hard));
+        assert_eq!(settings.saturation(), Some(Saturation::Low));
+        assert_eq!(settings.sharpness(), Some(Sharpness::Soft));
 
         let white_balance = nikon_white_balance();
         assert_eq!(white_balance.mode(), Some(WhiteBalanceMode::Auto));
@@ -3543,6 +3839,27 @@ mod tests {
                         ..start.clone()
                     },
                 ),
+                (
+                    start.clone().with_contrast(Contrast::Normal),
+                    CameraSettings {
+                        contrast: Some(Contrast::Normal),
+                        ..start.clone()
+                    },
+                ),
+                (
+                    start.clone().with_saturation(Saturation::High),
+                    CameraSettings {
+                        saturation: Some(Saturation::High),
+                        ..start.clone()
+                    },
+                ),
+                (
+                    start.clone().with_sharpness(Sharpness::Hard),
+                    CameraSettings {
+                        sharpness: Some(Sharpness::Hard),
+                        ..start.clone()
+                    },
+                ),
             ];
             for (place, (built, expected)) in cases.into_iter().enumerate() {
                 assert_eq!(built, expected, "builder {place} from {start:?}");
@@ -3645,7 +3962,10 @@ mod tests {
             .with_raw_bit_depth(14)
             .with_raw_compression(RawCompression::Lossless)
             .with_jpeg_quality(JpegQuality::Fine)
-            .with_jpeg_compression(JpegCompression::OptimalQuality);
+            .with_jpeg_compression(JpegCompression::OptimalQuality)
+            .with_contrast(Contrast::Hard)
+            .with_saturation(Saturation::Low)
+            .with_sharpness(Sharpness::Soft);
         assert_eq!(settings, full_settings());
     }
 
@@ -3673,7 +3993,10 @@ mod tests {
             .with_raw_bit_depth(12)
             .with_raw_compression(RawCompression::Lossy)
             .with_jpeg_quality(JpegQuality::Light)
-            .with_jpeg_compression(JpegCompression::SizePriority);
+            .with_jpeg_compression(JpegCompression::SizePriority)
+            .with_contrast(Contrast::Soft)
+            .with_saturation(Saturation::High)
+            .with_sharpness(Sharpness::Hard);
         // Every value of `earlier` differs from the full record's, so each
         // builder below has one to replace.
         let full = full_settings();
@@ -3699,7 +4022,10 @@ mod tests {
             .with_raw_bit_depth(14)
             .with_raw_compression(RawCompression::Lossless)
             .with_jpeg_quality(JpegQuality::Fine)
-            .with_jpeg_compression(JpegCompression::OptimalQuality);
+            .with_jpeg_compression(JpegCompression::OptimalQuality)
+            .with_contrast(Contrast::Hard)
+            .with_saturation(Saturation::Low)
+            .with_sharpness(Sharpness::Soft);
         assert_eq!(settings, full);
 
         let white_balance = WhiteBalance::default()
@@ -4176,6 +4502,39 @@ mod tests {
         all
     }
 
+    fn all_contrasts() -> [Contrast; 3] {
+        use Contrast::*;
+        let all = [Normal, Soft, Hard];
+        for contrast in all {
+            match contrast {
+                Normal | Soft | Hard => {}
+            }
+        }
+        all
+    }
+
+    fn all_saturations() -> [Saturation; 3] {
+        use Saturation::*;
+        let all = [Normal, Low, High];
+        for saturation in all {
+            match saturation {
+                Normal | Low | High => {}
+            }
+        }
+        all
+    }
+
+    fn all_sharpnesses() -> [Sharpness; 3] {
+        use Sharpness::*;
+        let all = [Normal, Soft, Hard];
+        for sharpness in all {
+            match sharpness {
+                Normal | Soft | Hard => {}
+            }
+        }
+        all
+    }
+
     #[test]
     fn every_name_is_the_one_documented_and_display_writes_it() {
         // The names are stable once released: a program may show or store
@@ -4358,6 +4717,21 @@ mod tests {
                 "Warm white fluorescent",
             ],
         );
+        assert_names(
+            &all_contrasts(),
+            Contrast::name,
+            &["Normal", "Soft", "Hard"],
+        );
+        assert_names(
+            &all_saturations(),
+            Saturation::name,
+            &["Normal", "Low", "High"],
+        );
+        assert_names(
+            &all_sharpnesses(),
+            Sharpness::name,
+            &["Normal", "Soft", "Hard"],
+        );
     }
 
     #[test]
@@ -4384,6 +4758,9 @@ mod tests {
         assert_ordered(&all_jpeg_qualities());
         assert_ordered(&all_jpeg_compressions());
         assert_ordered(&all_fluorescent_lamps());
+        assert_ordered(&all_contrasts());
+        assert_ordered(&all_saturations());
+        assert_ordered(&all_sharpnesses());
     }
 
     #[test]
