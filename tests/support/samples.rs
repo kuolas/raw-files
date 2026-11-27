@@ -23,12 +23,12 @@ use std::panic::{self, AssertUnwindSafe};
 use std::path::{Path, PathBuf};
 
 use raw_files::{
-    Bracketing, Camera, CameraFile, ColorSpace, Directory, ErrorKind, ExposureProgram, FieldType,
-    FlashControl, FlashMode, FlashSource, FlashSync, FluorescentLamp, FocusAreaMode,
-    FocusLayoutPoint, FocusMode, FocusOrigin, Format, ImageArea, JpegCompression, JpegQuality,
-    Make, Metadata, MeteringMode, Orientation, Point, Preview, PreviewFormat, Rational,
-    RawCompression, RawImageSize, ReleaseMode, Shutter, SignedRational, Size, StabilizationMode,
-    WhiteBalanceMode,
+    Bracketing, Camera, CameraFile, ColorSpace, Contrast, Directory, ErrorKind, ExposureProgram,
+    FieldType, FlashControl, FlashMode, FlashSource, FlashSync, FluorescentLamp, FocusAreaMode,
+    FocusLayoutPoint, FocusMode, FocusOrigin, Format, GainControl, ImageArea, JpegCompression,
+    JpegQuality, Make, Metadata, MeteringMode, Orientation, Point, Preview, PreviewFormat,
+    Rational, RawCompression, RawImageSize, ReleaseMode, Saturation, SceneCaptureType, Sharpness,
+    Shutter, SignedRational, Size, StabilizationMode, WhiteBalanceMode,
 };
 
 /// The path of the sample file `name`, or `None`, with a note on stderr,
@@ -451,7 +451,10 @@ pub struct SamplePlacedLayout {
 /// records none; whether auto ISO was on; the exposure fine-tuning, its
 /// numerator and denominator as stored; the release mode; the bracketing;
 /// whether daylight saving time was on; the raw bit depth and compression;
-/// and the JPEG quality and compression.
+/// the JPEG quality and compression; and Exif's six values of how the
+/// camera processed the picture: the directions of contrast, saturation
+/// and sharpness, the scene capture type, whether the process was custom,
+/// and the gain control.
 ///
 /// Every row writes every field, `None` included, one to a line, so that
 /// a value read later changes one line of a row.
@@ -482,6 +485,12 @@ pub struct SampleSettings {
     pub raw_compression: Option<RawCompression>,
     pub jpeg_quality: Option<JpegQuality>,
     pub jpeg_compression: Option<JpegCompression>,
+    pub contrast: Option<Contrast>,
+    pub saturation: Option<Saturation>,
+    pub sharpness: Option<Sharpness>,
+    pub scene_capture_type: Option<SceneCaptureType>,
+    pub custom_rendered: Option<bool>,
+    pub gain_control: Option<GainControl>,
 }
 
 /// The flash of a sample file, as the reader must give it
@@ -1106,6 +1115,32 @@ pub fn check_metadata(expected: &SampleMetadata, format: Format, folder: Folder)
         settings.jpeg_compression(),
         expected.jpeg_compression,
         "{label}: JPEG compression"
+    );
+    assert_eq!(settings.contrast(), expected.contrast, "{label}: contrast");
+    assert_eq!(
+        settings.saturation(),
+        expected.saturation,
+        "{label}: saturation"
+    );
+    assert_eq!(
+        settings.sharpness(),
+        expected.sharpness,
+        "{label}: sharpness"
+    );
+    assert_eq!(
+        settings.scene_capture_type(),
+        expected.scene_capture_type,
+        "{label}: scene capture type"
+    );
+    assert_eq!(
+        settings.custom_rendered(),
+        expected.custom_rendered,
+        "{label}: custom rendering"
+    );
+    assert_eq!(
+        settings.gain_control(),
+        expected.gain_control,
+        "{label}: gain control"
     );
 }
 

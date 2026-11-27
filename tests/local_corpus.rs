@@ -506,6 +506,21 @@ struct SettingsTally {
     jpeg_qualities: BTreeMap<&'static str, usize>,
     jpeg_compression: usize,
     jpeg_compressions: BTreeMap<&'static str, usize>,
+    /// Files with each of Exif's six values of how the camera processed
+    /// the picture, by value; custom rendering by how many files mark a
+    /// custom process, `custom_rendered_on`.
+    contrast: usize,
+    contrasts: BTreeMap<&'static str, usize>,
+    saturation: usize,
+    saturations: BTreeMap<&'static str, usize>,
+    sharpness: usize,
+    sharpnesses: BTreeMap<&'static str, usize>,
+    scene_capture_type: usize,
+    scene_capture_types: BTreeMap<&'static str, usize>,
+    custom_rendered: usize,
+    custom_rendered_on: usize,
+    gain_control: usize,
+    gain_controls: BTreeMap<&'static str, usize>,
 }
 
 impl SettingsTally {
@@ -732,6 +747,33 @@ impl SettingsTally {
                 &mut self.jpeg_compressions,
                 compression.name(),
             );
+        }
+        if let Some(contrast) = settings.contrast() {
+            count(&mut self.contrast, &mut self.contrasts, contrast.name());
+        }
+        if let Some(saturation) = settings.saturation() {
+            count(
+                &mut self.saturation,
+                &mut self.saturations,
+                saturation.name(),
+            );
+        }
+        if let Some(sharpness) = settings.sharpness() {
+            count(&mut self.sharpness, &mut self.sharpnesses, sharpness.name());
+        }
+        if let Some(scene) = settings.scene_capture_type() {
+            count(
+                &mut self.scene_capture_type,
+                &mut self.scene_capture_types,
+                scene.name(),
+            );
+        }
+        if let Some(custom) = settings.custom_rendered() {
+            self.custom_rendered += 1;
+            self.custom_rendered_on += usize::from(custom);
+        }
+        if let Some(gain) = settings.gain_control() {
+            count(&mut self.gain_control, &mut self.gain_controls, gain.name());
         }
     }
 }
@@ -1457,6 +1499,18 @@ impl Tally {
         println!(
             "files with a JPEG quality: {}, by step: {:?}; with a JPEG compression: {}, by compression: {:?}",
             s.jpeg_quality, s.jpeg_qualities, s.jpeg_compression, s.jpeg_compressions
+        );
+        println!(
+            "files with a contrast: {}, by direction: {:?}; with a saturation: {}, by direction: {:?}; with a sharpness: {}, by direction: {:?}",
+            s.contrast, s.contrasts, s.saturation, s.saturations, s.sharpness, s.sharpnesses
+        );
+        println!(
+            "files with a scene capture type: {}, by type: {:?}",
+            s.scene_capture_type, s.scene_capture_types
+        );
+        println!(
+            "files with custom rendering: {}, of which custom: {}; with a gain control: {}, by adjustment: {:?}",
+            s.custom_rendered, s.custom_rendered_on, s.gain_control, s.gain_controls
         );
         let f = &self.focus;
         println!(
@@ -2295,6 +2349,70 @@ fn the_settings_tally_counts_the_image_quality_and_the_white_balance_parts() {
     assert_eq!(
         tally.fluorescent_lamps,
         BTreeMap::from([("Cool white fluorescent", 1)])
+    );
+}
+
+#[test]
+fn the_settings_tally_counts_exifs_processing_values() {
+    use raw_files::{
+        CameraSettings, Contrast, GainControl, Saturation, SceneCaptureType, Sharpness,
+    };
+
+    // A Nikon file of the Picture Control Landscape, processed hard and
+    // marked custom, with a high gain up; a file of every normal value;
+    // a phone's file whose scene and rendering codes Exif reserves, so
+    // that it gives only its directions; and a file with none of them.
+    let files = [
+        CameraSettings::default()
+            .with_contrast(Contrast::Hard)
+            .with_saturation(Saturation::High)
+            .with_sharpness(Sharpness::Hard)
+            .with_scene_capture_type(SceneCaptureType::Landscape)
+            .with_custom_rendered(true)
+            .with_gain_control(GainControl::HighGainUp),
+        CameraSettings::default()
+            .with_contrast(Contrast::Normal)
+            .with_saturation(Saturation::Normal)
+            .with_sharpness(Sharpness::Normal)
+            .with_scene_capture_type(SceneCaptureType::Standard)
+            .with_custom_rendered(false)
+            .with_gain_control(GainControl::NoAdjustment),
+        CameraSettings::default()
+            .with_contrast(Contrast::Normal)
+            .with_saturation(Saturation::Low)
+            .with_sharpness(Sharpness::Soft),
+        CameraSettings::default(),
+    ];
+    let mut tally = SettingsTally::default();
+    for settings in files {
+        tally.record(&Metadata::default().with_camera_settings(settings));
+    }
+
+    assert_eq!(tally.contrast, 3);
+    assert_eq!(
+        tally.contrasts,
+        BTreeMap::from([("Hard", 1), ("Normal", 2)])
+    );
+    assert_eq!(tally.saturation, 3);
+    assert_eq!(
+        tally.saturations,
+        BTreeMap::from([("High", 1), ("Low", 1), ("Normal", 1)])
+    );
+    assert_eq!(tally.sharpness, 3);
+    assert_eq!(
+        tally.sharpnesses,
+        BTreeMap::from([("Hard", 1), ("Normal", 1), ("Soft", 1)])
+    );
+    assert_eq!(tally.scene_capture_type, 2);
+    assert_eq!(
+        tally.scene_capture_types,
+        BTreeMap::from([("Landscape", 1), ("Standard", 1)])
+    );
+    assert_eq!((tally.custom_rendered, tally.custom_rendered_on), (2, 1));
+    assert_eq!(tally.gain_control, 2);
+    assert_eq!(
+        tally.gain_controls,
+        BTreeMap::from([("High gain up", 1), ("None", 1)])
     );
 }
 
