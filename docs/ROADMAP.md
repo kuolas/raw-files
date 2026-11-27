@@ -125,7 +125,6 @@ a frame, observed on files, or documented only.
 ([ADR011](architecture-decisions/adr011-metadata-from-standard-tags.md),
 [#230](https://github.com/kuolas/raw-files/issues/230)):
 
-- Sony's shading, distortion and chromatic aberration compensations;
 - the scene mode.
 
 Exif's contrast, saturation, sharpness, scene capture type, custom
@@ -139,7 +138,9 @@ D-Range Optimizer. A `HighDynamicRange` holds Nikon's HDR or Sony's
 Auto HDR. The noise reductions are read as well: the high ISO one, in
 one list of both makers' steps, the long exposure one, and Sony's
 multi-frame one. A `VignettingCorrection` holds Nikon's vignette
-control, and a `DistortionCorrection` Nikon's auto distortion control.
+control or Sony's shading compensation, and a `DistortionCorrection`
+Nikon's auto distortion control or Sony's distortion compensation;
+Sony's chromatic aberration compensation is read too.
 
 Each setting of the list will keep its maker's own name and kinds, as
 the picture style does. Where two makers each have a setting for one

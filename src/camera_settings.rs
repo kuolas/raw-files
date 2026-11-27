@@ -13,8 +13,8 @@
 //! saturation and sharpness, the scene capture type, custom rendering,
 //! gain control, the maker's picture style, its dynamic range
 //! optimization and its high dynamic range setting, the high ISO, long
-//! exposure and multi-frame noise reductions, and its vignetting and
-//! distortion corrections.
+//! exposure and multi-frame noise reductions, its vignetting and
+//! distortion corrections, and its chromatic aberration compensation.
 //! [`CameraSettings`] holds them all, and
 //! [`Metadata::camera_settings`](crate::Metadata::camera_settings) gives
 //! them for a file. [`WhiteBalance`], [`WhiteBalanceFineTune`], [`Flash`],
@@ -27,8 +27,10 @@
 //! each under its own name, [`DynamicRangeOptimization`] holds Nikon's
 //! [`ActiveDLighting`] or Sony's [`DRangeOptimizer`],
 //! [`HighDynamicRange`] Nikon's [`Hdr`] or Sony's [`AutoHdr`],
-//! [`VignettingCorrection`] Nikon's [`VignetteControl`], and
-//! [`DistortionCorrection`] Nikon's [`AutoDistortionControl`].
+//! [`VignettingCorrection`] Nikon's [`VignetteControl`] or Sony's shading
+//! compensation, and [`DistortionCorrection`] Nikon's
+//! [`AutoDistortionControl`] or Sony's distortion compensation, each of
+//! Sony's a [`LensCompensation`].
 //!
 //! Every value is optional. A file may not record it, or may record it in
 //! a way that cannot be read, such as a code no variant names; either way
@@ -67,8 +69,9 @@
 //!   release mode and bracketing, the flash's source when it is external
 //!   and its compensation, the JPEG quality, the Creative Style or
 //!   Creative Look, Sony's picture style, the D-Range Optimizer, Auto HDR,
-//!   the high ISO noise reduction, which a raw file's 0 does not give, and
-//!   the long exposure and multi-frame noise reductions. A Sony raw file
+//!   the high ISO noise reduction, which a raw file's 0 does not give, the
+//!   long exposure and multi-frame noise reductions, and the shading,
+//!   distortion and chromatic aberration compensations. A Sony raw file
 //!   says how a compressed raw is compressed in codes of Sony's own.
 //!
 //! Where a Nikon MakerNote records its crop as "off", or holds no crop,
@@ -109,8 +112,9 @@ use crate::rational::{Rational, SignedRational};
 /// directions of contrast, saturation and sharpness it processed the
 /// picture in, the scene capture type, custom rendering, gain control, the
 /// maker's picture style, dynamic range optimization and high dynamic
-/// range setting, the noise reductions, and the vignetting and distortion
-/// corrections, for a viewer's information panel beside the exposure.
+/// range setting, the noise reductions, the vignetting and distortion
+/// corrections, and the chromatic aberration compensation, for a viewer's
+/// information panel beside the exposure.
 ///
 /// Every value is `None` when the file does not record it or records it in
 /// a way that cannot be read, such as a code that no variant names. A
@@ -128,9 +132,10 @@ use crate::rational::{Rational, SignedRational};
 /// maker's compression codes; the shutter, the image area, the raw image
 /// size, AF fine-tune, auto ISO, daylight saving time and the JPEG
 /// compression are `None` for every Sony file; the electronic front
-/// curtain setting and the multi-frame noise reduction for every Nikon
-/// file, whose long exposure noise reduction is never `Some(false)`. Each
-/// getter says where its value comes from.
+/// curtain setting, the multi-frame noise reduction and the chromatic
+/// aberration compensation for every Nikon file. A Nikon file's long
+/// exposure noise reduction is never `Some(false)`. Each getter says
+/// where its value comes from.
 ///
 /// `CameraSettings::default()` is the empty record, with every value
 /// `None` and an empty [`WhiteBalance`]. A caller's tests start from it and
@@ -233,6 +238,7 @@ pub struct CameraSettings {
     pub(crate) multi_frame_noise_reduction: Option<bool>,
     pub(crate) vignetting_correction: Option<VignettingCorrection>,
     pub(crate) distortion_correction: Option<DistortionCorrection>,
+    pub(crate) chromatic_aberration_compensation: Option<LensCompensation>,
 }
 
 impl CameraSettings {
@@ -1546,34 +1552,46 @@ impl CameraSettings {
 
     /// How the camera corrected the drop in brightness toward the
     /// picture's edges, its vignetting, under its maker's own name:
-    /// Nikon's [`VignetteControl`] ([`VignettingCorrection`]).
+    /// Nikon's [`VignetteControl`] or Sony's shading compensation, a
+    /// [`LensCompensation`] ([`VignettingCorrection`]).
     ///
-    /// Read from Nikon's MakerNote, in a raw file and a JPEG alike, from
-    /// VignetteControl (0x002A), one SHORT, by the list ExifTool's
-    /// documentation gives, read whole, since files hold part of it: 0
-    /// off, 1 low, 3 normal and 5 high.
+    /// Read from the maker's MakerNote, in a raw file and a JPEG alike, by
+    /// the lists ExifTool's documentation gives, each read whole, since
+    /// files hold part of it:
+    ///
+    /// - Nikon's vignette control from VignetteControl (0x002A), one
+    ///   SHORT: 0 off, 1 low, 3 normal and 5 high.
+    /// - Sony's shading compensation from 0x2011, which the documentation
+    ///   calls VignettingCorrection, one LONG: 0 off and 2 auto. The raw
+    ///   SubIFD's own vignetting code is not read: it is not the menu
+    ///   setting.
     ///
     /// `None` when:
     ///
     /// - the file records none, as every file of another maker does, and
     ///   every file of the D300S, D3200, D3300 and D7100 measured;
-    /// - the code is one its list lacks, such as 2;
-    /// - the tag is not one SHORT.
+    /// - the code is one its list lacks, such as Nikon's 2, or Sony's
+    ///   4294967295, which the documentation calls "n/a" and which the
+    ///   fixed-lens bodies write;
+    /// - the tag is not Nikon's one SHORT or Sony's one LONG.
     ///
     /// What files record is in the NEF notes on
-    /// [vignette control](https://github.com/kuolas/raw-files/blob/master/docs/formats/nef/makernote-and-metadata.md#811-picture-style-and-processing).
+    /// [vignette control](https://github.com/kuolas/raw-files/blob/master/docs/formats/nef/makernote-and-metadata.md#811-picture-style-and-processing)
+    /// and the ARW notes on
+    /// [the lens compensations](https://github.com/kuolas/raw-files/blob/master/docs/formats/arw/makernote-and-metadata.md#911-picture-style-and-processing).
     ///
     /// # Examples
     ///
     /// ```no_run
-    /// use raw_files::{CameraFile, VignetteControl, VignettingCorrection};
+    /// use raw_files::{CameraFile, LensCompensation, VignetteControl, VignettingCorrection};
     ///
     /// # fn main() -> raw_files::Result<()> {
     /// let file = CameraFile::open("photo.nef")?;
     /// if let Some(correction) = file.metadata().camera_settings().vignetting_correction() {
     ///     println!("{}: {}", correction.setting_name(), correction.name());
     ///     match correction {
-    ///         VignettingCorrection::VignetteControl(VignetteControl::Off) => {
+    ///         VignettingCorrection::VignetteControl(VignetteControl::Off)
+    ///         | VignettingCorrection::ShadingCompensation(LensCompensation::Off) => {
     ///             println!("the edges left as the lens drew them");
     ///         }
     ///         _ => {}
@@ -1588,38 +1606,52 @@ impl CameraSettings {
 
     /// How the camera corrected the lens's distortion, the bending of
     /// straight lines toward or away from the picture's center, under its
-    /// maker's own name: Nikon's [`AutoDistortionControl`]
+    /// maker's own name: Nikon's [`AutoDistortionControl`] or Sony's
+    /// distortion compensation, a [`LensCompensation`]
     /// ([`DistortionCorrection`]).
     ///
-    /// Read from Nikon's MakerNote, in a raw file and a JPEG alike, from
-    /// DistortInfo (0x002B), a record of 16 bytes that starts with its
-    /// version, at the one version measured files hold, 0100. Its byte 4
-    /// is read by the list ExifTool's documentation gives, read whole,
-    /// since files hold part of it: 0 off, 1 on and 2 on for underwater.
-    /// Bytes 5 to 7, which vary with the lens, are not read.
+    /// Read from the maker's MakerNote, in a raw file and a JPEG alike, by
+    /// the lists ExifTool's documentation gives, each read whole, since
+    /// files hold part of it:
+    ///
+    /// - Nikon's auto distortion control from DistortInfo (0x002B), a
+    ///   record of 16 bytes that starts with its version, at the one
+    ///   version measured files hold, 0100. Its byte 4 is 0 off, 1 on and
+    ///   2 on for underwater. Bytes 5 to 7, which vary with the lens, are
+    ///   not read.
+    /// - Sony's distortion compensation from 0x2013, which the
+    ///   documentation calls DistortionCorrectionSetting, one LONG: 0 off
+    ///   and 2 auto. The raw SubIFD's own distortion code is not read: it
+    ///   is not the menu setting.
     ///
     /// `None` when:
     ///
     /// - the file records none, as every file of another maker does, and
     ///   every file of the D300S measured;
-    /// - the record is of another version, or of another length than 16
-    ///   bytes, or is not of type UNDEFINED, as the D3000's one SHORT;
-    /// - byte 4 holds a code the list lacks, such as 3.
+    /// - Nikon's record is of another version, or of another length than
+    ///   16 bytes, or is not of type UNDEFINED, as the D3000's one SHORT;
+    /// - the code is one its list lacks, such as Nikon's 3, or Sony's
+    ///   4294967295, which the documentation calls "n/a" and which the
+    ///   fixed-lens bodies write;
+    /// - Sony's tag is not one LONG.
     ///
     /// What files record is in the NEF notes on
-    /// [auto distortion control](https://github.com/kuolas/raw-files/blob/master/docs/formats/nef/makernote-and-metadata.md#811-picture-style-and-processing).
+    /// [auto distortion control](https://github.com/kuolas/raw-files/blob/master/docs/formats/nef/makernote-and-metadata.md#811-picture-style-and-processing)
+    /// and the ARW notes on
+    /// [the lens compensations](https://github.com/kuolas/raw-files/blob/master/docs/formats/arw/makernote-and-metadata.md#911-picture-style-and-processing).
     ///
     /// # Examples
     ///
     /// ```no_run
-    /// use raw_files::{AutoDistortionControl, CameraFile, DistortionCorrection};
+    /// use raw_files::{AutoDistortionControl, CameraFile, DistortionCorrection, LensCompensation};
     ///
     /// # fn main() -> raw_files::Result<()> {
-    /// let file = CameraFile::open("photo.nef")?;
+    /// let file = CameraFile::open("photo.arw")?;
     /// if let Some(correction) = file.metadata().camera_settings().distortion_correction() {
     ///     println!("{}: {}", correction.setting_name(), correction.name());
     ///     match correction {
-    ///         DistortionCorrection::AutoDistortionControl(AutoDistortionControl::Off) => {
+    ///         DistortionCorrection::AutoDistortionControl(AutoDistortionControl::Off)
+    ///         | DistortionCorrection::DistortionCompensation(LensCompensation::Off) => {
     ///             println!("the lines left as the lens drew them");
     ///         }
     ///         _ => {}
@@ -1630,6 +1662,46 @@ impl CameraSettings {
     /// ```
     pub fn distortion_correction(&self) -> Option<DistortionCorrection> {
         self.distortion_correction
+    }
+
+    /// Whether Sony's camera corrected the color fringes toward the
+    /// picture's corners, the lens's chromatic aberration: its menu's Lens
+    /// Comp.: Chro. Aber., such as [`Auto`](LensCompensation::Auto).
+    /// Nikon records no such setting in a plain tag.
+    ///
+    /// Read from Sony's MakerNote, in a raw file and a JPEG alike, from
+    /// 0x2012, which ExifTool's documentation calls
+    /// LateralChromaticAberration, one LONG, by the list the documentation
+    /// gives, read whole, since files hold part of it: 0 off and 2 auto.
+    /// The raw SubIFD's own chromatic aberration code is not read: it is
+    /// not the menu setting.
+    ///
+    /// `None` when:
+    ///
+    /// - the file records none, as every file of another maker does;
+    /// - the code is one its list lacks, such as 4294967295, which the
+    ///   documentation calls "n/a" and which the fixed-lens bodies write;
+    /// - the tag is not one LONG.
+    ///
+    /// What files record is in the ARW notes on
+    /// [the lens compensations](https://github.com/kuolas/raw-files/blob/master/docs/formats/arw/makernote-and-metadata.md#911-picture-style-and-processing).
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use raw_files::{CameraFile, LensCompensation};
+    ///
+    /// # fn main() -> raw_files::Result<()> {
+    /// let file = CameraFile::open("photo.arw")?;
+    /// let settings = file.metadata().camera_settings();
+    /// if settings.chromatic_aberration_compensation() == Some(LensCompensation::Auto) {
+    ///     println!("color fringes corrected");
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn chromatic_aberration_compensation(&self) -> Option<LensCompensation> {
+        self.chromatic_aberration_compensation
     }
 
     /// Sets the white balance, in place of the one it had;
@@ -1933,6 +2005,19 @@ impl CameraSettings {
     #[must_use]
     pub fn with_distortion_correction(mut self, correction: DistortionCorrection) -> Self {
         self.distortion_correction = Some(correction);
+        self
+    }
+
+    /// Sets the chromatic aberration compensation, in place of any set
+    /// before;
+    /// [`chromatic_aberration_compensation`](Self::chromatic_aberration_compensation)
+    /// reads it.
+    #[must_use]
+    pub fn with_chromatic_aberration_compensation(
+        mut self,
+        compensation: LensCompensation,
+    ) -> Self {
+        self.chromatic_aberration_compensation = Some(compensation);
         self
     }
 }
@@ -5988,7 +6073,9 @@ impl fmt::Display for HighIsoNoiseReduction {
 /// keeps its own type:
 ///
 /// - [`VignetteControl`](Self::VignetteControl), Nikon's vignette
-///   control.
+///   control;
+/// - [`ShadingCompensation`](Self::ShadingCompensation), Sony's shading
+///   compensation, one of its three [`LensCompensation`]s.
 ///
 /// [`setting_name`](Self::setting_name) gives the maker's word for the
 /// setting, for a viewer's label, and [`name`](Self::name) the step's
@@ -6003,43 +6090,56 @@ impl fmt::Display for HighIsoNoiseReduction {
 ///
 /// # Examples
 ///
-/// A maker's setting, labeled for a viewer and read by its variant:
+/// Each maker's setting, labeled for a viewer and read by its variant:
 ///
 /// ```
-/// use raw_files::{VignetteControl, VignettingCorrection};
+/// use raw_files::{LensCompensation, VignetteControl, VignettingCorrection};
 ///
 /// let nikon = VignettingCorrection::from(VignetteControl::Normal);
-/// println!("{}: {}", nikon.setting_name(), nikon.name());
-/// let corrected = match nikon {
-///     VignettingCorrection::VignetteControl(step) => step != VignetteControl::Off,
-///     _ => false,
-/// };
-/// assert!(corrected);
+/// let sony = VignettingCorrection::from(LensCompensation::Auto);
+///
+/// for correction in [nikon, sony] {
+///     println!("{}: {}", correction.setting_name(), correction.name());
+///     let corrected = match correction {
+///         VignettingCorrection::VignetteControl(step) => step != VignetteControl::Off,
+///         VignettingCorrection::ShadingCompensation(compensation) => {
+///             compensation != LensCompensation::Off
+///         }
+///         _ => false,
+///     };
+///     assert!(corrected);
+/// }
 /// assert_eq!(nikon.setting_name(), "Vignette control");
 /// assert_eq!(nikon.name(), "Normal");
+/// assert_eq!(sony.setting_name(), "Shading Comp.");
+/// assert_eq!(sony.name(), "Auto");
 /// ```
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum VignettingCorrection {
     /// Nikon's vignette control.
     VignetteControl(VignetteControl),
+    /// Sony's shading compensation.
+    ShadingCompensation(LensCompensation),
 }
 
 impl VignettingCorrection {
     /// The maker's word for the setting, for a viewer's label: "Vignette
-    /// control".
+    /// control", or "Shading Comp.", as the ILCE-7M2's manual writes it.
     pub fn setting_name(&self) -> &'static str {
         match self {
             VignettingCorrection::VignetteControl(_) => "Vignette control",
+            VignettingCorrection::ShadingCompensation(_) => "Shading Comp.",
         }
     }
 
     /// The step's name, whichever maker's setting it is, such as
     /// "Normal": the `name` of the variant's own type,
-    /// [`VignetteControl::name`].
+    /// [`VignetteControl::name`] or [`LensCompensation::name`].
     pub fn name(&self) -> &'static str {
         match self {
             VignettingCorrection::VignetteControl(step) => step.name(),
+            VignettingCorrection::ShadingCompensation(compensation) => compensation.name(),
         }
     }
 }
@@ -6117,7 +6217,9 @@ impl fmt::Display for VignetteControl {
 /// keeps its own type:
 ///
 /// - [`AutoDistortionControl`](Self::AutoDistortionControl), Nikon's
-///   auto distortion control.
+///   auto distortion control;
+/// - [`DistortionCompensation`](Self::DistortionCompensation), Sony's
+///   distortion compensation, one of its three [`LensCompensation`]s.
 ///
 /// [`setting_name`](Self::setting_name) gives the maker's word for the
 /// setting, for a viewer's label, and [`name`](Self::name) the choice's
@@ -6132,45 +6234,59 @@ impl fmt::Display for VignetteControl {
 ///
 /// # Examples
 ///
-/// A maker's setting, labeled for a viewer and read by its variant:
+/// Each maker's setting, labeled for a viewer and read by its variant:
 ///
 /// ```
-/// use raw_files::{AutoDistortionControl, DistortionCorrection};
+/// use raw_files::{AutoDistortionControl, DistortionCorrection, LensCompensation};
 ///
 /// let nikon = DistortionCorrection::from(AutoDistortionControl::On);
-/// println!("{}: {}", nikon.setting_name(), nikon.name());
-/// let corrected = match nikon {
-///     DistortionCorrection::AutoDistortionControl(control) => {
-///         control != AutoDistortionControl::Off
-///     }
-///     _ => false,
-/// };
-/// assert!(corrected);
+/// let sony = DistortionCorrection::from(LensCompensation::Off);
+///
+/// for correction in [nikon, sony] {
+///     println!("{}: {}", correction.setting_name(), correction.name());
+///     let corrected = match correction {
+///         DistortionCorrection::AutoDistortionControl(control) => {
+///             control != AutoDistortionControl::Off
+///         }
+///         DistortionCorrection::DistortionCompensation(compensation) => {
+///             compensation != LensCompensation::Off
+///         }
+///         _ => false,
+///     };
+///     println!("corrected: {corrected}");
+/// }
 /// assert_eq!(nikon.setting_name(), "Auto distortion control");
 /// assert_eq!(nikon.name(), "On");
+/// assert_eq!(sony.setting_name(), "Distortion Comp.");
+/// assert_eq!(sony.name(), "Off");
 /// ```
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum DistortionCorrection {
     /// Nikon's auto distortion control.
     AutoDistortionControl(AutoDistortionControl),
+    /// Sony's distortion compensation.
+    DistortionCompensation(LensCompensation),
 }
 
 impl DistortionCorrection {
     /// The maker's word for the setting, for a viewer's label: "Auto
-    /// distortion control".
+    /// distortion control", or "Distortion Comp.", as the ILCE-7M2's
+    /// manual writes it.
     pub fn setting_name(&self) -> &'static str {
         match self {
             DistortionCorrection::AutoDistortionControl(_) => "Auto distortion control",
+            DistortionCorrection::DistortionCompensation(_) => "Distortion Comp.",
         }
     }
 
     /// The choice's name, whichever maker's setting it is, such as "On":
     /// the `name` of the variant's own type,
-    /// [`AutoDistortionControl::name`].
+    /// [`AutoDistortionControl::name`] or [`LensCompensation::name`].
     pub fn name(&self) -> &'static str {
         match self {
             DistortionCorrection::AutoDistortionControl(control) => control.name(),
+            DistortionCorrection::DistortionCompensation(compensation) => compensation.name(),
         }
     }
 }
@@ -6232,6 +6348,78 @@ impl AutoDistortionControl {
 
 impl fmt::Display for AutoDistortionControl {
     /// Writes [`name`](AutoDistortionControl::name).
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.name())
+    }
+}
+
+impl From<LensCompensation> for VignettingCorrection {
+    /// Sony's lens compensation as a vignetting correction, its
+    /// [`ShadingCompensation`](VignettingCorrection::ShadingCompensation)
+    /// variant: of Sony's three, the shading compensation alone corrects
+    /// the vignetting.
+    fn from(compensation: LensCompensation) -> Self {
+        VignettingCorrection::ShadingCompensation(compensation)
+    }
+}
+
+impl From<LensCompensation> for DistortionCorrection {
+    /// Sony's lens compensation as a distortion correction, its
+    /// [`DistortionCompensation`](DistortionCorrection::DistortionCompensation)
+    /// variant: of Sony's three, the distortion compensation alone
+    /// corrects the distortion.
+    fn from(compensation: LensCompensation) -> Self {
+        DistortionCorrection::DistortionCompensation(compensation)
+    }
+}
+
+/// One of Sony's three lens compensations, which its menu groups as Lens
+/// Comp.: whether the camera corrected the lens's shading, its chromatic
+/// aberration or its distortion for the lens mounted, or that it was off.
+///
+/// The shading compensation is a [`VignettingCorrection`], and the
+/// distortion compensation a [`DistortionCorrection`]: Nikon has a
+/// setting for each of those. The chromatic aberration compensation,
+/// which Nikon records in no plain tag, is
+/// [`CameraSettings::chromatic_aberration_compensation`].
+///
+/// `LensCompensation` is `#[non_exhaustive]`, so match on it with a
+/// wildcard arm. It orders as its variants are listed, and a new variant
+/// is added after the existing ones, so an order once observed holds. Its
+/// [`name`](Self::name)s, which `Display` writes too, are "Off" and
+/// "Auto".
+///
+/// # Examples
+///
+/// ```
+/// use raw_files::LensCompensation;
+///
+/// assert_eq!(LensCompensation::Auto.name(), "Auto");
+/// assert_eq!(LensCompensation::Off.to_string(), "Off");
+/// assert!(LensCompensation::Off < LensCompensation::Auto);
+/// ```
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[non_exhaustive]
+pub enum LensCompensation {
+    /// The compensation off.
+    Off,
+    /// The camera compensated as the lens mounted needs.
+    Auto,
+}
+
+impl LensCompensation {
+    /// The choice's name, for an information panel, such as "Auto"; the
+    /// type's docs list them all.
+    pub fn name(self) -> &'static str {
+        match self {
+            LensCompensation::Off => "Off",
+            LensCompensation::Auto => "Auto",
+        }
+    }
+}
+
+impl fmt::Display for LensCompensation {
+    /// Writes [`name`](LensCompensation::name).
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(self.name())
     }
@@ -6323,6 +6511,7 @@ mod tests {
             distortion_correction: Some(DistortionCorrection::AutoDistortionControl(
                 AutoDistortionControl::OnUnderwater,
             )),
+            chromatic_aberration_compensation: Some(LensCompensation::Auto),
         }
     }
 
@@ -6409,6 +6598,7 @@ mod tests {
         assert_eq!(settings.multi_frame_noise_reduction(), None);
         assert_eq!(settings.vignetting_correction(), None);
         assert_eq!(settings.distortion_correction(), None);
+        assert_eq!(settings.chromatic_aberration_compensation(), None);
 
         let control = PictureControl::default();
         assert_eq!(control.name(), None);
@@ -6549,6 +6739,10 @@ mod tests {
             Some(DistortionCorrection::AutoDistortionControl(
                 AutoDistortionControl::OnUnderwater
             ))
+        );
+        assert_eq!(
+            settings.chromatic_aberration_compensation(),
+            Some(LensCompensation::Auto)
         );
 
         let control = full_control();
@@ -6893,6 +7087,15 @@ mod tests {
                         ..start.clone()
                     },
                 ),
+                (
+                    start
+                        .clone()
+                        .with_chromatic_aberration_compensation(LensCompensation::Off),
+                    CameraSettings {
+                        chromatic_aberration_compensation: Some(LensCompensation::Off),
+                        ..start.clone()
+                    },
+                ),
             ];
             for (place, (built, expected)) in cases.into_iter().enumerate() {
                 assert_eq!(built, expected, "builder {place} from {start:?}");
@@ -7159,6 +7362,15 @@ mod tests {
             assert_eq!(correction.setting_name(), "Vignette control");
             assert_eq!(correction.name(), step.name());
         }
+        for compensation in all_lens_compensations() {
+            let correction = VignettingCorrection::from(compensation);
+            assert_eq!(
+                correction,
+                VignettingCorrection::ShadingCompensation(compensation)
+            );
+            assert_eq!(correction.setting_name(), "Shading Comp.");
+            assert_eq!(correction.name(), compensation.name());
+        }
     }
 
     #[test]
@@ -7171,6 +7383,15 @@ mod tests {
             );
             assert_eq!(correction.setting_name(), "Auto distortion control");
             assert_eq!(correction.name(), control.name());
+        }
+        for compensation in all_lens_compensations() {
+            let correction = DistortionCorrection::from(compensation);
+            assert_eq!(
+                correction,
+                DistortionCorrection::DistortionCompensation(compensation)
+            );
+            assert_eq!(correction.setting_name(), "Distortion Comp.");
+            assert_eq!(correction.name(), compensation.name());
         }
     }
 
@@ -7438,7 +7659,8 @@ mod tests {
             .with_vignetting_correction(VignettingCorrection::from(VignetteControl::Low))
             .with_distortion_correction(DistortionCorrection::from(
                 AutoDistortionControl::OnUnderwater,
-            ));
+            ))
+            .with_chromatic_aberration_compensation(LensCompensation::Auto);
         assert_eq!(settings, full_settings());
     }
 
@@ -7480,7 +7702,8 @@ mod tests {
             .with_long_exposure_noise_reduction(false)
             .with_multi_frame_noise_reduction(true)
             .with_vignetting_correction(VignetteControl::Normal.into())
-            .with_distortion_correction(AutoDistortionControl::On.into());
+            .with_distortion_correction(AutoDistortionControl::On.into())
+            .with_chromatic_aberration_compensation(LensCompensation::Off);
         // Every value of `earlier` differs from the full record's, so each
         // builder below has one to replace.
         let full = full_settings();
@@ -7520,7 +7743,8 @@ mod tests {
             .with_long_exposure_noise_reduction(true)
             .with_multi_frame_noise_reduction(false)
             .with_vignetting_correction(VignetteControl::Low.into())
-            .with_distortion_correction(AutoDistortionControl::OnUnderwater.into());
+            .with_distortion_correction(AutoDistortionControl::OnUnderwater.into())
+            .with_chromatic_aberration_compensation(LensCompensation::Auto);
         assert_eq!(settings, full);
 
         let hdr = Hdr::on()
@@ -8248,6 +8472,17 @@ mod tests {
         all
     }
 
+    fn all_lens_compensations() -> [LensCompensation; 2] {
+        use LensCompensation::*;
+        let all = [Off, Auto];
+        for compensation in all {
+            match compensation {
+                Off | Auto => {}
+            }
+        }
+        all
+    }
+
     #[test]
     fn every_name_is_the_one_documented_and_display_writes_it() {
         // The names are stable once released: a program may show or store
@@ -8560,6 +8795,11 @@ mod tests {
             AutoDistortionControl::name,
             &["Off", "On", "On (underwater)"],
         );
+        assert_names(
+            &all_lens_compensations(),
+            LensCompensation::name,
+            &["Off", "Auto"],
+        );
     }
 
     #[test]
@@ -8601,6 +8841,7 @@ mod tests {
         assert_ordered(&all_high_iso_noise_reductions());
         assert_ordered(&all_vignette_controls());
         assert_ordered(&all_auto_distortion_controls());
+        assert_ordered(&all_lens_compensations());
     }
 
     #[test]

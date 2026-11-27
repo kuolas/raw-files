@@ -58,9 +58,10 @@ use std::io::{Read, Seek};
 use super::{MakerNoteBlock, Picture, Reader, checked_color_temperature};
 use crate::camera_settings::{
     AutoHdr, AutoHdrExposureDifference, Bracketing, CameraSettings, CreativeLook, CreativeStyle,
-    DRangeOptimizer, DynamicRangeOptimization, FlashSource, FocusAreaMode, FocusMode,
-    HighDynamicRange, HighIsoNoiseReduction, JpegQuality, PictureStyle, RawCompression,
-    ReleaseMode, Stabilization, WhiteBalanceFineTune, WhiteBalanceMode,
+    DRangeOptimizer, DistortionCorrection, DynamicRangeOptimization, FlashSource, FocusAreaMode,
+    FocusMode, HighDynamicRange, HighIsoNoiseReduction, JpegQuality, LensCompensation,
+    PictureStyle, RawCompression, ReleaseMode, Stabilization, VignettingCorrection,
+    WhiteBalanceFineTune, WhiteBalanceMode,
 };
 use crate::container::tiff::{Ifd, Rule, Tree};
 use crate::entries::{Directory, Entries, Lookup};
@@ -166,6 +167,23 @@ const SATURATION: u16 = 0x2005;
 /// Creative Style and 4 under a Creative Look.
 const SHARPNESS: u16 = 0x2006;
 
+/// The Sony MakerNote tag that records the shading compensation, one of
+/// the menu's three lens compensations (0x2011, which ExifTool's
+/// documentation calls VignettingCorrection): one LONG, 0 off and 2 auto;
+/// 4294967295, "n/a", which the fixed-lens bodies write, records none.
+const SHADING_COMPENSATION: u16 = 0x2011;
+
+/// The Sony MakerNote tag that records the chromatic aberration
+/// compensation (0x2012, which the documentation calls
+/// LateralChromaticAberration): one LONG, with the codes of
+/// [`SHADING_COMPENSATION`].
+const CHROMATIC_ABERRATION_COMPENSATION: u16 = 0x2012;
+
+/// The Sony MakerNote tag that records the distortion compensation
+/// (0x2013, which the documentation calls DistortionCorrectionSetting):
+/// one LONG, with the codes of [`SHADING_COMPENSATION`].
+const DISTORTION_COMPENSATION: u16 = 0x2013;
+
 /// The Sony MakerNote tags that record a Creative Look's five further
 /// values, 0x2032 to 0x2036, which ExifTool's documentation names
 /// Shadows, Highlights, Fade, SharpnessRange and Clarity. Their presence
@@ -264,6 +282,12 @@ mod rules {
         Held::new(super::LONG_EXPOSURE_NOISE_REDUCTION, SLONG);
     pub(super) const MULTI_FRAME_NOISE_REDUCTION: Held<[u32; 1]> =
         Held::new(super::MULTI_FRAME_NOISE_REDUCTION, LONG);
+    pub(super) const SHADING_COMPENSATION: Held<[u32; 1]> =
+        Held::new(super::SHADING_COMPENSATION, LONG);
+    pub(super) const CHROMATIC_ABERRATION_COMPENSATION: Held<[u32; 1]> =
+        Held::new(super::CHROMATIC_ABERRATION_COMPENSATION, LONG);
+    pub(super) const DISTORTION_COMPENSATION: Held<[u32; 1]> =
+        Held::new(super::DISTORTION_COMPENSATION, LONG);
     pub(super) const IMAGE_STABILIZATION: Held<[u32; 1]> =
         Held::new(super::IMAGE_STABILIZATION, LONG);
     pub(super) const RELEASE_MODE: Held<[u32; 1]> = Held::new(super::RELEASE_MODE, SHORT);
@@ -614,6 +638,12 @@ fn area<R: Read + Seek>(src: &mut Source<R>, makernote: &MakerNote) -> Result<Op
 ///   camera took the dark frame, is not read.
 /// - **The multi-frame noise reduction** is MultiFrameNoiseReduction's
 ///   ([`multi_frame_noise_reduction`]).
+/// - **The vignetting correction**, **the chromatic aberration
+///   compensation** and **the distortion correction** are the three lens
+///   compensations that 0x2011, 0x2012 and 0x2013 record
+///   ([`lens_compensation`]), in a raw file and a JPEG alike. The raw
+///   SubIFD's own correction codes are not read: they are not the menu's
+///   settings.
 ///
 /// The shutter used, the image area and the raw image size stay as
 /// `settings` has them, `None`. Sony records the first two only in
@@ -690,6 +720,17 @@ fn camera_settings<R: Read + Seek>(
     settings.multi_frame_noise_reduction = ifd
         .held(rules::MULTI_FRAME_NOISE_REDUCTION)
         .and_then(|[code]| multi_frame_noise_reduction(code));
+    settings.vignetting_correction = ifd
+        .held(rules::SHADING_COMPENSATION)
+        .and_then(|[code]| lens_compensation(code))
+        .map(VignettingCorrection::ShadingCompensation);
+    settings.chromatic_aberration_compensation = ifd
+        .held(rules::CHROMATIC_ABERRATION_COMPENSATION)
+        .and_then(|[code]| lens_compensation(code));
+    settings.distortion_correction = ifd
+        .held(rules::DISTORTION_COMPENSATION)
+        .and_then(|[code]| lens_compensation(code))
+        .map(DistortionCorrection::DistortionCompensation);
     if let Some(flash) = settings.flash.as_mut() {
         if let Some(source) = ifd
             .held(rules::FLASH_ACTION)
@@ -884,6 +925,21 @@ fn multi_frame_noise_reduction(code: u32) -> Option<bool> {
     match code {
         0 => Some(false),
         1 => Some(true),
+        _ => None,
+    }
+}
+
+/// The lens compensation that a `code` of 0x2011, 0x2012 or 0x2013
+/// records, in the list ExifTool's published documentation gives for the
+/// three, read whole, since files hold part of it (ARW notes, section
+/// 9.11): 0 [`Off`](LensCompensation::Off) and 2
+/// [`Auto`](LensCompensation::Auto), each on files. `None` for every other
+/// code, the documentation's 4294967295, "n/a", among them, which the
+/// fixed-lens bodies write.
+fn lens_compensation(code: u32) -> Option<LensCompensation> {
+    match code {
+        0 => Some(LensCompensation::Off),
+        2 => Some(LensCompensation::Auto),
         _ => None,
     }
 }
@@ -3387,7 +3443,9 @@ mod tests {
     /// flash not fired and its compensation at zero, as a raw file written
     /// with a JPEG beside it, whose JPEG quality the body records in no
     /// plain tag, under a Creative Style with its contrast, saturation and
-    /// sharpness at 0.
+    /// sharpness at 0, with the shading and chromatic aberration
+    /// compensations on auto and the distortion compensation off, as most
+    /// of its files hold them.
     ///
     /// The ILCE-7M2 records no ExposureStandardAdjustment and no Quality2,
     /// so neither is added: the tests of the exposure fine-tuning and the
@@ -3416,7 +3474,10 @@ mod tests {
             .long(ifd, AUTO_HDR, &[0])
             .short(ifd, HIGH_ISO_NOISE_REDUCTION, &[0])
             .long(ifd, LONG_EXPOSURE_NOISE_REDUCTION, &[1])
-            .long(ifd, MULTI_FRAME_NOISE_REDUCTION, &[0]);
+            .long(ifd, MULTI_FRAME_NOISE_REDUCTION, &[0])
+            .long(ifd, SHADING_COMPENSATION, &[2])
+            .long(ifd, CHROMATIC_ABERRATION_COMPENSATION, &[2])
+            .long(ifd, DISTORTION_COMPENSATION, &[0]);
     }
 
     /// What [`settings_tags`] gives, from `settings`, for an E-mount body
@@ -3427,8 +3488,9 @@ mod tests {
     /// The high ISO noise reduction's 0, which a raw file holds where its
     /// JPEG holds the step, gives none. The long exposure noise reduction
     /// is on, as the ILCE-7M2's 1 records it, and the multi-frame one
-    /// off. FlashAction's 0 names no source, and
-    /// Quality's 6 and JPEGQuality's 65535 no JPEG quality.
+    /// off. The shading and chromatic aberration compensations are auto,
+    /// and the distortion compensation off. FlashAction's 0 names no
+    /// source, and Quality's 6 and JPEGQuality's 65535 no JPEG quality.
     fn with_settings_tags(settings: CameraSettings) -> CameraSettings {
         let white_balance = WhiteBalance::default()
             .with_mode(WhiteBalanceMode::ColorTemperature)
@@ -3451,7 +3513,10 @@ mod tests {
             .with_dynamic_range_optimization(DRangeOptimizer::Auto.into())
             .with_high_dynamic_range(AutoHdr::off().into())
             .with_long_exposure_noise_reduction(true)
-            .with_multi_frame_noise_reduction(false);
+            .with_multi_frame_noise_reduction(false)
+            .with_vignetting_correction(LensCompensation::Auto.into())
+            .with_chromatic_aberration_compensation(LensCompensation::Auto)
+            .with_distortion_correction(LensCompensation::Off.into());
         if let Some(flash) = settings.flash {
             let zero = SignedRational::new(0, 10).expect("a denominator of 10");
             settings = settings.with_flash(flash.with_compensation(zero));
@@ -4469,6 +4534,112 @@ mod tests {
                 );
                 assert_eq!(
                     settings.multi_frame_noise_reduction, None,
+                    "{order:?}, {place}"
+                );
+                assert_eq!(
+                    settings.white_balance.mode,
+                    Some(WhiteBalanceMode::Daylight),
+                    "{order:?}, {place}"
+                );
+            }
+        }
+    }
+
+    // The lens compensations.
+
+    /// Each code of the lens compensations' list with what it gives, and
+    /// codes the list lacks, the fixed-lens bodies' "n/a" among them.
+    const LENS_COMPENSATIONS: [(u32, Option<LensCompensation>); 5] = [
+        (0, Some(LensCompensation::Off)),
+        (2, Some(LensCompensation::Auto)),
+        (1, None),
+        (3, None),
+        (4294967295, None),
+    ];
+
+    #[test]
+    fn each_lens_compensation_code_gives_its_value_in_a_raw_file_and_a_jpeg() {
+        for order in ORDERS {
+            for picture in [Picture::Raw, Picture::Jpeg] {
+                for (code, expected) in LENS_COMPENSATIONS {
+                    // Each tag on its own, so that a tag read for another
+                    // is caught.
+                    let shading = picture_settings_of(order, picture, |builder, ifd| {
+                        builder.long(ifd, SHADING_COMPENSATION, &[code]);
+                    });
+                    assert_eq!(
+                        (
+                            shading.vignetting_correction,
+                            shading.chromatic_aberration_compensation,
+                            shading.distortion_correction
+                        ),
+                        (
+                            expected.map(VignettingCorrection::ShadingCompensation),
+                            None,
+                            None
+                        ),
+                        "{order:?}, {picture:?}, shading {code}"
+                    );
+                    let chromatic = picture_settings_of(order, picture, |builder, ifd| {
+                        builder.long(ifd, CHROMATIC_ABERRATION_COMPENSATION, &[code]);
+                    });
+                    assert_eq!(
+                        (
+                            chromatic.vignetting_correction,
+                            chromatic.chromatic_aberration_compensation,
+                            chromatic.distortion_correction
+                        ),
+                        (None, expected, None),
+                        "{order:?}, {picture:?}, chromatic aberration {code}"
+                    );
+                    let distortion = picture_settings_of(order, picture, |builder, ifd| {
+                        builder.long(ifd, DISTORTION_COMPENSATION, &[code]);
+                    });
+                    assert_eq!(
+                        (
+                            distortion.vignetting_correction,
+                            distortion.chromatic_aberration_compensation,
+                            distortion.distortion_correction
+                        ),
+                        (
+                            None,
+                            None,
+                            expected.map(DistortionCorrection::DistortionCompensation)
+                        ),
+                        "{order:?}, {picture:?}, distortion {code}"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn a_lens_compensation_of_another_shape_gives_none_and_costs_nothing_else() {
+        let tags = [
+            SHADING_COMPENSATION,
+            CHROMATIC_ABERRATION_COMPENSATION,
+            DISTORTION_COMPENSATION,
+        ];
+        for order in ORDERS {
+            // One SHORT, two LONGs, and one SLONG, of each tag.
+            for place in 0..3 {
+                let settings = settings_of(order, |builder, ifd| {
+                    for tag in tags {
+                        match place {
+                            0 => builder.short(ifd, tag, &[2]),
+                            1 => builder.long(ifd, tag, &[2, 2]),
+                            _ => builder.slong(ifd, tag, &[2]),
+                        };
+                    }
+                    builder.long(ifd, WHITE_BALANCE, &[16]);
+                });
+                assert_eq!(
+                    (
+                        settings.vignetting_correction,
+                        settings.chromatic_aberration_compensation,
+                        settings.distortion_correction
+                    ),
+                    (None, None, None),
                     "{order:?}, {place}"
                 );
                 assert_eq!(

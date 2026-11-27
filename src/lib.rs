@@ -426,7 +426,7 @@ pub use camera_settings::{
     DistortionCorrection, DynamicRangeOptimization, ExposureProgram, Flash, FlashControl,
     FlashMode, FlashSource, FlashSync, FluorescentLamp, FocusAreaMode, FocusMode, GainControl, Hdr,
     HdrExposureDifferential, HdrSmoothing, HdrStrength, HighDynamicRange, HighIsoNoiseReduction,
-    ImageArea, JpegCompression, JpegQuality, MeteringMode, PictureControl,
+    ImageArea, JpegCompression, JpegQuality, LensCompensation, MeteringMode, PictureControl,
     PictureControlAdjustment, PictureControlFilterEffect, PictureControlToning,
     PictureControlValue, PictureStyle, RawCompression, RawImageSize, ReleaseMode, Saturation,
     SceneCaptureType, Sharpness, Shutter, Stabilization, StabilizationMode, VignetteControl,

@@ -471,6 +471,9 @@ fn read_metadata(metadata: &Metadata) {
     if let Some(correction) = settings.distortion_correction() {
         read_distortion_correction(correction);
     }
+    let _ = settings
+        .chromatic_aberration_compensation()
+        .map(|compensation| compensation.to_string());
     let tiny = Size {
         width: 1,
         height: 1,
@@ -625,6 +628,9 @@ fn read_vignetting_correction(correction: VignettingCorrection) {
         VignettingCorrection::VignetteControl(step) => {
             let _ = step.to_string();
         }
+        VignettingCorrection::ShadingCompensation(compensation) => {
+            let _ = compensation.to_string();
+        }
     }
 }
 
@@ -635,6 +641,9 @@ fn read_distortion_correction(correction: DistortionCorrection) {
     match correction {
         DistortionCorrection::AutoDistortionControl(control) => {
             let _ = control.to_string();
+        }
+        DistortionCorrection::DistortionCompensation(compensation) => {
+            let _ = compensation.to_string();
         }
     }
 }

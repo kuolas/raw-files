@@ -229,7 +229,8 @@ const NIKON_COMPRESSED: u32 = 34713;
 ///   DistortInfo records ([`auto_distortion_control`]), in a raw file and
 ///   a JPEG alike.
 ///
-/// Nikon records no multi-frame noise reduction, so it stays `None`.
+/// Nikon records no multi-frame noise reduction, and no chromatic
+/// aberration compensation in a plain tag, so each stays `None`.
 ///
 /// Nikon records no electronic front curtain setting, so it stays as
 /// `settings` has it, `None`. The exposure program and the metering mode
