@@ -12,7 +12,8 @@
 //! and how the camera processed the picture: the directions of contrast,
 //! saturation and sharpness, the scene capture type, custom rendering,
 //! gain control, the maker's picture style, its dynamic range
-//! optimization and its high dynamic range setting.
+//! optimization and its high dynamic range setting, and the high ISO
+//! noise reduction.
 //! [`CameraSettings`] holds them all, and
 //! [`Metadata::camera_settings`](crate::Metadata::camera_settings) gives
 //! them for a file. [`WhiteBalance`], [`WhiteBalanceFineTune`], [`Flash`],
@@ -51,7 +52,7 @@
 //!   file, the raw image size and how a compressed raw is compressed; and
 //!   in a JPEG, its quality and the choice between size priority and
 //!   optimal quality; the Picture Control, Nikon's picture style; Active
-//!   D-Lighting; and HDR.
+//!   D-Lighting; HDR; and the high ISO noise reduction.
 //! - Sony's MakerNote, in ARW files and their family and in the JPEGs of
 //!   Sony cameras, gives the white balance setting in place of Exif's,
 //!   with its fine-tuning and the color temperature of a chosen color
@@ -60,9 +61,10 @@
 //!   the stabilization, without a mode, the exposure fine-tuning, the
 //!   release mode and bracketing, the flash's source when it is external
 //!   and its compensation, the JPEG quality, the Creative Style or
-//!   Creative Look, Sony's picture style, the D-Range Optimizer and Auto
-//!   HDR. A Sony raw file says how a compressed raw is compressed in codes
-//!   of Sony's own.
+//!   Creative Look, Sony's picture style, the D-Range Optimizer, Auto HDR,
+//!   and the high ISO noise reduction, which a raw file's 0 does not give.
+//!   A Sony raw file says how a compressed raw is compressed in codes of
+//!   Sony's own.
 //!
 //! Where a Nikon MakerNote records its crop as "off", or holds no crop,
 //! raw-files gives the body's sensor format from a table of its own, for
@@ -102,7 +104,8 @@ use crate::rational::{Rational, SignedRational};
 /// directions of contrast, saturation and sharpness it processed the
 /// picture in, the scene capture type, custom rendering, gain control, the
 /// maker's picture style, dynamic range optimization and high dynamic
-/// range setting, for a viewer's information panel beside the exposure.
+/// range setting, and the high ISO noise reduction, for a viewer's
+/// information panel beside the exposure.
 ///
 /// Every value is `None` when the file does not record it or records it in
 /// a way that cannot be read, such as a code that no variant names. A
@@ -218,6 +221,7 @@ pub struct CameraSettings {
     pub(crate) picture_style: Option<PictureStyle>,
     pub(crate) dynamic_range_optimization: Option<DynamicRangeOptimization>,
     pub(crate) high_dynamic_range: Option<HighDynamicRange>,
+    pub(crate) high_iso_noise_reduction: Option<HighIsoNoiseReduction>,
 }
 
 impl CameraSettings {
@@ -1390,6 +1394,56 @@ impl CameraSettings {
         self.high_dynamic_range
     }
 
+    /// How strongly the camera reduced the noise of pictures taken at
+    /// high sensitivities, the setting both makers call High ISO NR, such
+    /// as [`Normal`](HighIsoNoiseReduction::Normal). One list holds both
+    /// makers' steps ([`HighIsoNoiseReduction`]).
+    ///
+    /// Read from the maker's MakerNote, by the lists ExifTool's
+    /// documentation gives, each read whole, since files hold part of it:
+    ///
+    /// - Nikon's from HighISONoiseReduction (0x00B1), one SHORT, in a raw
+    ///   file and a JPEG alike: 0 off, 1 minimal, 2 low, 3 medium low, 4
+    ///   normal, 5 medium high and 6 high.
+    /// - Sony's from HighISONoiseReduction (0x2009), one SHORT: 0 off, 1
+    ///   low, 2 normal, 3 high and 256 auto. In a raw file its 0 gives
+    ///   `None`: on every shot of an ILCE-7M2 measured with both files, the
+    ///   raw file holds 0 where its JPEG holds the step, so a raw file's 0
+    ///   does not say the setting. A raw file's other codes are read.
+    ///
+    /// `None` when:
+    ///
+    /// - the file records none, as every file of another maker does;
+    /// - the code is one its list lacks, such as Sony's 65535, which the
+    ///   documentation calls "n/a";
+    /// - a Sony raw file holds 0;
+    /// - the tag is not one SHORT.
+    ///
+    /// Sony's DSC bodies record a second tag, 0xB050, with another list;
+    /// it is not read. What files record is in the NEF notes on
+    /// [the high ISO noise reduction](https://github.com/kuolas/raw-files/blob/master/docs/formats/nef/makernote-and-metadata.md#811-picture-style-and-processing)
+    /// and the ARW notes on
+    /// [the same](https://github.com/kuolas/raw-files/blob/master/docs/formats/arw/makernote-and-metadata.md#911-picture-style-and-processing).
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use raw_files::{CameraFile, HighIsoNoiseReduction};
+    ///
+    /// # fn main() -> raw_files::Result<()> {
+    /// let file = CameraFile::open("photo.nef")?;
+    /// match file.metadata().camera_settings().high_iso_noise_reduction() {
+    ///     Some(HighIsoNoiseReduction::Off) => println!("high ISO NR: off"),
+    ///     Some(step) => println!("high ISO NR: {step}"),
+    ///     None => {}
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn high_iso_noise_reduction(&self) -> Option<HighIsoNoiseReduction> {
+        self.high_iso_noise_reduction
+    }
+
     /// Sets the white balance, in place of the one it had;
     /// [`white_balance`](Self::white_balance) reads it.
     #[must_use]
@@ -1646,6 +1700,15 @@ impl CameraSettings {
     #[must_use]
     pub fn with_high_dynamic_range(mut self, setting: HighDynamicRange) -> Self {
         self.high_dynamic_range = Some(setting);
+        self
+    }
+
+    /// Sets the high ISO noise reduction, in place of any set before;
+    /// [`high_iso_noise_reduction`](Self::high_iso_noise_reduction) reads
+    /// it.
+    #[must_use]
+    pub fn with_high_iso_noise_reduction(mut self, step: HighIsoNoiseReduction) -> Self {
+        self.high_iso_noise_reduction = Some(step);
         self
     }
 }
@@ -5602,6 +5665,97 @@ pub enum AutoHdrExposureDifference {
     Ev(Rational),
 }
 
+/// How strongly the camera reduced the noise of pictures taken at high
+/// sensitivities, in its maker's steps, which one list holds for both
+/// makers, as their menus name the setting alike, High ISO NR:
+///
+/// - Nikon's steps: [`Off`](Self::Off), [`Minimal`](Self::Minimal),
+///   [`Low`](Self::Low), [`MediumLow`](Self::MediumLow),
+///   [`Normal`](Self::Normal), [`MediumHigh`](Self::MediumHigh) and
+///   [`High`](Self::High);
+/// - Sony's steps: [`Off`](Self::Off), [`Low`](Self::Low),
+///   [`Normal`](Self::Normal), [`High`](Self::High) and
+///   [`Auto`](Self::Auto).
+///
+/// The D600's manual offers high, normal, low and off, and says that under
+/// off the camera still reduces noise at high sensitivities, by less than
+/// under low. Sony's SLT-A99 manual offers normal, low and off. Nikon's
+/// minimal step follows off as the documentation numbers Nikon's codes, 0
+/// and 1; which of the two reduces more is not known.
+///
+/// A maker's code is named where it is in a list that its published
+/// documentation gives and that the measured files agree with, as the
+/// [decision to read the metadata from the standard tags](https://github.com/kuolas/raw-files/blob/master/docs/architecture-decisions/adr011-metadata-from-standard-tags.md)
+/// says; any other code gives `None`.
+///
+/// `HighIsoNoiseReduction` is `#[non_exhaustive]`, so match on it with a
+/// wildcard arm. The steps are listed from the weakest to the strongest,
+/// as the documentation numbers each maker's codes, then auto, so that
+/// each maker's ladder runs in that order, and
+/// `HighIsoNoiseReduction` orders as they are listed. A new step is added
+/// where its maker's ladder puts it, between the existing ones if need
+/// be, so two steps keep the order once observed between them. Across
+/// makers the order is only the list's: Nikon's
+/// [`Normal`](Self::Normal) and Sony's are one variant, but not the same
+/// strength. Its [`name`](Self::name)s, which `Display` writes too, are
+/// "Off", "Minimal", "Low", "Medium low", "Normal", "Medium high", "High"
+/// and "Auto".
+///
+/// # Examples
+///
+/// ```
+/// use raw_files::HighIsoNoiseReduction;
+///
+/// assert_eq!(HighIsoNoiseReduction::MediumLow.name(), "Medium low");
+/// assert_eq!(HighIsoNoiseReduction::Normal.to_string(), "Normal");
+/// assert!(HighIsoNoiseReduction::Low < HighIsoNoiseReduction::High);
+/// ```
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[non_exhaustive]
+pub enum HighIsoNoiseReduction {
+    /// Nikon's and Sony's off.
+    Off,
+    /// Nikon's minimal step, which its files of the D3200, the D600 and
+    /// the D7100 hold beside off; what sets the two apart is not known.
+    Minimal,
+    /// Nikon's and Sony's low step.
+    Low,
+    /// Nikon's medium low step.
+    MediumLow,
+    /// Nikon's and Sony's normal step.
+    Normal,
+    /// Nikon's medium high step.
+    MediumHigh,
+    /// Nikon's and Sony's high step.
+    High,
+    /// Sony's auto: the camera chose the step.
+    Auto,
+}
+
+impl HighIsoNoiseReduction {
+    /// The step's name, for an information panel, such as "Medium low";
+    /// the type's docs list them all.
+    pub fn name(self) -> &'static str {
+        match self {
+            HighIsoNoiseReduction::Off => "Off",
+            HighIsoNoiseReduction::Minimal => "Minimal",
+            HighIsoNoiseReduction::Low => "Low",
+            HighIsoNoiseReduction::MediumLow => "Medium low",
+            HighIsoNoiseReduction::Normal => "Normal",
+            HighIsoNoiseReduction::MediumHigh => "Medium high",
+            HighIsoNoiseReduction::High => "High",
+            HighIsoNoiseReduction::Auto => "Auto",
+        }
+    }
+}
+
+impl fmt::Display for HighIsoNoiseReduction {
+    /// Writes [`name`](HighIsoNoiseReduction::name).
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.name())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -5679,6 +5833,7 @@ mod tests {
                 ActiveDLighting::High,
             )),
             high_dynamic_range: Some(HighDynamicRange::Hdr(full_hdr())),
+            high_iso_noise_reduction: Some(HighIsoNoiseReduction::MediumHigh),
         }
     }
 
@@ -5760,6 +5915,7 @@ mod tests {
         assert_eq!(settings.picture_style(), None);
         assert_eq!(settings.dynamic_range_optimization(), None);
         assert_eq!(settings.high_dynamic_range(), None);
+        assert_eq!(settings.high_iso_noise_reduction(), None);
 
         let control = PictureControl::default();
         assert_eq!(control.name(), None);
@@ -5885,6 +6041,10 @@ mod tests {
             }))
         );
         assert_eq!(hdr.smoothing(), Some(HdrSmoothing::High));
+        assert_eq!(
+            settings.high_iso_noise_reduction(),
+            Some(HighIsoNoiseReduction::MediumHigh)
+        );
 
         let control = full_control();
         assert_eq!(control.name(), Some("VIVID-KR"));
@@ -6180,6 +6340,15 @@ mod tests {
                     start.clone().with_high_dynamic_range(Hdr::off().into()),
                     CameraSettings {
                         high_dynamic_range: Some(HighDynamicRange::Hdr(Hdr::off())),
+                        ..start.clone()
+                    },
+                ),
+                (
+                    start
+                        .clone()
+                        .with_high_iso_noise_reduction(HighIsoNoiseReduction::Auto),
+                    CameraSettings {
+                        high_iso_noise_reduction: Some(HighIsoNoiseReduction::Auto),
                         ..start.clone()
                     },
                 ),
@@ -6698,7 +6867,8 @@ mod tests {
                         denominator: 1,
                     }))
                     .with_smoothing(HdrSmoothing::High),
-            ));
+            ))
+            .with_high_iso_noise_reduction(HighIsoNoiseReduction::MediumHigh);
         assert_eq!(settings, full_settings());
     }
 
@@ -6735,7 +6905,8 @@ mod tests {
             .with_gain_control(GainControl::LowGainDown)
             .with_picture_style(PictureControl::default().with_name("FLAT").into())
             .with_dynamic_range_optimization(ActiveDLighting::Low.into())
-            .with_high_dynamic_range(Hdr::off().into());
+            .with_high_dynamic_range(Hdr::off().into())
+            .with_high_iso_noise_reduction(HighIsoNoiseReduction::Off);
         // Every value of `earlier` differs from the full record's, so each
         // builder below has one to replace.
         let full = full_settings();
@@ -6770,7 +6941,8 @@ mod tests {
             .with_gain_control(GainControl::HighGainUp)
             .with_picture_style(full_control().into())
             .with_dynamic_range_optimization(ActiveDLighting::High.into())
-            .with_high_dynamic_range(full_hdr().into());
+            .with_high_dynamic_range(full_hdr().into())
+            .with_high_iso_noise_reduction(HighIsoNoiseReduction::MediumHigh);
         assert_eq!(settings, full);
 
         let hdr = Hdr::on()
@@ -7465,6 +7637,17 @@ mod tests {
         all
     }
 
+    fn all_high_iso_noise_reductions() -> [HighIsoNoiseReduction; 8] {
+        use HighIsoNoiseReduction::*;
+        let all = [Off, Minimal, Low, MediumLow, Normal, MediumHigh, High, Auto];
+        for step in all {
+            match step {
+                Off | Minimal | Low | MediumLow | Normal | MediumHigh | High | Auto => {}
+            }
+        }
+        all
+    }
+
     #[test]
     fn every_name_is_the_one_documented_and_display_writes_it() {
         // The names are stable once released: a program may show or store
@@ -7753,6 +7936,20 @@ mod tests {
             HdrSmoothing::name,
             &["Off", "Low", "Normal", "High", "Auto"],
         );
+        assert_names(
+            &all_high_iso_noise_reductions(),
+            HighIsoNoiseReduction::name,
+            &[
+                "Off",
+                "Minimal",
+                "Low",
+                "Medium low",
+                "Normal",
+                "Medium high",
+                "High",
+                "Auto",
+            ],
+        );
     }
 
     #[test]
@@ -7791,6 +7988,7 @@ mod tests {
         assert_ordered(&all_d_range_optimizers());
         assert_ordered(&all_hdr_strengths());
         assert_ordered(&all_hdr_smoothings());
+        assert_ordered(&all_high_iso_noise_reductions());
     }
 
     #[test]

@@ -907,7 +907,7 @@ same shot **[F]**:
   under HDR. HDR is on on four of them.
 - **Sony's high ISO noise reduction differs.** On all 2,024 shots the
   JPEG holds 2, normal, and the ARW file 0. The four public Sony JPEGs
-  that hold the tag hold 2 as well. A raw file's 0 will give none
+  that hold the tag hold 2 as well. A raw file's 0 gives none
   (ADR011).
 - **A JPEG has none of the raw SubIFD's lens correction codes.** Sony's
   three lens compensations will be read from the MakerNote, which both

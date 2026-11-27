@@ -901,6 +901,8 @@ fn camera_settings<R: Read + Seek>(
         dynamic_range_optimization: None,
         // Only a maker's MakerNote records the high dynamic range setting.
         high_dynamic_range: None,
+        // Only a maker's MakerNote records the noise reductions.
+        high_iso_noise_reduction: None,
     })
 }
 
