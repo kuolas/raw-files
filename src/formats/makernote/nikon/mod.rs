@@ -40,6 +40,7 @@ mod af_info2;
 mod block;
 mod crop;
 mod metadata;
+mod picture_control;
 mod settings;
 #[cfg(test)]
 mod testing;
@@ -145,6 +146,13 @@ const COLOR_SPACE: u16 = 0x001E;
 /// its seventh byte its mode, in a list of codes each version sets.
 const VR_INFO: u16 = 0x001F;
 
+/// The Nikon MakerNote tag that records the Picture Control, Nikon's
+/// picture style (PictureControlData): an UNDEFINED value that starts with
+/// its version, four ASCII digits, then the control's name and base and
+/// its values, at offsets each version's layout sets
+/// ([`picture_control`]).
+const PICTURE_CONTROL: u16 = 0x0023;
+
 /// The Nikon MakerNote tag that records the time zone and daylight-saving
 /// setting of the camera's clock (WorldTime): four UNDEFINED bytes. The
 /// first two are the zone in minutes east of UTC as a signed 16-bit number
@@ -230,6 +238,11 @@ const AF_INFO2: u16 = 0x00B7;
 /// value, signed, and the value at a zoom's long end, signed.
 const AF_TUNE: u16 = 0x00B9;
 
+/// The Nikon MakerNote tag under which the Coolpix bodies record the
+/// Picture Control, in the same record as [`PICTURE_CONTROL`], which they
+/// do not write. No measured file holds both.
+const COOLPIX_PICTURE_CONTROL: u16 = 0x00BD;
+
 /// The rules of the tags this reader reads: each tag's number, from the
 /// constants above, and the type and count Nikon writes its value in on
 /// every file checked (ADR011). [`Ifd::get`] and [`Ifd::held`] read them.
@@ -269,6 +282,8 @@ mod rules {
     pub(super) const SERIAL_NUMBER: Rule<Text> = Rule::new(super::SERIAL_NUMBER, ASCII);
     pub(super) const COLOR_SPACE: Held<[u32; 1]> = Held::new(super::COLOR_SPACE, SHORT);
     pub(super) const VR_INFO: Rule<Vec<u8>> = Rule::new(super::VR_INFO, &[FieldType::Undefined]);
+    pub(super) const PICTURE_CONTROL: Rule<Vec<u8>> =
+        Rule::new(super::PICTURE_CONTROL, &[FieldType::Undefined]);
     pub(super) const WORLD_TIME: Held<[u8; 4]> =
         Held::new(super::WORLD_TIME, &[FieldType::Undefined]);
     pub(super) const SHUTTER_MODE: Held<[u32; 1]> = Held::new(super::SHUTTER_MODE, SHORT);
@@ -283,6 +298,8 @@ mod rules {
     pub(super) const AF_INFO: Held<[u8; 4]> = Held::new(super::AF_INFO, &[FieldType::Undefined]);
     pub(super) const SHOOTING_MODE: Held<[u32; 1]> = Held::new(super::SHOOTING_MODE, SHORT);
     pub(super) const AF_TUNE: Held<[u8; 4]> = Held::new(super::AF_TUNE, &[FieldType::Undefined]);
+    pub(super) const COOLPIX_PICTURE_CONTROL: Rule<Vec<u8>> =
+        Rule::new(super::COOLPIX_PICTURE_CONTROL, &[FieldType::Undefined]);
     pub(super) const AF_INFO2: Rule<Vec<u8>> = Rule::new(super::AF_INFO2, &[FieldType::Undefined]);
     pub(super) const NEF_COMPRESSION: Held<[u32; 1]> = Held::new(super::NEF_COMPRESSION, SHORT);
     pub(super) const COMPRESSION_RECORD: Rule<Vec<u8>> =

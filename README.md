@@ -61,7 +61,9 @@ Linux and Windows alike.
   - the JPEG quality, and on Nikon files the JPEG compression;
   - how the camera processed the picture, in Exif's words: the
     directions of contrast, saturation and sharpness, the scene capture
-    type, custom rendering and gain control.
+    type, custom rendering and gain control;
+  - the picture style, under its maker's own name, with its name and
+    values: on Nikon files the Picture Control.
   - [`CameraSettings`](https://docs.rs/raw-files/latest/raw_files/struct.CameraSettings.html)
     says which a maker's files leave out: Sony's give no shutter, image
     area or raw image size.

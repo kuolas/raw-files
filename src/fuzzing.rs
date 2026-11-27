@@ -16,6 +16,7 @@
 
 use std::io::{Cursor, Read, Seek};
 
+use crate::camera_settings::{PictureControlValue, PictureStyle};
 use crate::container::jpeg::{mpf, probe, segments};
 use crate::container::tiff::{Block, FieldType, First, Held, Rule, Text, Tree, walk};
 use crate::datetime::DateTime;
@@ -446,6 +447,9 @@ fn read_metadata(metadata: &Metadata) {
     let _ = settings.scene_capture_type().map(|scene| scene.to_string());
     let _ = settings.custom_rendered();
     let _ = settings.gain_control().map(|gain| gain.to_string());
+    if let Some(style) = settings.picture_style() {
+        read_picture_style(style);
+    }
     let tiny = Size {
         width: 1,
         height: 1,
@@ -525,4 +529,39 @@ fn read_placed_focus_layout(layout: &PlacedFocusLayout) {
     }
     let _ = layout.point(1);
     let _ = format!("{layout:?}");
+}
+
+/// Calls every getter of the picture style `style`, whichever maker's it
+/// is.
+fn read_picture_style(style: &PictureStyle) {
+    let _ = (style.setting_name(), style.name());
+    match style {
+        PictureStyle::PictureControl(control) => {
+            let _ = (control.name(), control.base());
+            let _ = control
+                .adjustment()
+                .map(|adjustment| adjustment.to_string());
+            let _ = control.filter_effect().map(|effect| effect.to_string());
+            let _ = control.toning().map(|toning| toning.to_string());
+            let values = [
+                control.quick_adjust(),
+                control.quick_sharp(),
+                control.sharpening(),
+                control.mid_range_sharpening(),
+                control.clarity(),
+                control.contrast(),
+                control.brightness(),
+                control.saturation(),
+                control.hue(),
+                control.toning_saturation(),
+            ];
+            for value in values.into_iter().flatten() {
+                if let PictureControlValue::Steps(steps) = value {
+                    let _ = steps.to_string();
+                    let _ = steps.reduced();
+                    let _ = steps.to_f64();
+                }
+            }
+        }
+    }
 }

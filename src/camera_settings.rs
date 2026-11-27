@@ -10,15 +10,17 @@
 //! mode, bracketing, whether the clock was on daylight saving time, the
 //! raw data's bit depth and compression, the JPEG quality and compression,
 //! and how the camera processed the picture: the directions of contrast,
-//! saturation and sharpness, the scene capture type, custom rendering and
-//! gain control.
+//! saturation and sharpness, the scene capture type, custom rendering,
+//! gain control and the maker's picture style.
 //! [`CameraSettings`] holds them all, and
 //! [`Metadata::camera_settings`](crate::Metadata::camera_settings) gives
 //! them for a file. [`WhiteBalance`], [`WhiteBalanceFineTune`], [`Flash`],
 //! [`AfFineTune`] and [`Stabilization`] hold the settings made of several
 //! parts; each enum, such as [`ExposureProgram`], names one setting's
 //! choices in words that fit any maker, with a
-//! [`name`](ExposureProgram::name) to show.
+//! [`name`](ExposureProgram::name) to show. The picture style keeps each
+//! maker's own words instead: [`PictureStyle`] holds Nikon's
+//! [`PictureControl`] under its own name.
 //!
 //! Every value is optional. A file may not record it, or may record it in
 //! a way that cannot be read, such as a code no variant names; either way
@@ -44,7 +46,7 @@
 //!   Exif tags record none, as in every Nikon raw file checked; in a raw
 //!   file, the raw image size and how a compressed raw is compressed; and
 //!   in a JPEG, its quality and the choice between size priority and
-//!   optimal quality.
+//!   optimal quality; and the Picture Control, Nikon's picture style.
 //! - Sony's MakerNote, in ARW files and their family and in the JPEGs of
 //!   Sony cameras, gives the white balance setting in place of Exif's,
 //!   with its fine-tuning and the color temperature of a chosen color
@@ -61,7 +63,7 @@
 //! holds no raw size, it gives large for a body the table says offers no
 //! raw sizes.
 //!
-//! On Sony files seven settings are `None`:
+//! On Sony files eight settings are `None`:
 //!
 //! - the shutter and the image area: Sony records them only in enciphered
 //!   blocks, which raw-files does not read;
@@ -70,13 +72,14 @@
 //! - AF fine-tune and auto ISO: Sony keeps its AF micro adjustment and
 //!   ISO setting in enciphered or unread blocks;
 //! - daylight saving time: Sony records none in a plain tag;
-//! - the JPEG compression: it is a setting of Nikon's alone.
+//! - the JPEG compression: it is a setting of Nikon's alone;
+//! - the picture style: Sony's Creative Style is not read yet.
 //!
 //! A program that uses raw-files can build these values for its own
-//! tests, without a camera file: [`CameraSettings`] and [`WhiteBalance`]
-//! through their `with_…` methods, and a [`WhiteBalanceFineTune`], a
-//! [`Flash`], an [`AfFineTune`] and a [`Stabilization`] through their
-//! constructors.
+//! tests, without a camera file: [`CameraSettings`], [`WhiteBalance`]
+//! and [`PictureControl`] through their `with_…` methods, and a
+//! [`WhiteBalanceFineTune`], a [`Flash`], an [`AfFineTune`] and a
+//! [`Stabilization`] through their constructors.
 //! [`CameraSettings`]'s docs show how.
 
 use std::fmt;
@@ -89,8 +92,9 @@ use crate::rational::SignedRational;
 /// ISO, exposure fine-tuning, release mode, bracketing, daylight saving
 /// time, raw bit depth and compression, JPEG quality and compression, the
 /// directions of contrast, saturation and sharpness it processed the
-/// picture in, the scene capture type, custom rendering and gain control,
-/// for a viewer's information panel beside the exposure.
+/// picture in, the scene capture type, custom rendering, gain control and
+/// the maker's picture style, for a viewer's information panel beside the
+/// exposure.
 ///
 /// Every value is `None` when the file does not record it or records it in
 /// a way that cannot be read, such as a code that no variant names. A
@@ -106,9 +110,9 @@ use crate::rational::SignedRational;
 /// MakerNote or its own codes record, it gives from Nikon's MakerNote and
 /// Sony's, each those its MakerNote records in plain tags, and from each
 /// maker's compression codes; the shutter, the image area, the raw image
-/// size, AF fine-tune, auto ISO, daylight saving time and the JPEG
-/// compression are `None` for every Sony file. Each getter says where its
-/// value comes from.
+/// size, AF fine-tune, auto ISO, daylight saving time, the JPEG
+/// compression and the picture style are `None` for every Sony file. Each
+/// getter says where its value comes from.
 ///
 /// `CameraSettings::default()` is the empty record, with every value
 /// `None` and an empty [`WhiteBalance`]. A caller's tests start from it and
@@ -203,6 +207,7 @@ pub struct CameraSettings {
     pub(crate) scene_capture_type: Option<SceneCaptureType>,
     pub(crate) custom_rendered: Option<bool>,
     pub(crate) gain_control: Option<GainControl>,
+    pub(crate) picture_style: Option<PictureStyle>,
 }
 
 impl CameraSettings {
@@ -1192,6 +1197,48 @@ impl CameraSettings {
         self.gain_control
     }
 
+    /// The picture style the camera processed the picture in, under its
+    /// maker's own name: Nikon's [`PictureControl`], with its name and
+    /// each of its values ([`PictureStyle`]).
+    ///
+    /// Read from Nikon's MakerNote, in a raw file and a JPEG alike: the
+    /// record PictureControlData (0x0023), or the same record under
+    /// 0x00BD, which the Coolpix bodies write, where a file holds no
+    /// 0x0023. The record is read at version 0100, of 58 bytes, the
+    /// version and length that measured files hold.
+    ///
+    /// `None` when:
+    ///
+    /// - the file records no picture style, as every file of another
+    ///   maker does;
+    /// - the record is of another version, or of another length than its
+    ///   version's: no measured file shows which layout it takes;
+    /// - the record is not of type UNDEFINED.
+    ///
+    /// What files record is in the
+    /// [NEF notes](https://github.com/kuolas/raw-files/blob/master/docs/formats/nef/makernote-and-metadata.md#811-picture-style-and-processing).
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use raw_files::{CameraFile, PictureStyle};
+    ///
+    /// # fn main() -> raw_files::Result<()> {
+    /// let file = CameraFile::open("photo.nef")?;
+    /// if let Some(style) = file.metadata().camera_settings().picture_style() {
+    ///     let name = style.name().unwrap_or("unnamed");
+    ///     println!("{}: {name}", style.setting_name());
+    ///     if let PictureStyle::PictureControl(control) = style {
+    ///         println!("sharpening: {:?}", control.sharpening());
+    ///     }
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn picture_style(&self) -> Option<&PictureStyle> {
+        self.picture_style.as_ref()
+    }
+
     /// Sets the white balance, in place of the one it had;
     /// [`white_balance`](Self::white_balance) reads it.
     #[must_use]
@@ -1417,6 +1464,15 @@ impl CameraSettings {
     #[must_use]
     pub fn with_gain_control(mut self, gain: GainControl) -> Self {
         self.gain_control = Some(gain);
+        self
+    }
+
+    /// Sets the picture style, in place of any set before;
+    /// [`picture_style`](Self::picture_style) reads it. Each maker's type
+    /// converts into a [`PictureStyle`] with `From`.
+    #[must_use]
+    pub fn with_picture_style(mut self, style: PictureStyle) -> Self {
+        self.picture_style = Some(style);
         self
     }
 }
@@ -3724,6 +3780,626 @@ impl fmt::Display for GainControl {
     }
 }
 
+/// The picture style the camera processed the picture in, under its
+/// maker's own name: the variant says which maker's setting it is, and
+/// holds that setting's own type.
+///
+/// A picture style is a preset of the processing the camera gives its
+/// JPEG, such as its sharpening, contrast and saturation, which the
+/// photographer picks and may adjust. Each maker names it and cuts its
+/// values in its own way, so each keeps its own type:
+///
+/// - [`PictureControl`](Self::PictureControl), Nikon's Picture Control.
+///
+/// [`setting_name`](Self::setting_name) gives the maker's word for the
+/// setting, for a viewer's label, and [`name`](Self::name) the style's
+/// own name, whichever maker's it is.
+///
+/// `PictureStyle` is `#[non_exhaustive]`, so match on it with a wildcard
+/// arm: another maker's setting is added as a variant. It is `Clone` and
+/// not `Copy`, and has no `Default`: a style is always one maker's. Each
+/// maker's type converts into it with `From`.
+///
+/// # Examples
+///
+/// A Nikon Picture Control, labeled for a viewer and read by its variant:
+///
+/// ```
+/// use raw_files::{PictureControl, PictureControlValue, PictureStyle, SignedRational};
+///
+/// let five = PictureControlValue::Steps(SignedRational { numerator: 20, denominator: 4 });
+/// let style = PictureStyle::from(
+///     PictureControl::default()
+///         .with_name("VIVID")
+///         .with_base("VIVID")
+///         .with_sharpening(five),
+/// );
+///
+/// assert_eq!(style.setting_name(), "Picture Control");
+/// assert_eq!(style.name(), Some("VIVID"));
+/// match &style {
+///     PictureStyle::PictureControl(control) => {
+///         assert_eq!(control.sharpening(), Some(five));
+///     }
+///     _ => unreachable!("built as a Picture Control"),
+/// }
+/// ```
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum PictureStyle {
+    /// Nikon's Picture Control.
+    PictureControl(PictureControl),
+}
+
+impl PictureStyle {
+    /// The maker's word for the setting, for a viewer's label: "Picture
+    /// Control".
+    pub fn setting_name(&self) -> &'static str {
+        match self {
+            PictureStyle::PictureControl(_) => "Picture Control",
+        }
+    }
+
+    /// The style's name as the file records it, whichever maker's style
+    /// it is, such as `STANDARD` or a name the photographer typed: the
+    /// [`name`](PictureControl::name) of the variant's own type. `None`
+    /// when that type gives none.
+    pub fn name(&self) -> Option<&str> {
+        match self {
+            PictureStyle::PictureControl(control) => control.name(),
+        }
+    }
+}
+
+impl From<PictureControl> for PictureStyle {
+    /// The Picture Control as a picture style, its
+    /// [`PictureControl`](PictureStyle::PictureControl) variant.
+    fn from(control: PictureControl) -> Self {
+        PictureStyle::PictureControl(control)
+    }
+}
+
+/// Nikon's Picture Control: the preset of sharpening, contrast,
+/// brightness, saturation and hue the camera processed the picture in,
+/// with the photographer's adjustments.
+///
+/// Each part is in Nikon's own words, those of its cameras' manuals:
+/// sharpening, quick adjust, filter effects, toning. The name and the
+/// base, the preset the control was made from, are as the file records
+/// them, `STANDARD` or a name its owner typed: raw-files keeps no list of
+/// Picture Control names. Each value is a [`PictureControlValue`], auto
+/// or a count of steps as recorded.
+///
+/// Read from Nikon's MakerNote, from the record PictureControlData
+/// (0x0023), or from the same record under 0x00BD, which the Coolpix
+/// bodies write, where a file holds no 0x0023. The record is read at the
+/// version and length that measured files hold: version 0100, of 58
+/// bytes. A record of another version, or of another length than its
+/// version's, gives no Picture Control.
+///
+/// Every part is `None` when the record marks it not available, as Nikon
+/// does for quick adjust under `NEUTRAL` and for the filter effect
+/// outside a monochrome control, or holds a byte its field cannot hold;
+/// each getter lists its own cases. A damaged part costs only itself.
+/// What files record is in the
+/// [NEF notes](https://github.com/kuolas/raw-files/blob/master/docs/formats/nef/makernote-and-metadata.md#811-picture-style-and-processing).
+///
+/// `PictureControl::default()` is the empty control, with every part
+/// `None`; a caller's tests set the parts they need with the `with_…`
+/// methods, each named after the method that reads the part back, each
+/// replacing any value set before and storing it as given.
+/// `PictureControl` is `Clone` and not `Copy`.
+///
+/// # Examples
+///
+/// The `VIVID` control of a Nikon Z 9 with Quick sharp at +1:
+///
+/// ```
+/// use raw_files::{
+///     PictureControl, PictureControlAdjustment, PictureControlValue, SignedRational,
+/// };
+///
+/// let steps = |numerator, denominator| {
+///     PictureControlValue::Steps(SignedRational { numerator, denominator })
+/// };
+/// let control = PictureControl::default()
+///     .with_name("VIVID")
+///     .with_base("VIVID")
+///     .with_adjustment(PictureControlAdjustment::FullControl)
+///     .with_quick_sharp(steps(1, 1))
+///     .with_sharpening(steps(20, 4))
+///     .with_mid_range_sharpening(steps(14, 4))
+///     .with_clarity(steps(8, 4));
+///
+/// assert_eq!(control.name(), Some("VIVID"));
+/// assert_eq!(control.sharpening(), Some(steps(20, 4)));
+/// assert_eq!(control.quick_adjust(), None);
+/// assert_eq!(control.filter_effect(), None);
+/// ```
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
+pub struct PictureControl {
+    pub(crate) name: Option<String>,
+    pub(crate) base: Option<String>,
+    pub(crate) adjustment: Option<PictureControlAdjustment>,
+    pub(crate) quick_adjust: Option<PictureControlValue>,
+    pub(crate) quick_sharp: Option<PictureControlValue>,
+    pub(crate) sharpening: Option<PictureControlValue>,
+    pub(crate) mid_range_sharpening: Option<PictureControlValue>,
+    pub(crate) clarity: Option<PictureControlValue>,
+    pub(crate) contrast: Option<PictureControlValue>,
+    pub(crate) brightness: Option<PictureControlValue>,
+    pub(crate) saturation: Option<PictureControlValue>,
+    pub(crate) hue: Option<PictureControlValue>,
+    pub(crate) filter_effect: Option<PictureControlFilterEffect>,
+    pub(crate) toning: Option<PictureControlToning>,
+    pub(crate) toning_saturation: Option<PictureControlValue>,
+}
+
+impl PictureControl {
+    /// The control's name as the file records it, such as `STANDARD`,
+    /// `VIVID` or a name the photographer typed, cleaned as every text.
+    ///
+    /// `None` when the name is blank, or holds a byte that is not ASCII.
+    pub fn name(&self) -> Option<&str> {
+        self.name.as_deref()
+    }
+
+    /// The name of the preset the control was made from, as the file
+    /// records it, such as `VIVID` under a name the photographer typed.
+    /// Under a preset itself it equals [`name`](Self::name).
+    ///
+    /// `None` when the base is blank, or holds a byte that is not ASCII.
+    pub fn base(&self) -> Option<&str> {
+        self.base.as_deref()
+    }
+
+    /// How the photographer adjusted the control: not at all, by quick
+    /// adjust or Quick sharp, or value by value.
+    ///
+    /// `None` when the record holds a code the list does not name.
+    pub fn adjustment(&self) -> Option<PictureControlAdjustment> {
+        self.adjustment
+    }
+
+    /// Quick adjust, which mutes or heightens the whole control, in
+    /// whole steps.
+    ///
+    /// `None` when:
+    ///
+    /// - the record marks it not available, as under `NEUTRAL`, `FLAT`,
+    ///   `MONOCHROME` and a name the photographer typed;
+    /// - the record holds 0, which this value cannot hold;
+    /// - the record is of a version that has Quick sharp in its place.
+    pub fn quick_adjust(&self) -> Option<PictureControlValue> {
+        self.quick_adjust
+    }
+
+    /// Quick sharp, which raises or lowers sharpening, mid-range
+    /// sharpening and clarity together, in whole steps.
+    ///
+    /// `None` when:
+    ///
+    /// - the record marks it not available, as under a name the
+    ///   photographer typed;
+    /// - the record holds 0, which this value cannot hold;
+    /// - the record is of a version that has quick adjust in its place,
+    ///   as every version read so far is.
+    pub fn quick_sharp(&self) -> Option<PictureControlValue> {
+        self.quick_sharp
+    }
+
+    /// Sharpening, in steps, or [`Auto`](PictureControlValue::Auto).
+    ///
+    /// `None` when the record marks it not available, as under the
+    /// `AUTO` control of the later bodies.
+    pub fn sharpening(&self) -> Option<PictureControlValue> {
+        self.sharpening
+    }
+
+    /// Mid-range sharpening, in steps.
+    ///
+    /// `None` when the record marks it not available, holds 0, or is of a
+    /// version that records none, as every version read so far is.
+    pub fn mid_range_sharpening(&self) -> Option<PictureControlValue> {
+        self.mid_range_sharpening
+    }
+
+    /// Clarity, in steps, or [`Auto`](PictureControlValue::Auto).
+    ///
+    /// `None` when the record marks it not available, or is of a version
+    /// that records none, as every version read so far is.
+    pub fn clarity(&self) -> Option<PictureControlValue> {
+        self.clarity
+    }
+
+    /// Contrast, in steps, or [`Auto`](PictureControlValue::Auto).
+    ///
+    /// `None` when the record marks it not available.
+    pub fn contrast(&self) -> Option<PictureControlValue> {
+        self.contrast
+    }
+
+    /// Brightness, in steps.
+    ///
+    /// `None` when the record marks it not available, as on the Coolpix
+    /// bodies, or holds 0.
+    pub fn brightness(&self) -> Option<PictureControlValue> {
+        self.brightness
+    }
+
+    /// Saturation, in steps, or [`Auto`](PictureControlValue::Auto).
+    ///
+    /// `None` when the record marks it not available, as under
+    /// `MONOCHROME`.
+    pub fn saturation(&self) -> Option<PictureControlValue> {
+        self.saturation
+    }
+
+    /// Hue, in steps.
+    ///
+    /// `None` when the record marks it not available, as under
+    /// `MONOCHROME` and on the Coolpix bodies, or holds 0.
+    pub fn hue(&self) -> Option<PictureControlValue> {
+        self.hue
+    }
+
+    /// The filter effect of a monochrome control, such as
+    /// [`Yellow`](PictureControlFilterEffect::Yellow).
+    ///
+    /// `None` when the record marks it not available, as outside a
+    /// monochrome control, or holds a code the list does not name.
+    pub fn filter_effect(&self) -> Option<PictureControlFilterEffect> {
+        self.filter_effect
+    }
+
+    /// The toning of a monochrome control, such as
+    /// [`Sepia`](PictureControlToning::Sepia).
+    ///
+    /// `None` when the record marks it not available, as outside a
+    /// monochrome control, or holds a code the list does not name.
+    pub fn toning(&self) -> Option<PictureControlToning> {
+        self.toning
+    }
+
+    /// The saturation of a monochrome control's toning, in steps.
+    ///
+    /// `None` when the record marks it not available, as every measured
+    /// file does, or holds 0.
+    pub fn toning_saturation(&self) -> Option<PictureControlValue> {
+        self.toning_saturation
+    }
+
+    /// Sets the name, in place of any set before;
+    /// [`name`](Self::name) reads it.
+    #[must_use]
+    pub fn with_name(mut self, name: impl Into<String>) -> Self {
+        self.name = Some(name.into());
+        self
+    }
+
+    /// Sets the base, in place of any set before;
+    /// [`base`](Self::base) reads it.
+    #[must_use]
+    pub fn with_base(mut self, base: impl Into<String>) -> Self {
+        self.base = Some(base.into());
+        self
+    }
+
+    /// Sets how the control was adjusted, in place of any value set
+    /// before; [`adjustment`](Self::adjustment) reads it.
+    #[must_use]
+    pub fn with_adjustment(mut self, adjustment: PictureControlAdjustment) -> Self {
+        self.adjustment = Some(adjustment);
+        self
+    }
+
+    /// Sets quick adjust, in place of any value set before;
+    /// [`quick_adjust`](Self::quick_adjust) reads it.
+    #[must_use]
+    pub fn with_quick_adjust(mut self, value: PictureControlValue) -> Self {
+        self.quick_adjust = Some(value);
+        self
+    }
+
+    /// Sets Quick sharp, in place of any value set before;
+    /// [`quick_sharp`](Self::quick_sharp) reads it.
+    #[must_use]
+    pub fn with_quick_sharp(mut self, value: PictureControlValue) -> Self {
+        self.quick_sharp = Some(value);
+        self
+    }
+
+    /// Sets sharpening, in place of any value set before;
+    /// [`sharpening`](Self::sharpening) reads it.
+    #[must_use]
+    pub fn with_sharpening(mut self, value: PictureControlValue) -> Self {
+        self.sharpening = Some(value);
+        self
+    }
+
+    /// Sets mid-range sharpening, in place of any value set before;
+    /// [`mid_range_sharpening`](Self::mid_range_sharpening) reads it.
+    #[must_use]
+    pub fn with_mid_range_sharpening(mut self, value: PictureControlValue) -> Self {
+        self.mid_range_sharpening = Some(value);
+        self
+    }
+
+    /// Sets clarity, in place of any value set before;
+    /// [`clarity`](Self::clarity) reads it.
+    #[must_use]
+    pub fn with_clarity(mut self, value: PictureControlValue) -> Self {
+        self.clarity = Some(value);
+        self
+    }
+
+    /// Sets contrast, in place of any value set before;
+    /// [`contrast`](Self::contrast) reads it.
+    #[must_use]
+    pub fn with_contrast(mut self, value: PictureControlValue) -> Self {
+        self.contrast = Some(value);
+        self
+    }
+
+    /// Sets brightness, in place of any value set before;
+    /// [`brightness`](Self::brightness) reads it.
+    #[must_use]
+    pub fn with_brightness(mut self, value: PictureControlValue) -> Self {
+        self.brightness = Some(value);
+        self
+    }
+
+    /// Sets saturation, in place of any value set before;
+    /// [`saturation`](Self::saturation) reads it.
+    #[must_use]
+    pub fn with_saturation(mut self, value: PictureControlValue) -> Self {
+        self.saturation = Some(value);
+        self
+    }
+
+    /// Sets hue, in place of any value set before;
+    /// [`hue`](Self::hue) reads it.
+    #[must_use]
+    pub fn with_hue(mut self, value: PictureControlValue) -> Self {
+        self.hue = Some(value);
+        self
+    }
+
+    /// Sets the filter effect, in place of any set before;
+    /// [`filter_effect`](Self::filter_effect) reads it.
+    #[must_use]
+    pub fn with_filter_effect(mut self, effect: PictureControlFilterEffect) -> Self {
+        self.filter_effect = Some(effect);
+        self
+    }
+
+    /// Sets the toning, in place of any set before;
+    /// [`toning`](Self::toning) reads it.
+    #[must_use]
+    pub fn with_toning(mut self, toning: PictureControlToning) -> Self {
+        self.toning = Some(toning);
+        self
+    }
+
+    /// Sets the toning's saturation, in place of any value set before;
+    /// [`toning_saturation`](Self::toning_saturation) reads it.
+    #[must_use]
+    pub fn with_toning_saturation(mut self, value: PictureControlValue) -> Self {
+        self.toning_saturation = Some(value);
+        self
+    }
+}
+
+/// One value of a Picture Control: auto, where the camera chooses it, or
+/// a count of steps.
+///
+/// The steps are kept as the record holds them: the byte less 128 over
+/// the divisor recorded beside it. So five steps are `20/4` in the
+/// records that count quarter steps, and `5/1` in the oldest, which
+/// counts whole steps. Each is the value on the menu's own scale.
+/// Contrast, brightness, saturation, hue, quick adjust, Quick sharp and
+/// the toning's saturation are 0 under a preset's own settings.
+/// Sharpening, mid-range sharpening and clarity hold the preset's level
+/// instead, such as a sharpening of 3 under an unadjusted `STANDARD`. Two values of one count in different records are
+/// so not equal; compare their [`reduced`](SignedRational::reduced)
+/// forms, or [`to_f64`](SignedRational::to_f64), to compare counts.
+///
+/// `PictureControlValue` is `#[non_exhaustive]`, so match on it with a
+/// wildcard arm. It is `Copy`, and has no `Display`: how a quarter step
+/// is written is the viewer's choice.
+///
+/// # Examples
+///
+/// ```
+/// use raw_files::{PictureControlValue, SignedRational};
+///
+/// let value = PictureControlValue::Steps(SignedRational { numerator: 14, denominator: 4 });
+/// match value {
+///     PictureControlValue::Auto => println!("auto"),
+///     PictureControlValue::Steps(steps) => assert_eq!(steps.to_f64(), 3.5),
+///     _ => {}
+/// }
+/// ```
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum PictureControlValue {
+    /// The camera chooses the value: "A (auto)" in Nikon's menus.
+    Auto,
+    /// A count of steps on the menu's scale, as recorded.
+    Steps(SignedRational),
+}
+
+/// How the photographer adjusted a Picture Control, as Nikon's record
+/// names it: 0 the default settings, 1 by quick adjust or Quick sharp, 2
+/// value by value, full control. A code the list does not name gives
+/// `None`.
+///
+/// `PictureControlAdjustment` is `#[non_exhaustive]`, so match on it with
+/// a wildcard arm. It orders as its variants are listed, and a new
+/// variant is added after the existing ones, so an order once observed
+/// holds. Its [`name`](Self::name)s, which `Display` writes too, are
+/// "Default settings", "Quick adjust" and "Full control".
+///
+/// # Examples
+///
+/// ```
+/// use raw_files::PictureControlAdjustment;
+///
+/// assert_eq!(PictureControlAdjustment::FullControl.name(), "Full control");
+/// ```
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[non_exhaustive]
+pub enum PictureControlAdjustment {
+    /// The preset's own values, unadjusted.
+    Default,
+    /// Adjusted by quick adjust or, on the Z bodies, Quick sharp.
+    QuickAdjust,
+    /// Adjusted value by value.
+    FullControl,
+}
+
+impl PictureControlAdjustment {
+    /// The adjustment's name, for an information panel, such as "Quick
+    /// adjust"; the type's docs list them all.
+    pub fn name(self) -> &'static str {
+        match self {
+            PictureControlAdjustment::Default => "Default settings",
+            PictureControlAdjustment::QuickAdjust => "Quick adjust",
+            PictureControlAdjustment::FullControl => "Full control",
+        }
+    }
+}
+
+impl fmt::Display for PictureControlAdjustment {
+    /// Writes [`name`](PictureControlAdjustment::name).
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.name())
+    }
+}
+
+/// The filter effect of a monochrome Picture Control, which imitates a
+/// color filter on black-and-white film, as Nikon's manuals list them:
+/// off, yellow, orange, red and green. A code the list does not name
+/// gives `None`.
+///
+/// `PictureControlFilterEffect` is `#[non_exhaustive]`, so match on it
+/// with a wildcard arm. It orders as its variants are listed, and a new
+/// variant is added after the existing ones, so an order once observed
+/// holds. Its [`name`](Self::name)s, which `Display` writes too, are
+/// "Off", "Yellow", "Orange", "Red" and "Green".
+///
+/// # Examples
+///
+/// ```
+/// use raw_files::PictureControlFilterEffect;
+///
+/// assert_eq!(PictureControlFilterEffect::Orange.to_string(), "Orange");
+/// ```
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[non_exhaustive]
+pub enum PictureControlFilterEffect {
+    /// No filter effect.
+    Off,
+    /// A yellow filter.
+    Yellow,
+    /// An orange filter.
+    Orange,
+    /// A red filter.
+    Red,
+    /// A green filter.
+    Green,
+}
+
+impl PictureControlFilterEffect {
+    /// The filter effect's name, for an information panel, such as
+    /// "Yellow"; the type's docs list them all.
+    pub fn name(self) -> &'static str {
+        match self {
+            PictureControlFilterEffect::Off => "Off",
+            PictureControlFilterEffect::Yellow => "Yellow",
+            PictureControlFilterEffect::Orange => "Orange",
+            PictureControlFilterEffect::Red => "Red",
+            PictureControlFilterEffect::Green => "Green",
+        }
+    }
+}
+
+impl fmt::Display for PictureControlFilterEffect {
+    /// Writes [`name`](PictureControlFilterEffect::name).
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.name())
+    }
+}
+
+/// The toning of a monochrome Picture Control, as Nikon's manuals list
+/// them: black-and-white, sepia, cyanotype, and seven tints. A code the
+/// list does not name gives `None`.
+///
+/// `PictureControlToning` is `#[non_exhaustive]`, so match on it with a
+/// wildcard arm. It orders as its variants are listed, and a new variant
+/// is added after the existing ones, so an order once observed holds. Its
+/// [`name`](Self::name)s, which `Display` writes too, are
+/// "Black-and-white", "Sepia", "Cyanotype", "Red", "Yellow", "Green",
+/// "Blue green", "Blue", "Purple blue" and "Red purple".
+///
+/// # Examples
+///
+/// ```
+/// use raw_files::PictureControlToning;
+///
+/// assert_eq!(PictureControlToning::BlueGreen.name(), "Blue green");
+/// ```
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[non_exhaustive]
+pub enum PictureControlToning {
+    /// Black-and-white, untinted.
+    BlackAndWhite,
+    /// Sepia.
+    Sepia,
+    /// Cyanotype, a blue tint.
+    Cyanotype,
+    /// A red tint.
+    Red,
+    /// A yellow tint.
+    Yellow,
+    /// A green tint.
+    Green,
+    /// A blue-green tint.
+    BlueGreen,
+    /// A blue tint.
+    Blue,
+    /// A purple-blue tint.
+    PurpleBlue,
+    /// A red-purple tint.
+    RedPurple,
+}
+
+impl PictureControlToning {
+    /// The toning's name, for an information panel, such as "Sepia"; the
+    /// type's docs list them all.
+    pub fn name(self) -> &'static str {
+        match self {
+            PictureControlToning::BlackAndWhite => "Black-and-white",
+            PictureControlToning::Sepia => "Sepia",
+            PictureControlToning::Cyanotype => "Cyanotype",
+            PictureControlToning::Red => "Red",
+            PictureControlToning::Yellow => "Yellow",
+            PictureControlToning::Green => "Green",
+            PictureControlToning::BlueGreen => "Blue green",
+            PictureControlToning::Blue => "Blue",
+            PictureControlToning::PurpleBlue => "Purple blue",
+            PictureControlToning::RedPurple => "Red purple",
+        }
+    }
+}
+
+impl fmt::Display for PictureControlToning {
+    /// Writes [`name`](PictureControlToning::name).
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.name())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -3796,6 +4472,36 @@ mod tests {
             scene_capture_type: Some(SceneCaptureType::Portrait),
             custom_rendered: Some(true),
             gain_control: Some(GainControl::HighGainUp),
+            picture_style: Some(PictureStyle::PictureControl(full_control())),
+        }
+    }
+
+    /// `numerator` over `denominator` steps of a Picture Control value.
+    fn steps(numerator: i32, denominator: i32) -> PictureControlValue {
+        PictureControlValue::Steps(signed_fraction(numerator, denominator))
+    }
+
+    /// A Picture Control with every part set, each value different from
+    /// the others and from what the builders set in the tests below. No
+    /// record holds quick adjust beside Quick sharp, nor a toning beside a
+    /// color control's saturation.
+    fn full_control() -> PictureControl {
+        PictureControl {
+            name: Some("VIVID-KR".into()),
+            base: Some("VIVID".into()),
+            adjustment: Some(PictureControlAdjustment::FullControl),
+            quick_adjust: Some(steps(1, 1)),
+            quick_sharp: Some(steps(2, 1)),
+            sharpening: Some(steps(20, 4)),
+            mid_range_sharpening: Some(steps(14, 4)),
+            clarity: Some(steps(8, 4)),
+            contrast: Some(PictureControlValue::Auto),
+            brightness: Some(steps(-4, 4)),
+            saturation: Some(steps(3, 4)),
+            hue: Some(steps(-1, 4)),
+            filter_effect: Some(PictureControlFilterEffect::Red),
+            toning: Some(PictureControlToning::Sepia),
+            toning_saturation: Some(steps(5, 4)),
         }
     }
 
@@ -3830,6 +4536,24 @@ mod tests {
         assert_eq!(settings.scene_capture_type(), None);
         assert_eq!(settings.custom_rendered(), None);
         assert_eq!(settings.gain_control(), None);
+        assert_eq!(settings.picture_style(), None);
+
+        let control = PictureControl::default();
+        assert_eq!(control.name(), None);
+        assert_eq!(control.base(), None);
+        assert_eq!(control.adjustment(), None);
+        assert_eq!(control.quick_adjust(), None);
+        assert_eq!(control.quick_sharp(), None);
+        assert_eq!(control.sharpening(), None);
+        assert_eq!(control.mid_range_sharpening(), None);
+        assert_eq!(control.clarity(), None);
+        assert_eq!(control.contrast(), None);
+        assert_eq!(control.brightness(), None);
+        assert_eq!(control.saturation(), None);
+        assert_eq!(control.hue(), None);
+        assert_eq!(control.filter_effect(), None);
+        assert_eq!(control.toning(), None);
+        assert_eq!(control.toning_saturation(), None);
 
         let white_balance = WhiteBalance::default();
         assert_eq!(white_balance.mode(), None);
@@ -3913,6 +4637,33 @@ mod tests {
         );
         assert_eq!(settings.custom_rendered(), Some(true));
         assert_eq!(settings.gain_control(), Some(GainControl::HighGainUp));
+        assert_eq!(
+            settings.picture_style(),
+            Some(&PictureStyle::PictureControl(full_control()))
+        );
+
+        let control = full_control();
+        assert_eq!(control.name(), Some("VIVID-KR"));
+        assert_eq!(control.base(), Some("VIVID"));
+        assert_eq!(
+            control.adjustment(),
+            Some(PictureControlAdjustment::FullControl)
+        );
+        assert_eq!(control.quick_adjust(), Some(steps(1, 1)));
+        assert_eq!(control.quick_sharp(), Some(steps(2, 1)));
+        assert_eq!(control.sharpening(), Some(steps(20, 4)));
+        assert_eq!(control.mid_range_sharpening(), Some(steps(14, 4)));
+        assert_eq!(control.clarity(), Some(steps(8, 4)));
+        assert_eq!(control.contrast(), Some(PictureControlValue::Auto));
+        assert_eq!(control.brightness(), Some(steps(-4, 4)));
+        assert_eq!(control.saturation(), Some(steps(3, 4)));
+        assert_eq!(control.hue(), Some(steps(-1, 4)));
+        assert_eq!(
+            control.filter_effect(),
+            Some(PictureControlFilterEffect::Red)
+        );
+        assert_eq!(control.toning(), Some(PictureControlToning::Sepia));
+        assert_eq!(control.toning_saturation(), Some(steps(5, 4)));
 
         let white_balance = nikon_white_balance();
         assert_eq!(white_balance.mode(), Some(WhiteBalanceMode::Auto));
@@ -4159,6 +4910,17 @@ mod tests {
                         ..start.clone()
                     },
                 ),
+                (
+                    start
+                        .clone()
+                        .with_picture_style(PictureControl::default().into()),
+                    CameraSettings {
+                        picture_style: Some(
+                            PictureStyle::PictureControl(PictureControl::default()),
+                        ),
+                        ..start.clone()
+                    },
+                ),
             ];
             for (place, (built, expected)) in cases.into_iter().enumerate() {
                 assert_eq!(built, expected, "builder {place} from {start:?}");
@@ -4219,6 +4981,138 @@ mod tests {
     }
 
     #[test]
+    fn each_picture_control_builder_sets_its_own_value_and_no_other() {
+        let zero = steps(0, 1);
+        for start in [PictureControl::default(), full_control()] {
+            let cases = [
+                (
+                    start.clone().with_name("STANDARD"),
+                    PictureControl {
+                        name: Some("STANDARD".into()),
+                        ..start.clone()
+                    },
+                ),
+                (
+                    start.clone().with_base("STANDARD"),
+                    PictureControl {
+                        base: Some("STANDARD".into()),
+                        ..start.clone()
+                    },
+                ),
+                (
+                    start
+                        .clone()
+                        .with_adjustment(PictureControlAdjustment::QuickAdjust),
+                    PictureControl {
+                        adjustment: Some(PictureControlAdjustment::QuickAdjust),
+                        ..start.clone()
+                    },
+                ),
+                (
+                    start.clone().with_quick_adjust(zero),
+                    PictureControl {
+                        quick_adjust: Some(zero),
+                        ..start.clone()
+                    },
+                ),
+                (
+                    start.clone().with_quick_sharp(zero),
+                    PictureControl {
+                        quick_sharp: Some(zero),
+                        ..start.clone()
+                    },
+                ),
+                (
+                    start.clone().with_sharpening(zero),
+                    PictureControl {
+                        sharpening: Some(zero),
+                        ..start.clone()
+                    },
+                ),
+                (
+                    start.clone().with_mid_range_sharpening(zero),
+                    PictureControl {
+                        mid_range_sharpening: Some(zero),
+                        ..start.clone()
+                    },
+                ),
+                (
+                    start.clone().with_clarity(zero),
+                    PictureControl {
+                        clarity: Some(zero),
+                        ..start.clone()
+                    },
+                ),
+                (
+                    start.clone().with_contrast(zero),
+                    PictureControl {
+                        contrast: Some(zero),
+                        ..start.clone()
+                    },
+                ),
+                (
+                    start.clone().with_brightness(zero),
+                    PictureControl {
+                        brightness: Some(zero),
+                        ..start.clone()
+                    },
+                ),
+                (
+                    start.clone().with_saturation(zero),
+                    PictureControl {
+                        saturation: Some(zero),
+                        ..start.clone()
+                    },
+                ),
+                (
+                    start.clone().with_hue(zero),
+                    PictureControl {
+                        hue: Some(zero),
+                        ..start.clone()
+                    },
+                ),
+                (
+                    start
+                        .clone()
+                        .with_filter_effect(PictureControlFilterEffect::Green),
+                    PictureControl {
+                        filter_effect: Some(PictureControlFilterEffect::Green),
+                        ..start.clone()
+                    },
+                ),
+                (
+                    start.clone().with_toning(PictureControlToning::RedPurple),
+                    PictureControl {
+                        toning: Some(PictureControlToning::RedPurple),
+                        ..start.clone()
+                    },
+                ),
+                (
+                    start.clone().with_toning_saturation(zero),
+                    PictureControl {
+                        toning_saturation: Some(zero),
+                        ..start.clone()
+                    },
+                ),
+            ];
+            for (place, (built, expected)) in cases.into_iter().enumerate() {
+                assert_eq!(built, expected, "builder {place} from {start:?}");
+            }
+        }
+    }
+
+    #[test]
+    fn a_picture_style_gives_its_makers_word_and_its_name() {
+        let style = PictureStyle::from(full_control());
+        assert_eq!(style, PictureStyle::PictureControl(full_control()));
+        assert_eq!(style.setting_name(), "Picture Control");
+        assert_eq!(style.name(), Some("VIVID-KR"));
+        let unnamed = PictureStyle::from(PictureControl::default());
+        assert_eq!(unnamed.setting_name(), "Picture Control");
+        assert_eq!(unnamed.name(), None);
+    }
+
+    #[test]
     fn every_builder_in_a_chain_equals_the_value_built_field_by_field() {
         let settings = CameraSettings::default()
             .with_white_balance(
@@ -4267,7 +5161,25 @@ mod tests {
             .with_sharpness(Sharpness::Soft)
             .with_scene_capture_type(SceneCaptureType::Portrait)
             .with_custom_rendered(true)
-            .with_gain_control(GainControl::HighGainUp);
+            .with_gain_control(GainControl::HighGainUp)
+            .with_picture_style(PictureStyle::from(
+                PictureControl::default()
+                    .with_name("VIVID-KR")
+                    .with_base("VIVID")
+                    .with_adjustment(PictureControlAdjustment::FullControl)
+                    .with_quick_adjust(steps(1, 1))
+                    .with_quick_sharp(steps(2, 1))
+                    .with_sharpening(steps(20, 4))
+                    .with_mid_range_sharpening(steps(14, 4))
+                    .with_clarity(steps(8, 4))
+                    .with_contrast(PictureControlValue::Auto)
+                    .with_brightness(steps(-4, 4))
+                    .with_saturation(steps(3, 4))
+                    .with_hue(steps(-1, 4))
+                    .with_filter_effect(PictureControlFilterEffect::Red)
+                    .with_toning(PictureControlToning::Sepia)
+                    .with_toning_saturation(steps(5, 4)),
+            ));
         assert_eq!(settings, full_settings());
     }
 
@@ -4301,7 +5213,8 @@ mod tests {
             .with_sharpness(Sharpness::Hard)
             .with_scene_capture_type(SceneCaptureType::NightScene)
             .with_custom_rendered(false)
-            .with_gain_control(GainControl::LowGainDown);
+            .with_gain_control(GainControl::LowGainDown)
+            .with_picture_style(PictureControl::default().with_name("FLAT").into());
         // Every value of `earlier` differs from the full record's, so each
         // builder below has one to replace.
         let full = full_settings();
@@ -4333,8 +5246,42 @@ mod tests {
             .with_sharpness(Sharpness::Soft)
             .with_scene_capture_type(SceneCaptureType::Portrait)
             .with_custom_rendered(true)
-            .with_gain_control(GainControl::HighGainUp);
+            .with_gain_control(GainControl::HighGainUp)
+            .with_picture_style(full_control().into());
         assert_eq!(settings, full);
+
+        let control = PictureControl::default()
+            .with_name("FLAT")
+            .with_base("FLAT")
+            .with_adjustment(PictureControlAdjustment::Default)
+            .with_quick_adjust(steps(-1, 1))
+            .with_quick_sharp(steps(-2, 1))
+            .with_sharpening(PictureControlValue::Auto)
+            .with_mid_range_sharpening(steps(0, 4))
+            .with_clarity(PictureControlValue::Auto)
+            .with_contrast(steps(0, 4))
+            .with_brightness(steps(0, 4))
+            .with_saturation(PictureControlValue::Auto)
+            .with_hue(steps(0, 4))
+            .with_filter_effect(PictureControlFilterEffect::Off)
+            .with_toning(PictureControlToning::BlackAndWhite)
+            .with_toning_saturation(steps(0, 4))
+            .with_name("VIVID-KR")
+            .with_base("VIVID")
+            .with_adjustment(PictureControlAdjustment::FullControl)
+            .with_quick_adjust(steps(1, 1))
+            .with_quick_sharp(steps(2, 1))
+            .with_sharpening(steps(20, 4))
+            .with_mid_range_sharpening(steps(14, 4))
+            .with_clarity(steps(8, 4))
+            .with_contrast(PictureControlValue::Auto)
+            .with_brightness(steps(-4, 4))
+            .with_saturation(steps(3, 4))
+            .with_hue(steps(-1, 4))
+            .with_filter_effect(PictureControlFilterEffect::Red)
+            .with_toning(PictureControlToning::Sepia)
+            .with_toning_saturation(steps(5, 4));
+        assert_eq!(control, full_control());
 
         let white_balance = WhiteBalance::default()
             .with_mode(WhiteBalanceMode::Daylight)
@@ -4854,6 +5801,51 @@ mod tests {
         all
     }
 
+    fn all_picture_control_adjustments() -> [PictureControlAdjustment; 3] {
+        use PictureControlAdjustment::*;
+        let all = [Default, QuickAdjust, FullControl];
+        for adjustment in all {
+            match adjustment {
+                Default | QuickAdjust | FullControl => {}
+            }
+        }
+        all
+    }
+
+    fn all_picture_control_filter_effects() -> [PictureControlFilterEffect; 5] {
+        use PictureControlFilterEffect::*;
+        let all = [Off, Yellow, Orange, Red, Green];
+        for effect in all {
+            match effect {
+                Off | Yellow | Orange | Red | Green => {}
+            }
+        }
+        all
+    }
+
+    fn all_picture_control_tonings() -> [PictureControlToning; 10] {
+        use PictureControlToning::*;
+        let all = [
+            BlackAndWhite,
+            Sepia,
+            Cyanotype,
+            Red,
+            Yellow,
+            Green,
+            BlueGreen,
+            Blue,
+            PurpleBlue,
+            RedPurple,
+        ];
+        for toning in all {
+            match toning {
+                BlackAndWhite | Sepia | Cyanotype | Red | Yellow | Green | BlueGreen | Blue
+                | PurpleBlue | RedPurple => {}
+            }
+        }
+        all
+    }
+
     fn all_gain_controls() -> [GainControl; 5] {
         use GainControl::*;
         let all = [
@@ -5084,6 +6076,32 @@ mod tests {
                 "High gain down",
             ],
         );
+        assert_names(
+            &all_picture_control_adjustments(),
+            PictureControlAdjustment::name,
+            &["Default settings", "Quick adjust", "Full control"],
+        );
+        assert_names(
+            &all_picture_control_filter_effects(),
+            PictureControlFilterEffect::name,
+            &["Off", "Yellow", "Orange", "Red", "Green"],
+        );
+        assert_names(
+            &all_picture_control_tonings(),
+            PictureControlToning::name,
+            &[
+                "Black-and-white",
+                "Sepia",
+                "Cyanotype",
+                "Red",
+                "Yellow",
+                "Green",
+                "Blue green",
+                "Blue",
+                "Purple blue",
+                "Red purple",
+            ],
+        );
     }
 
     #[test]
@@ -5115,6 +6133,9 @@ mod tests {
         assert_ordered(&all_sharpnesses());
         assert_ordered(&all_scene_capture_types());
         assert_ordered(&all_gain_controls());
+        assert_ordered(&all_picture_control_adjustments());
+        assert_ordered(&all_picture_control_filter_effects());
+        assert_ordered(&all_picture_control_tonings());
     }
 
     #[test]

@@ -893,6 +893,9 @@ fn camera_settings<R: Read + Seek>(
         gain_control: exif
             .held(rules::GAIN_CONTROL)
             .and_then(|[code]| gain_control(code)),
+        // Only a maker's MakerNote records the picture style, in the
+        // maker's own words.
+        picture_style: None,
     })
 }
 
