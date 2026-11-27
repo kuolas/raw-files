@@ -73,9 +73,11 @@ Linux and Windows alike.
     whether the long exposure one was on; on Sony files the multi-frame
     one too.
   - the vignetting correction, under its maker's own name: on Nikon
-    files vignette control.
+    files vignette control, and on Sony files the shading compensation.
   - the distortion correction, under its maker's own name: on Nikon
-    files auto distortion control.
+    files auto distortion control, and on Sony files the distortion
+    compensation.
+  - on Sony files the chromatic aberration compensation.
   - [`CameraSettings`](https://docs.rs/raw-files/latest/raw_files/struct.CameraSettings.html)
     says which a maker's files leave out: Sony's give no shutter, image
     area or raw image size.

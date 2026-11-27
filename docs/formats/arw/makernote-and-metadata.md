@@ -1924,12 +1924,10 @@ settings
   contrast, saturation and sharpness;
 - Exif's six processing values;
 - the D-Range Optimizer and Auto HDR;
-- the high ISO, long exposure and multi-frame noise reductions.
+- the high ISO, long exposure and multi-frame noise reductions;
+- the three lens compensations.
 
-It will read:
-
-- the three lens compensations;
-- the scene.
+It will read the scene.
 
 Each setting keeps Sony's own name and kinds. Where Nikon has a setting
 for the same thing, one value of the camera settings holds either
@@ -2155,10 +2153,10 @@ MakerNote tags record them, one LONG each [S][1]:
 |---|---|---|---|---|---|
 | 0 | Off | observed | 9 / 0 | 9 / 0 | 71 / 4,459 |
 | 2 | Auto | observed | 153 / 5,241 | 153 / 5,241 | 91 / 782 |
-| 4294967295 | n/a | will give none | 22 / 0 | 22 / 0 | 22 / 0 |
+| 4294967295 | n/a | gives none | 22 / 0 | 22 / 0 | 22 / 0 |
 
 **[F]** They are on 184 public files of 84 bodies. The 22 files that
-say "n/a" are of fixed-lens bodies. raw-files will read:
+say "n/a" are of fixed-lens bodies. raw-files reads:
 
 - 0x2011 as the shading compensation of a `VignettingCorrection`;
 - 0x2013 as the distortion compensation of a `DistortionCorrection`;
@@ -2169,7 +2167,7 @@ The raw SubIFD holds three more codes, with parameters
 ([section 7](#7-raw-relevant-tags)). They are not the menu settings: on
 seven public files the shading setting is auto where the SubIFD says
 that it has no parameters. And a JPEG has none of them. So raw-files
-will read the MakerNote's three, in a raw file and a JPEG alike.
+reads the MakerNote's three, in a raw file and a JPEG alike.
 
 **The scene.** 0xB023, which the documentation calls SceneMode, is one
 LONG [S][1], on 207 public files of 107 bodies and on all of mine.
@@ -2478,13 +2476,11 @@ For the picture style and the processing settings of
 - the high ISO noise reduction from 0x2009, where a raw file's 0 gives
   none;
 - the long exposure noise reduction from the low half of 0x2008;
-- the multi-frame noise reduction from 0x200B.
-
-It will read:
-
+- the multi-frame noise reduction from 0x200B;
 - the shading, chromatic aberration and distortion compensations from
-  0x2011 to 0x2013, never from the raw SubIFD's codes;
-- the scene from 0xB023, where 0 will give none.
+  0x2011 to 0x2013, never from the raw SubIFD's codes.
+
+It will read the scene from 0xB023, where 0 will give none.
 
 It reads contrast, saturation, sharpness, the scene capture type,
 custom rendering and gain control from Exif alone.

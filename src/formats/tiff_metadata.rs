@@ -908,6 +908,7 @@ fn camera_settings<R: Read + Seek>(
         // Only a maker's MakerNote records the lens corrections.
         vignetting_correction: None,
         distortion_correction: None,
+        chromatic_aberration_compensation: None,
     })
 }
 

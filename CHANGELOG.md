@@ -455,6 +455,19 @@ does. An entry that can break a caller opens with **Breaking:**.
   - `DistortionCorrection::setting_name` gives the maker's word for the
     setting, and `name` the choice's name. Each maker's type converts
     into it with `From`.
+- Sony's three lens compensations are read, each a `LensCompensation`,
+  off or auto, from 0x2011 to 0x2013, in a raw file and a JPEG alike
+  ([#230](https://github.com/kuolas/raw-files/issues/230)).
+  - The shading compensation is the `ShadingCompensation` variant of
+    `VignettingCorrection`, and the distortion compensation the
+    `DistortionCompensation` variant of `DistortionCorrection`. Their
+    `setting_name` is "Shading Comp." and "Distortion Comp.", Sony's
+    words.
+  - `CameraSettings::chromatic_aberration_compensation` gives the
+    third, a setting Nikon records in no plain tag.
+    `with_chromatic_aberration_compensation` sets it.
+  - The fixed-lens bodies' "n/a" gives `None`. The raw SubIFD's own
+    correction codes are not read: they are not the menu's settings.
 
 ### Changed
 
