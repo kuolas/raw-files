@@ -57,9 +57,10 @@ use std::io::{Read, Seek};
 
 use super::{MakerNoteBlock, Picture, Reader, checked_color_temperature};
 use crate::camera_settings::{
-    Bracketing, CameraSettings, CreativeLook, CreativeStyle, DRangeOptimizer,
-    DynamicRangeOptimization, FlashSource, FocusAreaMode, FocusMode, JpegQuality, PictureStyle,
-    RawCompression, ReleaseMode, Stabilization, WhiteBalanceFineTune, WhiteBalanceMode,
+    AutoHdr, AutoHdrExposureDifference, Bracketing, CameraSettings, CreativeLook, CreativeStyle,
+    DRangeOptimizer, DynamicRangeOptimization, FlashSource, FocusAreaMode, FocusMode,
+    HighDynamicRange, JpegQuality, PictureStyle, RawCompression, ReleaseMode, Stabilization,
+    WhiteBalanceFineTune, WhiteBalanceMode,
 };
 use crate::container::tiff::{Ifd, Rule, Tree};
 use crate::entries::{Directory, Entries, Lookup};
@@ -67,10 +68,10 @@ use crate::error::Result;
 use crate::focus::{Focus, FocusOrigin, FocusPoints};
 use crate::formats::tiff_metadata::{self, RawStorage, Standard};
 use crate::geometry::{Point, Size};
-use crate::io::Source;
+use crate::io::{ByteOrder, Source};
 use crate::limits::Limits;
 use crate::metadata::Metadata;
-use crate::rational::SignedRational;
+use crate::rational::{Rational, SignedRational};
 
 /// The Sony MakerNote tag that records the image quality (Quality): one
 /// LONG. In a raw file it says whether a JPEG was written beside it: 0 the
@@ -128,6 +129,13 @@ pub(in crate::formats) const FOCUS_LOCATION: u16 = 0x2027;
 /// the camera's metering (ExposureStandardAdjustment): one SRATIONAL, in
 /// EV, `0/6` on every file checked.
 pub(in crate::formats) const EXPOSURE_FINE_TUNE: u16 = 0x202D;
+
+/// The Sony MakerNote tag that records Auto HDR (HDR): one LONG, which
+/// the documentation reads as two 16-bit numbers. The first is the
+/// setting, 0 off, 1 on with the exposure difference left to the camera,
+/// and 0x10 to 0x1A on with a difference of 1.0 to 6.0 EV in half steps;
+/// the second says whether the camera made the HDR picture.
+const AUTO_HDR: u16 = 0x200A;
 
 /// The Sony MakerNote tag that records the contrast of the picture style
 /// (Contrast): one SLONG, the camera's steps from the style's own, 0.
@@ -229,6 +237,7 @@ mod rules {
     pub(super) const COLOR_TEMPERATURE: Held<[u32; 1]> = Held::new(super::COLOR_TEMPERATURE, LONG);
     pub(super) const DYNAMIC_RANGE_OPTIMIZER: Held<[u32; 1]> =
         Held::new(super::DYNAMIC_RANGE_OPTIMIZER, LONG);
+    pub(super) const AUTO_HDR: Held<[u32; 1]> = Held::new(super::AUTO_HDR, LONG);
     pub(super) const IMAGE_STABILIZATION: Held<[u32; 1]> =
         Held::new(super::IMAGE_STABILIZATION, LONG);
     pub(super) const RELEASE_MODE: Held<[u32; 1]> = Held::new(super::RELEASE_MODE, SHORT);
@@ -566,6 +575,9 @@ fn area<R: Read + Seek>(src: &mut Source<R>, makernote: &MakerNote) -> Result<Op
 /// - **The dynamic range optimization** is the D-Range Optimizer step
 ///   that DynamicRangeOptimizer's code names ([`d_range_optimizer`]).
 ///   0xB04F, which repeats it in three steps, is not read.
+/// - **The high dynamic range setting** is the Auto HDR that the first
+///   16-bit number of HDR records ([`auto_hdr`]). The second, whether the
+///   camera made the HDR picture, is not read.
 ///
 /// The shutter used, the image area and the raw image size stay as
 /// `settings` has them, `None`. Sony records the first two only in
@@ -624,6 +636,10 @@ fn camera_settings<R: Read + Seek>(
         .held(rules::DYNAMIC_RANGE_OPTIMIZER)
         .and_then(|[code]| d_range_optimizer(code))
         .map(DynamicRangeOptimization::DRangeOptimizer);
+    settings.high_dynamic_range = ifd
+        .held(rules::AUTO_HDR)
+        .and_then(|[value]| auto_hdr(first_half(value, ifd.order())))
+        .map(HighDynamicRange::AutoHdr);
     if let Some(flash) = settings.flash.as_mut() {
         if let Some(source) = ifd
             .held(rules::FLASH_ACTION)
@@ -721,6 +737,45 @@ fn d_range_optimizer(code: u32) -> Option<DRangeOptimizer> {
         23 => Level8,
         _ => return None,
     })
+}
+
+/// The first of the two 16-bit numbers that the LONG `value`, read in
+/// byte order `order`, holds as stored: the number in the value's first
+/// two bytes. That is its low half in a little-endian file, as every
+/// measured file that holds HDR is, and its high half in a big-endian
+/// one.
+fn first_half(value: u32, order: ByteOrder) -> u32 {
+    match order {
+        ByteOrder::Little => value & 0xFFFF,
+        ByteOrder::Big => value >> 16,
+    }
+}
+
+/// The Auto HDR that the first number of HDR, `code`, names, in the list
+/// ExifTool's published documentation gives, read whole, since files hold
+/// part of it (ARW notes, section 9.11):
+///
+/// - 0 [`off`](AutoHdr::off), which every measured file holds;
+/// - 1, which the documentation calls auto, [`on`](AutoHdr::on) with the
+///   exposure difference left to the camera,
+///   [`Auto`](AutoHdrExposureDifference::Auto), documented only;
+/// - 0x10 to 0x1A, on with a difference of 1.0 to 6.0 EV in steps of half
+///   an EV, [`Ev`](AutoHdrExposureDifference::Ev) of `2/2` to `12/2`,
+///   documented only.
+///
+/// `None` for every other code.
+fn auto_hdr(code: u32) -> Option<AutoHdr> {
+    match code {
+        0 => Some(AutoHdr::off()),
+        1 => Some(AutoHdr::on().with_exposure_difference(AutoHdrExposureDifference::Auto)),
+        0x10..=0x1A => Some(
+            AutoHdr::on().with_exposure_difference(AutoHdrExposureDifference::Ev(Rational {
+                numerator: code - 0x10 + 2,
+                denominator: 2,
+            })),
+        ),
+        _ => None,
+    }
 }
 
 /// The JPEG quality step that the MakerNote's IFD `ifd` records, from the
@@ -3247,15 +3302,16 @@ mod tests {
             .slong(ifd, CONTRAST, &[0])
             .slong(ifd, SATURATION, &[0])
             .slong(ifd, SHARPNESS, &[0])
-            .long(ifd, DYNAMIC_RANGE_OPTIMIZER, &[3]);
+            .long(ifd, DYNAMIC_RANGE_OPTIMIZER, &[3])
+            .long(ifd, AUTO_HDR, &[0]);
     }
 
     /// What [`settings_tags`] gives, from `settings`, for an E-mount body
     /// such as the ILCE-7M2: AF-C, the flexible spot as a single point,
     /// the stabilization on, a single frame and no bracketing, and, where
     /// `settings` holds a flash, a compensation of zero, a Creative Style
-    /// at 0, with no name, and the D-Range Optimizer on auto. FlashAction's
-    /// 0 names no source, and
+    /// at 0, with no name, the D-Range Optimizer on auto and Auto HDR off.
+    /// FlashAction's 0 names no source, and
     /// Quality's 6 and JPEGQuality's 65535 no JPEG quality.
     fn with_settings_tags(settings: CameraSettings) -> CameraSettings {
         let white_balance = WhiteBalance::default()
@@ -3276,7 +3332,8 @@ mod tests {
                 saturation: Some(0),
                 sharpness: Some(0),
             }))
-            .with_dynamic_range_optimization(DRangeOptimizer::Auto.into());
+            .with_dynamic_range_optimization(DRangeOptimizer::Auto.into())
+            .with_high_dynamic_range(AutoHdr::off().into());
         if let Some(flash) = settings.flash {
             let zero = SignedRational::new(0, 10).expect("a denominator of 10");
             settings = settings.with_flash(flash.with_compensation(zero));
@@ -4016,6 +4073,115 @@ mod tests {
                     settings.dynamic_range_optimization, None,
                     "{order:?}, {place}"
                 );
+                assert_eq!(
+                    settings.white_balance.mode,
+                    Some(WhiteBalanceMode::Daylight),
+                    "{order:?}, {place}"
+                );
+            }
+        }
+    }
+
+    // Auto HDR.
+
+    /// The LONG whose first two bytes, in byte order `order`, hold the
+    /// 16-bit number `first`, and whose last two hold `second`.
+    fn halves(order: Order, first: u16, second: u16) -> u32 {
+        match order {
+            Order::Little => u32::from(second) << 16 | u32::from(first),
+            Order::Big => u32::from(first) << 16 | u32::from(second),
+        }
+    }
+
+    fn half_steps(numerator: u32) -> Option<AutoHdr> {
+        Some(
+            AutoHdr::on().with_exposure_difference(AutoHdrExposureDifference::Ev(Rational {
+                numerator,
+                denominator: 2,
+            })),
+        )
+    }
+
+    #[test]
+    fn each_auto_hdr_code_gives_its_setting_in_a_raw_file_and_a_jpeg() {
+        let mut cases = vec![
+            (0, Some(AutoHdr::off())),
+            (
+                1,
+                Some(AutoHdr::on().with_exposure_difference(AutoHdrExposureDifference::Auto)),
+            ),
+            // 1.0 EV, 1.5 EV and 6.0 EV, the ends of the list and a half
+            // step between.
+            (0x10, half_steps(2)),
+            (0x11, half_steps(3)),
+            (0x1A, half_steps(12)),
+            // Codes the list lacks.
+            (2, None),
+            (0x0F, None),
+            (0x1B, None),
+            (0xFFFF, None),
+        ];
+        // Every half step between, 2.0 EV to 5.5 EV.
+        cases.extend((0x12..=0x19).map(|code| (code, half_steps(u32::from(code) - 0x10 + 2))));
+        for order in ORDERS {
+            for picture in [Picture::Raw, Picture::Jpeg] {
+                for &(code, expected) in &cases {
+                    // The second number, whether the camera made the HDR
+                    // picture, is not read: 0, 1 "good", and 2 and 3, two
+                    // kinds of failure.
+                    for second in [0, 1, 2, 3] {
+                        let settings = picture_settings_of(order, picture, |builder, ifd| {
+                            builder.long(ifd, AUTO_HDR, &[halves(order, code, second)]);
+                        });
+                        assert_eq!(
+                            settings.high_dynamic_range,
+                            expected.map(HighDynamicRange::AutoHdr),
+                            "{order:?}, {picture:?}, {code:#x}, {second}"
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn auto_hdr_is_the_first_number_as_stored_in_either_byte_order() {
+        // A first number of 0 beside a second that would name a step reads
+        // as off, and the reverse as that step.
+        for order in ORDERS {
+            let off = settings_of(order, |builder, ifd| {
+                builder.long(ifd, AUTO_HDR, &[halves(order, 0, 0x10)]);
+            });
+            assert_eq!(
+                off.high_dynamic_range,
+                Some(HighDynamicRange::AutoHdr(AutoHdr::off())),
+                "{order:?}"
+            );
+            let on = settings_of(order, |builder, ifd| {
+                builder.long(ifd, AUTO_HDR, &[halves(order, 0x10, 0)]);
+            });
+            assert_eq!(
+                on.high_dynamic_range,
+                half_steps(2).map(HighDynamicRange::AutoHdr),
+                "{order:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn an_auto_hdr_of_another_shape_gives_none_and_costs_nothing_else() {
+        for order in ORDERS {
+            // One SHORT, two LONGs, and one SLONG.
+            for place in 0..3 {
+                let settings = settings_of(order, |builder, ifd| {
+                    match place {
+                        0 => builder.short(ifd, AUTO_HDR, &[0]),
+                        1 => builder.long(ifd, AUTO_HDR, &[0, 0]),
+                        _ => builder.slong(ifd, AUTO_HDR, &[0]),
+                    };
+                    builder.long(ifd, WHITE_BALANCE, &[16]);
+                });
+                assert_eq!(settings.high_dynamic_range, None, "{order:?}, {place}");
                 assert_eq!(
                     settings.white_balance.mode,
                     Some(WhiteBalanceMode::Daylight),

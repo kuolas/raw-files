@@ -1923,11 +1923,10 @@ settings
 - the picture style, Sony's Creative Style or Creative Look, with its
   contrast, saturation and sharpness;
 - Exif's six processing values;
-- the D-Range Optimizer.
+- the D-Range Optimizer and Auto HDR.
 
 It will read:
 
-- Auto HDR;
 - the high ISO, long exposure and multi-frame noise reductions;
 - the three lens compensations;
 - the scene.
@@ -2061,7 +2060,7 @@ setting and gives no list of levels [P][33] (p. 75).
 one image [P][33] (p. 75). 0x200A HDR is one LONG, which the
 documentation reads as two 16-bit numbers [S][1]. It is on 184 public
 files of 84 bodies and on all of mine, and is 0 on every one. **[F]**
-raw-files will read the first number as the `AutoHdr` of a
+raw-files reads the first number as the `AutoHdr` of a
 `HighDynamicRange`:
 
 | First number | The documentation's name [S][1] | Read as | Mark |
@@ -2072,7 +2071,7 @@ raw-files will read the first number as the `AutoHdr` of a
 
 - The second number says whether the camera made the HDR image. It is
   0 for "uncorrected image", 1 for "HDR image (good)", and 2 or 3 for
-  two kinds of failure [S][1]. It will not be read.
+  two kinds of failure [S][1]. It is not read.
 - The first number is the value's first two bytes. Every measured file
   that holds the tag is little-endian, so it is the LONG's low half
   there. **[F]**
@@ -2474,11 +2473,11 @@ For the picture style and the processing settings of
   records any of 0x2032 to 0x2036, the same four tags are a Creative
   Look;
 - the D-Range Optimizer from 0xB025, never from 0xB04F, which repeats
-  it in three steps.
+  it in three steps;
+- Auto HDR from the first half of 0x200A.
 
 It will read:
 
-- Auto HDR from the first half of 0x200A;
 - the high ISO noise reduction from 0x2009, where a raw file's 0 will
   give none;
 - the long exposure noise reduction from the low half of 0x2008;
