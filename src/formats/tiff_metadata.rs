@@ -48,8 +48,8 @@ use crate::authorship::Authorship;
 use crate::camera::Camera;
 use crate::camera_settings::{
     Bracketing, CameraSettings, ColorSpace, Contrast, ExposureProgram, Flash, FlashMode,
-    FluorescentLamp, MeteringMode, RawCompression, Saturation, Sharpness, WhiteBalance,
-    WhiteBalanceMode,
+    FluorescentLamp, MeteringMode, RawCompression, Saturation, SceneCaptureType, Sharpness,
+    WhiteBalance, WhiteBalanceMode,
 };
 use crate::container::tiff::tags::COLOR_SPACE;
 use crate::container::tiff::{First, Ifd, Rule, Text, Tree};
@@ -142,6 +142,8 @@ mod rules {
     pub(super) const WHITE_BALANCE: Held<[u32; 1]> = Held::new(tags::WHITE_BALANCE, SHORT);
     pub(super) const LIGHT_SOURCE: Held<[u32; 1]> = Held::new(tags::LIGHT_SOURCE, SHORT);
     pub(super) const COLOR_SPACE: Held<[u32; 1]> = Held::new(tags::COLOR_SPACE, SHORT);
+    pub(super) const SCENE_CAPTURE_TYPE: Held<[u32; 1]> =
+        Held::new(tags::SCENE_CAPTURE_TYPE, SHORT);
     pub(super) const CONTRAST: Held<[u32; 1]> = Held::new(tags::CONTRAST, SHORT);
     pub(super) const SATURATION: Held<[u32; 1]> = Held::new(tags::SATURATION, SHORT);
     pub(super) const SHARPNESS: Held<[u32; 1]> = Held::new(tags::SHARPNESS, SHORT);
@@ -783,10 +785,10 @@ const DCF_OPTION_FILE: &str = "R03";
 /// it: the exposure program, the metering mode, the flash, the white
 /// balance mode and, for a manual one, its kind of fluorescent lamp
 /// ([`fluorescent_lamp`]), the color space, exposure bracketing
-/// ([`bracketing`]), and the directions of contrast ([`contrast`]),
-/// saturation ([`saturation`]) and sharpness ([`sharpness`]). The color
-/// space also reads the Interoperability IFD `interop`, when the tree has
-/// one.
+/// ([`bracketing`]), the directions of contrast ([`contrast`]),
+/// saturation ([`saturation`]) and sharpness ([`sharpness`]), and the
+/// scene capture type ([`scene_capture_type`]). The color space also reads
+/// the Interoperability IFD `interop`, when the tree has one.
 ///
 /// Each tag must be exactly one SHORT, as the standard gives it. Each code
 /// Exif defines and a variant names gives that variant. Every other code,
@@ -798,7 +800,8 @@ const DCF_OPTION_FILE: &str = "R03";
 /// It also puts the MakerNote's white balance setting, finer than Exif's,
 /// in place of the mode read here, when the MakerNote names one. No
 /// MakerNote reader touches the directions of contrast, saturation and
-/// sharpness: a maker's finer values belong to its picture style (ADR011).
+/// sharpness, or the scene capture type: a maker's finer values and its
+/// scene modes are its own (ADR011).
 ///
 /// # Errors
 ///
@@ -877,6 +880,26 @@ fn camera_settings<R: Read + Seek>(
         sharpness: exif
             .held(rules::SHARPNESS)
             .and_then(|[code]| sharpness(code)),
+        scene_capture_type: exif
+            .held(rules::SCENE_CAPTURE_TYPE)
+            .and_then(|[code]| scene_capture_type(code)),
+    })
+}
+
+/// The type an Exif SceneCaptureType `code` names: 0
+/// [`Standard`](SceneCaptureType::Standard), 1
+/// [`Landscape`](SceneCaptureType::Landscape), 2
+/// [`Portrait`](SceneCaptureType::Portrait) and 3
+/// [`NightScene`](SceneCaptureType::NightScene) (Exif 3.1, 4.6.6.7.40).
+/// `None` for every code Exif reserves, 4 and above, such as the 4, 5, 6
+/// and 64 that phones write.
+fn scene_capture_type(code: u32) -> Option<SceneCaptureType> {
+    Some(match code {
+        0 => SceneCaptureType::Standard,
+        1 => SceneCaptureType::Landscape,
+        2 => SceneCaptureType::Portrait,
+        3 => SceneCaptureType::NightScene,
+        _ => return None,
     })
 }
 
@@ -4112,9 +4135,9 @@ mod tests {
     /// fill mode, a manual white balance for shade, a color space that is
     /// "uncalibrated", which the InteropIndex `R03` beside it makes Adobe
     /// RGB, and auto bracket, exposure bracketing; then how the camera
-    /// processed the picture: hard contrast, low saturation and soft
-    /// sharpness.
-    const FULL_SETTINGS: [(u16, u16); 10] = [
+    /// processed the picture: hard contrast, low saturation, soft sharpness
+    /// and a night scene.
+    const FULL_SETTINGS: [(u16, u16); 11] = [
         (EXPOSURE_PROGRAM, 3),
         (METERING_MODE, 5),
         // Fired in fill mode, the return light detected, red-eye
@@ -4127,6 +4150,7 @@ mod tests {
         (CONTRAST, 2),
         (SATURATION, 1),
         (SHARPNESS, 1),
+        (SCENE_CAPTURE_TYPE, 3),
     ];
 
     /// The metadata of a file whose IFD0 holds the Make `SONY`, whose Exif
@@ -4177,6 +4201,7 @@ mod tests {
             contrast: Some(Contrast::Hard),
             saturation: Some(Saturation::Low),
             sharpness: Some(Sharpness::Soft),
+            scene_capture_type: Some(SceneCaptureType::NightScene),
             ..CameraSettings::default()
         };
         change(&mut settings);
@@ -4202,7 +4227,7 @@ mod tests {
     #[test]
     fn a_setting_missing_or_of_another_type_or_count_is_none_and_costs_no_other() {
         type Unset = fn(&mut CameraSettings);
-        let settings: [(u16, Unset); 10] = [
+        let settings: [(u16, Unset); 11] = [
             (EXPOSURE_PROGRAM, |settings| {
                 settings.exposure_program = None
             }),
@@ -4215,6 +4240,9 @@ mod tests {
             (CONTRAST, |settings| settings.contrast = None),
             (SATURATION, |settings| settings.saturation = None),
             (SHARPNESS, |settings| settings.sharpness = None),
+            (SCENE_CAPTURE_TYPE, |settings| {
+                settings.scene_capture_type = None
+            }),
         ];
         // Each with the code that gives a value as one SHORT.
         type Damage = fn(&mut TiffBuilder, IfdId, u16, u16);
@@ -4291,6 +4319,30 @@ mod tests {
             assert_eq!(settings_of(CONTRAST, code).contrast, None, "{code}");
             assert_eq!(settings_of(SATURATION, code).saturation, None, "{code}");
             assert_eq!(settings_of(SHARPNESS, code).sharpness, None, "{code}");
+        }
+    }
+
+    #[test]
+    fn every_scene_capture_type_exif_defines_gives_its_type() {
+        // 0, standard, is a type the camera recorded, as on most files.
+        for (code, scene) in [
+            (0, SceneCaptureType::Standard),
+            (1, SceneCaptureType::Landscape),
+            (2, SceneCaptureType::Portrait),
+            (3, SceneCaptureType::NightScene),
+        ] {
+            let read = settings_of(SCENE_CAPTURE_TYPE, code);
+            assert_eq!(read.scene_capture_type, Some(scene), "{code}");
+        }
+    }
+
+    #[test]
+    fn a_scene_capture_type_exif_reserves_is_none() {
+        // 4, 5, 6 and 64 are on phones' JPEGs measured; Exif reserves every
+        // code from 4 on.
+        for code in [4, 5, 6, 64, 255, 65535] {
+            let read = settings_of(SCENE_CAPTURE_TYPE, code);
+            assert_eq!(read.scene_capture_type, None, "{code}");
         }
     }
 

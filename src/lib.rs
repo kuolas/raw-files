@@ -424,8 +424,8 @@ pub use camera_settings::{
     AfFineTune, Bracketing, CameraSettings, ColorSpace, Contrast, ExposureProgram, Flash,
     FlashControl, FlashMode, FlashSource, FlashSync, FluorescentLamp, FocusAreaMode, FocusMode,
     ImageArea, JpegCompression, JpegQuality, MeteringMode, RawCompression, RawImageSize,
-    ReleaseMode, Saturation, Sharpness, Shutter, Stabilization, StabilizationMode, WhiteBalance,
-    WhiteBalanceFineTune, WhiteBalanceMode,
+    ReleaseMode, Saturation, SceneCaptureType, Sharpness, Shutter, Stabilization,
+    StabilizationMode, WhiteBalance, WhiteBalanceFineTune, WhiteBalanceMode,
 };
 pub use datetime::DateTime;
 pub use entries::{Directory, Entries, Entry, FieldType, SkippedDirectory, Value, ValueDisplay};

@@ -443,6 +443,7 @@ fn read_metadata(metadata: &Metadata) {
         .saturation()
         .map(|saturation| saturation.to_string());
     let _ = settings.sharpness().map(|sharpness| sharpness.to_string());
+    let _ = settings.scene_capture_type().map(|scene| scene.to_string());
     let tiny = Size {
         width: 1,
         height: 1,
