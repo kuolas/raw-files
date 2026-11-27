@@ -4666,17 +4666,23 @@ impl PictureControl {
 
     /// Mid-range sharpening, in steps.
     ///
-    /// `None` when the record marks it not available, holds 0, or is of a
-    /// version that records none, 0100 or 0200.
+    /// `None` when:
+    ///
+    /// - the record marks it not available;
+    /// - the record holds 0;
+    /// - the record is of a version that records none, 0100 or 0200.
     pub fn mid_range_sharpening(&self) -> Option<PictureControlValue> {
         self.mid_range_sharpening
     }
 
     /// Clarity, in steps, or [`Auto`](PictureControlValue::Auto).
     ///
-    /// `None` when the record marks it not available, holds 0 at the
-    /// 108-byte versions, whose bodies offer no auto clarity, or is of a
-    /// version that records none, as 0100 is.
+    /// `None` when:
+    ///
+    /// - the record marks it not available;
+    /// - the record holds 0 at the 108-byte versions, whose bodies offer
+    ///   no auto clarity;
+    /// - the record is of a version that records none, as 0100 is.
     pub fn clarity(&self) -> Option<PictureControlValue> {
         self.clarity
     }
@@ -4910,8 +4916,11 @@ impl CreativeStyle {
     /// The style's name as the file records it, such as `Standard`,
     /// cleaned as every text.
     ///
-    /// `None` when the file records none, as seven of Sony's DSLRs do,
-    /// when the text is blank, or when the tag is not ASCII.
+    /// `None` when:
+    ///
+    /// - the file records none, as seven of Sony's DSLRs do;
+    /// - the text is blank;
+    /// - the tag is not ASCII.
     pub fn name(&self) -> Option<&str> {
         self.name.as_deref()
     }
@@ -5023,8 +5032,11 @@ impl CreativeLook {
     /// The look's name as the file records it, such as `Standard`,
     /// cleaned as every text.
     ///
-    /// `None` when the file records none, when the text is blank, or when
-    /// the tag is not ASCII.
+    /// `None` when:
+    ///
+    /// - the file records none;
+    /// - the text is blank;
+    /// - the tag is not ASCII.
     pub fn name(&self) -> Option<&str> {
         self.name.as_deref()
     }
@@ -5769,23 +5781,27 @@ impl Hdr {
     }
 
     /// How strongly the camera combined the exposures, the D7100's HDR
-    /// strength, or `None` when none is recorded: when HDR is off, the
-    /// file records the D600's parts instead, or the record marks the
-    /// strength not available.
+    /// strength.
+    ///
+    /// `None` when:
+    ///
+    /// - the file records HDR as off;
+    /// - the file records the D600's parts instead;
+    /// - the record marks the strength not available.
     pub fn strength(&self) -> Option<HdrStrength> {
         self.strength
     }
 
     /// The difference in exposure between the two shots, the D600's
-    /// exposure differential, or `None` when none is recorded: when HDR is
-    /// off, or the file records a strength instead.
+    /// exposure differential, or `None` when none is recorded: when the
+    /// file records HDR as off, or a strength instead.
     pub fn exposure_differential(&self) -> Option<HdrExposureDifferential> {
         self.exposure_differential
     }
 
     /// How much the camera smoothed the boundaries between the two shots,
-    /// the D600's smoothing, or `None` when none is recorded: when HDR is
-    /// off, or the file records a strength instead.
+    /// the D600's smoothing, or `None` when none is recorded: when the
+    /// file records HDR as off, or a strength instead.
     pub fn smoothing(&self) -> Option<HdrSmoothing> {
         self.smoothing
     }
