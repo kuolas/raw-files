@@ -40,13 +40,13 @@ mod support;
 use std::io::Cursor;
 
 use raw_files::{
-    ActiveDLighting, Bracketing, Camera, CameraFile, CameraSettings, ColorSpace, Contrast,
-    DateTime, Directory, ErrorKind, Exposure, ExposureProgram, FlashControl, FlashMode,
-    FlashSource, FlashSync, Focus, FocusAreaMode, FocusMode, FocusOrigin, FocusPoints, Format,
-    GainControl, HighIsoNoiseReduction, ImageArea, Lens, Limits, Make, Metadata, MeteringMode,
-    Options, Orientation, Point, Preview, PreviewFormat, Rational, RawCompression, RawImageSize,
-    ReleaseMode, Saturation, SceneCaptureType, Sharpness, Shutter, SignedRational, Size,
-    StabilizationMode, ValueError, WhiteBalance, WhiteBalanceMode,
+    ActiveDLighting, AutoDistortionControl, Bracketing, Camera, CameraFile, CameraSettings,
+    ColorSpace, Contrast, DateTime, Directory, ErrorKind, Exposure, ExposureProgram, FlashControl,
+    FlashMode, FlashSource, FlashSync, Focus, FocusAreaMode, FocusMode, FocusOrigin, FocusPoints,
+    Format, GainControl, HighIsoNoiseReduction, ImageArea, Lens, Limits, Make, Metadata,
+    MeteringMode, Options, Orientation, Point, Preview, PreviewFormat, Rational, RawCompression,
+    RawImageSize, ReleaseMode, Saturation, SceneCaptureType, Sharpness, Shutter, SignedRational,
+    Size, StabilizationMode, ValueError, VignetteControl, WhiteBalance, WhiteBalanceMode,
 };
 use support::jpeg_stub::{stub, stub_len};
 use support::nef::{
@@ -65,9 +65,9 @@ use support::nef::{
 use support::samples::{
     Folder, HDR_OFF, Jpeg, LocationPart, Sample, SampleEntries, SampleFineTune, SampleFlash,
     SampleFocus, SampleLens, SampleMetadata, SamplePictureStyle, SamplePlacedLayout,
-    SampleSettings, SerialShape, Text, active_d_lighting, check, check_enciphered, check_entries,
-    check_every, check_fixture_tables, check_metadata, check_placed_layout, check_tables, sizes,
-    steps,
+    SampleSettings, SerialShape, Text, active_d_lighting, auto_distortion_control, check,
+    check_enciphered, check_entries, check_every, check_fixture_tables, check_metadata,
+    check_placed_layout, check_tables, scene_mode, sizes, steps, vignette_control,
 };
 use support::tiff_builder::{
     Built, EXIF_IFD, ORDERS, Order, RawValue, SHORT, SUB_IFDS, TiffBuilder,
@@ -1188,7 +1188,9 @@ const FIXTURE_METADATA: &[SampleMetadata] = &[
         // the MakerNote's WhiteBalance text and its fine-tuning, 0x003F,
         // whose values are stored outside their entries, so the white
         // balance mode is Exif's, and since the Z 9 writes no 0x000B, there
-        // is no fine-tuning.
+        // is no fine-tuning. It also removed DistortInfo, 0x002B, and the
+        // scene text, 0x00AB, stored the same way, so the distortion
+        // correction and the scene are `None`.
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
             color_temperature: Some(2830),
@@ -1237,6 +1239,10 @@ const FIXTURE_METADATA: &[SampleMetadata] = &[
             high_iso_noise_reduction: Some(HighIsoNoiseReduction::Normal),
             long_exposure_noise_reduction: None,
             multi_frame_noise_reduction: None,
+            vignetting_correction: vignette_control(VignetteControl::Normal),
+            distortion_correction: None,
+            chromatic_aberration_compensation: None,
+            scene: None,
         },
     },
     // The Z 9's 1:1 shot, alike but for these values. CropHiSpeed `[17,
@@ -1287,6 +1293,7 @@ const FIXTURE_METADATA: &[SampleMetadata] = &[
         }),
         focus_layout: None,
         placed_focus_layout: None,
+        // As the DX shot, stripped the same way.
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
             color_temperature: Some(2860),
@@ -1335,6 +1342,10 @@ const FIXTURE_METADATA: &[SampleMetadata] = &[
             high_iso_noise_reduction: Some(HighIsoNoiseReduction::Normal),
             long_exposure_noise_reduction: None,
             multi_frame_noise_reduction: None,
+            vignetting_correction: vignette_control(VignetteControl::Normal),
+            distortion_correction: None,
+            chromatic_aberration_compensation: None,
+            scene: None,
         },
     },
     // The Z 9's pinpoint shot, in FX. CropHiSpeed `[11, 8280, 5520, 8280,
@@ -1433,6 +1444,10 @@ const FIXTURE_METADATA: &[SampleMetadata] = &[
             high_iso_noise_reduction: Some(HighIsoNoiseReduction::Normal),
             long_exposure_noise_reduction: None,
             multi_frame_noise_reduction: None,
+            vignetting_correction: vignette_control(VignetteControl::Normal),
+            distortion_correction: None,
+            chromatic_aberration_compensation: None,
+            scene: None,
         },
     },
     // The D600's frame 4.
@@ -1504,12 +1519,14 @@ const FIXTURE_METADATA: &[SampleMetadata] = &[
         // and not fired. From the MakerNote: the fine-tuning 0x000B
         // records, no shift, whole steps; and, since the Exif IFD records
         // no ColorSpace, the MakerNote's color space, sRGB. The stripping
-        // removed the WhiteBalance text, so the mode is Exif's; the D600
-        // writes no ColorTemperatureAuto or ShutterMode. CropHiSpeed's
-        // crop setting, 0, "off", names no image area, so the area is the
-        // D600's sensor format from raw-files' table of bodies, full
-        // frame; and the D600 writes no ImageSizeRAW, so the raw size is
-        // large, the one size the table says it offers.
+        // removed the WhiteBalance text, DistortInfo and the scene text,
+        // whose values are stored outside their entries, so the mode is
+        // Exif's and the distortion correction and the scene are `None`;
+        // the D600 writes no ColorTemperatureAuto or ShutterMode.
+        // CropHiSpeed's crop setting, 0, "off", names no image area, so
+        // the area is the D600's sensor format from raw-files' table of
+        // bodies, full frame; and the D600 writes no ImageSizeRAW, so the
+        // raw size is large, the one size the table says it offers.
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
             color_temperature: None,
@@ -1561,6 +1578,10 @@ const FIXTURE_METADATA: &[SampleMetadata] = &[
             high_iso_noise_reduction: Some(HighIsoNoiseReduction::Normal),
             long_exposure_noise_reduction: None,
             multi_frame_noise_reduction: None,
+            vignetting_correction: vignette_control(VignetteControl::Off),
+            distortion_correction: None,
+            chromatic_aberration_compensation: None,
+            scene: None,
         },
     },
 ];
@@ -3469,6 +3490,10 @@ const METADATA: &[SampleMetadata] = &[
             high_iso_noise_reduction: Some(HighIsoNoiseReduction::Normal),
             long_exposure_noise_reduction: None,
             multi_frame_noise_reduction: None,
+            vignetting_correction: vignette_control(VignetteControl::Normal),
+            distortion_correction: auto_distortion_control(AutoDistortionControl::On),
+            chromatic_aberration_compensation: None,
+            scene: None,
         },
     },
     // Z 9, High Efficiency* (raw.pixls.us 5147)
@@ -3573,6 +3598,10 @@ const METADATA: &[SampleMetadata] = &[
             high_iso_noise_reduction: Some(HighIsoNoiseReduction::Normal),
             long_exposure_noise_reduction: None,
             multi_frame_noise_reduction: None,
+            vignetting_correction: vignette_control(VignetteControl::Normal),
+            distortion_correction: auto_distortion_control(AutoDistortionControl::On),
+            chromatic_aberration_compensation: None,
+            scene: None,
         },
     },
     // Z 9, High Efficiency (raw.pixls.us 5148)
@@ -3677,6 +3706,10 @@ const METADATA: &[SampleMetadata] = &[
             high_iso_noise_reduction: Some(HighIsoNoiseReduction::Normal),
             long_exposure_noise_reduction: None,
             multi_frame_noise_reduction: None,
+            vignetting_correction: vignette_control(VignetteControl::Normal),
+            distortion_correction: auto_distortion_control(AutoDistortionControl::On),
+            chromatic_aberration_compensation: None,
+            scene: None,
         },
     },
     // D1H, 12-bit uncompressed (raw.pixls.us 5364)
@@ -3752,6 +3785,10 @@ const METADATA: &[SampleMetadata] = &[
             high_iso_noise_reduction: None,
             long_exposure_noise_reduction: None,
             multi_frame_noise_reduction: None,
+            vignetting_correction: None,
+            distortion_correction: None,
+            chromatic_aberration_compensation: None,
+            scene: None,
         },
     },
     // D1X, 12-bit lossy (raw.pixls.us 1785)
@@ -3827,6 +3864,10 @@ const METADATA: &[SampleMetadata] = &[
             high_iso_noise_reduction: None,
             long_exposure_noise_reduction: None,
             multi_frame_noise_reduction: None,
+            vignetting_correction: None,
+            distortion_correction: None,
+            chromatic_aberration_compensation: None,
+            scene: None,
         },
     },
     // D1X, 12-bit uncompressed (raw.pixls.us 1786)
@@ -3902,6 +3943,10 @@ const METADATA: &[SampleMetadata] = &[
             high_iso_noise_reduction: None,
             long_exposure_noise_reduction: None,
             multi_frame_noise_reduction: None,
+            vignetting_correction: None,
+            distortion_correction: None,
+            chromatic_aberration_compensation: None,
+            scene: None,
         },
     },
     // D100, 12-bit uncompressed (raw.pixls.us 2996)
@@ -3986,6 +4031,10 @@ const METADATA: &[SampleMetadata] = &[
             high_iso_noise_reduction: None,
             long_exposure_noise_reduction: None,
             multi_frame_noise_reduction: None,
+            vignetting_correction: None,
+            distortion_correction: None,
+            chromatic_aberration_compensation: None,
+            scene: None,
         },
     },
     // D70, 12-bit lossy (raw.pixls.us 2060)
@@ -4070,6 +4119,10 @@ const METADATA: &[SampleMetadata] = &[
             high_iso_noise_reduction: None,
             long_exposure_noise_reduction: None,
             multi_frame_noise_reduction: None,
+            vignetting_correction: None,
+            distortion_correction: None,
+            chromatic_aberration_compensation: None,
+            scene: None,
         },
     },
     // D200, 12-bit lossy (raw.pixls.us 8079)
@@ -4154,6 +4207,10 @@ const METADATA: &[SampleMetadata] = &[
             high_iso_noise_reduction: Some(HighIsoNoiseReduction::Off),
             long_exposure_noise_reduction: None,
             multi_frame_noise_reduction: None,
+            vignetting_correction: None,
+            distortion_correction: None,
+            chromatic_aberration_compensation: None,
+            scene: None,
         },
     },
     // D300, 12-bit lossy (raw.pixls.us 928)
@@ -4250,6 +4307,10 @@ const METADATA: &[SampleMetadata] = &[
             high_iso_noise_reduction: Some(HighIsoNoiseReduction::Off),
             long_exposure_noise_reduction: None,
             multi_frame_noise_reduction: None,
+            vignetting_correction: None,
+            distortion_correction: None,
+            chromatic_aberration_compensation: None,
+            scene: None,
         },
     },
     // D700, 12-bit lossy (raw.pixls.us 2255)
@@ -4346,6 +4407,10 @@ const METADATA: &[SampleMetadata] = &[
             high_iso_noise_reduction: Some(HighIsoNoiseReduction::Off),
             long_exposure_noise_reduction: None,
             multi_frame_noise_reduction: None,
+            vignetting_correction: vignette_control(VignetteControl::Normal),
+            distortion_correction: None,
+            chromatic_aberration_compensation: None,
+            scene: None,
         },
     },
     // D7000, 12-bit lossy (raw.pixls.us 961)
@@ -4450,6 +4515,10 @@ const METADATA: &[SampleMetadata] = &[
             high_iso_noise_reduction: Some(HighIsoNoiseReduction::Normal),
             long_exposure_noise_reduction: None,
             multi_frame_noise_reduction: None,
+            vignetting_correction: None,
+            distortion_correction: auto_distortion_control(AutoDistortionControl::On),
+            chromatic_aberration_compensation: None,
+            scene: None,
         },
     },
     // D750, 12-bit lossy (raw.pixls.us 895)
@@ -4546,6 +4615,10 @@ const METADATA: &[SampleMetadata] = &[
             high_iso_noise_reduction: Some(HighIsoNoiseReduction::Normal),
             long_exposure_noise_reduction: None,
             multi_frame_noise_reduction: None,
+            vignetting_correction: vignette_control(VignetteControl::Normal),
+            distortion_correction: auto_distortion_control(AutoDistortionControl::Off),
+            chromatic_aberration_compensation: None,
+            scene: None,
         },
     },
     // D810, 12-bit small raw (raw.pixls.us 2036)
@@ -4642,6 +4715,10 @@ const METADATA: &[SampleMetadata] = &[
             high_iso_noise_reduction: Some(HighIsoNoiseReduction::Normal),
             long_exposure_noise_reduction: None,
             multi_frame_noise_reduction: None,
+            vignetting_correction: vignette_control(VignetteControl::Normal),
+            distortion_correction: auto_distortion_control(AutoDistortionControl::Off),
+            chromatic_aberration_compensation: None,
+            scene: None,
         },
     },
     // D850, 12-bit lossless small raw (raw.pixls.us 1835)
@@ -4738,6 +4815,10 @@ const METADATA: &[SampleMetadata] = &[
             high_iso_noise_reduction: Some(HighIsoNoiseReduction::Off),
             long_exposure_noise_reduction: None,
             multi_frame_noise_reduction: None,
+            vignetting_correction: vignette_control(VignetteControl::Off),
+            distortion_correction: auto_distortion_control(AutoDistortionControl::Off),
+            chromatic_aberration_compensation: None,
+            scene: None,
         },
     },
     // D780, 12-bit lossy (raw.pixls.us 3827)
@@ -4834,6 +4915,10 @@ const METADATA: &[SampleMetadata] = &[
             high_iso_noise_reduction: Some(HighIsoNoiseReduction::Normal),
             long_exposure_noise_reduction: None,
             multi_frame_noise_reduction: None,
+            vignetting_correction: vignette_control(VignetteControl::Normal),
+            distortion_correction: auto_distortion_control(AutoDistortionControl::Off),
+            chromatic_aberration_compensation: None,
+            scene: None,
         },
     },
     // Z 6, 12-bit small raw (raw.pixls.us 3587)
@@ -4938,6 +5023,10 @@ const METADATA: &[SampleMetadata] = &[
             high_iso_noise_reduction: Some(HighIsoNoiseReduction::Low),
             long_exposure_noise_reduction: None,
             multi_frame_noise_reduction: None,
+            vignetting_correction: vignette_control(VignetteControl::Normal),
+            distortion_correction: auto_distortion_control(AutoDistortionControl::On),
+            chromatic_aberration_compensation: None,
+            scene: None,
         },
     },
     // Z f, 14-bit (raw.pixls.us 6887)
@@ -5042,6 +5131,10 @@ const METADATA: &[SampleMetadata] = &[
             high_iso_noise_reduction: Some(HighIsoNoiseReduction::Normal),
             long_exposure_noise_reduction: None,
             multi_frame_noise_reduction: None,
+            vignetting_correction: vignette_control(VignetteControl::Normal),
+            distortion_correction: auto_distortion_control(AutoDistortionControl::On),
+            chromatic_aberration_compensation: None,
+            scene: None,
         },
     },
     // Z6III, 14-bit, 3:2 (raw.pixls.us 7810)
@@ -5146,6 +5239,10 @@ const METADATA: &[SampleMetadata] = &[
             high_iso_noise_reduction: Some(HighIsoNoiseReduction::Normal),
             long_exposure_noise_reduction: None,
             multi_frame_noise_reduction: None,
+            vignetting_correction: vignette_control(VignetteControl::Normal),
+            distortion_correction: auto_distortion_control(AutoDistortionControl::On),
+            chromatic_aberration_compensation: None,
+            scene: scene_mode("AUTO"),
         },
     },
     // Z6III, 14-bit, 16:9 (raw.pixls.us 7809)
@@ -5250,6 +5347,10 @@ const METADATA: &[SampleMetadata] = &[
             high_iso_noise_reduction: Some(HighIsoNoiseReduction::Normal),
             long_exposure_noise_reduction: None,
             multi_frame_noise_reduction: None,
+            vignetting_correction: vignette_control(VignetteControl::Normal),
+            distortion_correction: auto_distortion_control(AutoDistortionControl::On),
+            chromatic_aberration_compensation: None,
+            scene: scene_mode("AUTO"),
         },
     },
     // Z6III, 14-bit, 1:1 (raw.pixls.us 7808)
@@ -5354,6 +5455,10 @@ const METADATA: &[SampleMetadata] = &[
             high_iso_noise_reduction: Some(HighIsoNoiseReduction::Normal),
             long_exposure_noise_reduction: None,
             multi_frame_noise_reduction: None,
+            vignetting_correction: vignette_control(VignetteControl::Normal),
+            distortion_correction: auto_distortion_control(AutoDistortionControl::On),
+            chromatic_aberration_compensation: None,
+            scene: scene_mode("AUTO"),
         },
     },
     // Coolpix A, 14-bit lossy (raw.pixls.us 2238)
@@ -5450,6 +5555,10 @@ const METADATA: &[SampleMetadata] = &[
             high_iso_noise_reduction: Some(HighIsoNoiseReduction::Off),
             long_exposure_noise_reduction: None,
             multi_frame_noise_reduction: None,
+            vignetting_correction: None,
+            distortion_correction: auto_distortion_control(AutoDistortionControl::Off),
+            chromatic_aberration_compensation: None,
+            scene: None,
         },
     },
     // Coolpix P7800, 12-bit, an NRW file (raw.pixls.us 1425)
@@ -5535,6 +5644,10 @@ const METADATA: &[SampleMetadata] = &[
             high_iso_noise_reduction: Some(HighIsoNoiseReduction::Low),
             long_exposure_noise_reduction: None,
             multi_frame_noise_reduction: None,
+            vignetting_correction: None,
+            distortion_correction: auto_distortion_control(AutoDistortionControl::Off),
+            chromatic_aberration_compensation: None,
+            scene: None,
         },
     },
     // E5700, 12-bit uncompressed (raw.pixls.us 4456)
@@ -5611,6 +5724,10 @@ const METADATA: &[SampleMetadata] = &[
             high_iso_noise_reduction: None,
             long_exposure_noise_reduction: None,
             multi_frame_noise_reduction: None,
+            vignetting_correction: None,
+            distortion_correction: None,
+            chromatic_aberration_compensation: None,
+            scene: None,
         },
     },
     // Nikon 1 J1, 12-bit lossy (raw.pixls.us 2956)
@@ -5707,6 +5824,10 @@ const METADATA: &[SampleMetadata] = &[
             high_iso_noise_reduction: Some(HighIsoNoiseReduction::Off),
             long_exposure_noise_reduction: None,
             multi_frame_noise_reduction: None,
+            vignetting_correction: None,
+            distortion_correction: None,
+            chromatic_aberration_compensation: None,
+            scene: None,
         },
     },
     // D5600, 12-bit lossy, live view (raw.pixls.us 1415)
@@ -5811,6 +5932,10 @@ const METADATA: &[SampleMetadata] = &[
             high_iso_noise_reduction: Some(HighIsoNoiseReduction::Normal),
             long_exposure_noise_reduction: None,
             multi_frame_noise_reduction: None,
+            vignetting_correction: vignette_control(VignetteControl::Normal),
+            distortion_correction: auto_distortion_control(AutoDistortionControl::Off),
+            chromatic_aberration_compensation: None,
+            scene: None,
         },
     },
     // Z5II, 14-bit, 1:1 (raw.pixls.us 7735)
@@ -5907,6 +6032,10 @@ const METADATA: &[SampleMetadata] = &[
             high_iso_noise_reduction: Some(HighIsoNoiseReduction::Normal),
             long_exposure_noise_reduction: None,
             multi_frame_noise_reduction: None,
+            vignetting_correction: vignette_control(VignetteControl::Normal),
+            distortion_correction: auto_distortion_control(AutoDistortionControl::On),
+            chromatic_aberration_compensation: None,
+            scene: scene_mode("AUTO"),
         },
     },
     // Z5II, 14-bit, 16:9 (raw.pixls.us 7736)
@@ -6003,6 +6132,10 @@ const METADATA: &[SampleMetadata] = &[
             high_iso_noise_reduction: Some(HighIsoNoiseReduction::Normal),
             long_exposure_noise_reduction: None,
             multi_frame_noise_reduction: None,
+            vignetting_correction: vignette_control(VignetteControl::Normal),
+            distortion_correction: auto_distortion_control(AutoDistortionControl::On),
+            chromatic_aberration_compensation: None,
+            scene: scene_mode("AUTO"),
         },
     },
     // Z50II, 14-bit, 1:1 (raw.pixls.us 7767)
@@ -6107,6 +6240,10 @@ const METADATA: &[SampleMetadata] = &[
             high_iso_noise_reduction: Some(HighIsoNoiseReduction::Normal),
             long_exposure_noise_reduction: None,
             multi_frame_noise_reduction: None,
+            vignetting_correction: vignette_control(VignetteControl::Normal),
+            distortion_correction: auto_distortion_control(AutoDistortionControl::On),
+            chromatic_aberration_compensation: None,
+            scene: None,
         },
     },
     // Z50II, 14-bit, 16:9 (raw.pixls.us 7770)
@@ -6211,6 +6348,10 @@ const METADATA: &[SampleMetadata] = &[
             high_iso_noise_reduction: Some(HighIsoNoiseReduction::Normal),
             long_exposure_noise_reduction: None,
             multi_frame_noise_reduction: None,
+            vignetting_correction: vignette_control(VignetteControl::Normal),
+            distortion_correction: auto_distortion_control(AutoDistortionControl::On),
+            chromatic_aberration_compensation: None,
+            scene: None,
         },
     },
     // Z6III, 14-bit High Efficiency*, 1:1 (raw.pixls.us 7812)
@@ -6315,6 +6456,10 @@ const METADATA: &[SampleMetadata] = &[
             high_iso_noise_reduction: Some(HighIsoNoiseReduction::Normal),
             long_exposure_noise_reduction: None,
             multi_frame_noise_reduction: None,
+            vignetting_correction: vignette_control(VignetteControl::Normal),
+            distortion_correction: auto_distortion_control(AutoDistortionControl::On),
+            chromatic_aberration_compensation: None,
+            scene: scene_mode("AUTO"),
         },
     },
     // Z6III, 14-bit High Efficiency*, 16:9 (raw.pixls.us 7813)
@@ -6419,6 +6564,10 @@ const METADATA: &[SampleMetadata] = &[
             high_iso_noise_reduction: Some(HighIsoNoiseReduction::Normal),
             long_exposure_noise_reduction: None,
             multi_frame_noise_reduction: None,
+            vignetting_correction: vignette_control(VignetteControl::Normal),
+            distortion_correction: auto_distortion_control(AutoDistortionControl::On),
+            chromatic_aberration_compensation: None,
+            scene: scene_mode("AUTO"),
         },
     },
     // D5, 14-bit lossy, live view (raw.pixls.us 2218)
@@ -6523,6 +6672,10 @@ const METADATA: &[SampleMetadata] = &[
             high_iso_noise_reduction: Some(HighIsoNoiseReduction::Normal),
             long_exposure_noise_reduction: None,
             multi_frame_noise_reduction: None,
+            vignetting_correction: vignette_control(VignetteControl::Normal),
+            distortion_correction: auto_distortion_control(AutoDistortionControl::On),
+            chromatic_aberration_compensation: None,
+            scene: None,
         },
     },
     // Z 30, 12-bit lossless, rotated (raw.pixls.us 5812)
@@ -6627,6 +6780,10 @@ const METADATA: &[SampleMetadata] = &[
             high_iso_noise_reduction: Some(HighIsoNoiseReduction::Off),
             long_exposure_noise_reduction: None,
             multi_frame_noise_reduction: None,
+            vignetting_correction: vignette_control(VignetteControl::Off),
+            distortion_correction: auto_distortion_control(AutoDistortionControl::On),
+            chromatic_aberration_compensation: None,
+            scene: None,
         },
     },
     // Z fc, 12-bit lossless, manual focus (raw.pixls.us 8559)
@@ -6723,6 +6880,10 @@ const METADATA: &[SampleMetadata] = &[
             high_iso_noise_reduction: Some(HighIsoNoiseReduction::Normal),
             long_exposure_noise_reduction: None,
             multi_frame_noise_reduction: None,
+            vignetting_correction: vignette_control(VignetteControl::Normal),
+            distortion_correction: auto_distortion_control(AutoDistortionControl::On),
+            chromatic_aberration_compensation: None,
+            scene: None,
         },
     },
 ];

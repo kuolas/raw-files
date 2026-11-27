@@ -42,13 +42,15 @@ use std::io::Cursor;
 use std::ops::Range;
 
 use raw_files::{
-    ActiveDLighting, Bracketing, Camera, CameraFile, CameraSettings, ColorSpace, Contrast,
-    DRangeOptimizer, DateTime, Directory, ErrorKind, Exposure, ExposureProgram, FlashMode,
-    FlashSync, Focus, FocusAreaMode, FocusMode, FocusOrigin, FocusPoint, FocusPoints, Format,
-    GainControl, HighIsoNoiseReduction, ImageArea, JpegCompression, JpegQuality, Lens, Limits,
-    Make, Metadata, MeteringMode, Options, Orientation, Point, Preview, PreviewFormat, Rational,
-    ReleaseMode, Saturation, SceneCaptureType, Sharpness, Shutter, SignedRational, Size,
-    Stabilization, StabilizationMode, Value, WhiteBalance, WhiteBalanceFineTune, WhiteBalanceMode,
+    ActiveDLighting, AutoDistortionControl, Bracketing, Camera, CameraFile, CameraSettings,
+    ColorSpace, Contrast, DRangeOptimizer, DateTime, Directory, ErrorKind, Exposure,
+    ExposureProgram, FlashMode, FlashSync, Focus, FocusAreaMode, FocusMode, FocusOrigin,
+    FocusPoint, FocusPoints, Format, GainControl, HighIsoNoiseReduction, ImageArea,
+    JpegCompression, JpegQuality, Lens, LensCompensation, Limits, Make, Metadata, MeteringMode,
+    Options, Orientation, Point, Preview, PreviewFormat, Rational, ReleaseMode, Saturation,
+    SceneCaptureType, SceneSelection, Sharpness, Shutter, SignedRational, Size, Stabilization,
+    StabilizationMode, Value, VignetteControl, WhiteBalance, WhiteBalanceFineTune,
+    WhiteBalanceMode,
 };
 use support::arw::{
     ARW4_FOCUS_CENTER, ARW4_FOCUS_FRAME, ARW4_FOCUS_SIZE, ARW4_FULL_SIZE_JPEG,
@@ -90,9 +92,10 @@ use support::nef::{
 use support::samples::{
     AUTO, AUTO_HDR_OFF, Folder, HDR_OFF, Jpeg, Sample, SampleEntries, SampleFineTune, SampleFlash,
     SampleFocus, SampleLens, SampleMetadata, SamplePictureStyle, SamplePlacedLayout,
-    SampleSettings, SerialShape, Text, active_d_lighting, check, check_entries, check_every,
-    check_fixture_tables, check_metadata, check_placed_layout, check_placeholder_description,
-    check_tables, d_range_optimizer, steps,
+    SampleSettings, SerialShape, Text, active_d_lighting, auto_distortion_control, check,
+    check_entries, check_every, check_fixture_tables, check_metadata, check_placed_layout,
+    check_placeholder_description, check_tables, d_range_optimizer, distortion_compensation,
+    scene_mode, scene_selection, shading_compensation, steps, vignette_control,
 };
 use support::tiff_builder::{EXIF_IFD, IfdId, ORDERS, Order, TiffBuilder};
 use support::{fraction, size_of};
@@ -2627,6 +2630,10 @@ const FIXTURE_METADATA: &[SampleMetadata] = &[
             high_iso_noise_reduction: Some(HighIsoNoiseReduction::Normal),
             long_exposure_noise_reduction: None,
             multi_frame_noise_reduction: None,
+            vignetting_correction: vignette_control(VignetteControl::Normal),
+            distortion_correction: auto_distortion_control(AutoDistortionControl::On),
+            chromatic_aberration_compensation: None,
+            scene: None,
         },
     },
     // The Z 9's DX shot, at full size: CropHiSpeed `[2, 8280, 5520, 5408,
@@ -2733,6 +2740,10 @@ const FIXTURE_METADATA: &[SampleMetadata] = &[
             high_iso_noise_reduction: Some(HighIsoNoiseReduction::Normal),
             long_exposure_noise_reduction: None,
             multi_frame_noise_reduction: None,
+            vignetting_correction: vignette_control(VignetteControl::Normal),
+            distortion_correction: auto_distortion_control(AutoDistortionControl::On),
+            chromatic_aberration_compensation: None,
+            scene: None,
         },
     },
     // The Z 9's 16:9 shot, at the middle size, 6192 by 3480, taken in
@@ -2841,6 +2852,10 @@ const FIXTURE_METADATA: &[SampleMetadata] = &[
             high_iso_noise_reduction: Some(HighIsoNoiseReduction::Normal),
             long_exposure_noise_reduction: None,
             multi_frame_noise_reduction: None,
+            vignetting_correction: vignette_control(VignetteControl::Normal),
+            distortion_correction: auto_distortion_control(AutoDistortionControl::On),
+            chromatic_aberration_compensation: None,
+            scene: None,
         },
     },
     // The JPEG of the Z 9's pinpoint shot, whose NEF `tests/nef.rs`
@@ -2948,6 +2963,10 @@ const FIXTURE_METADATA: &[SampleMetadata] = &[
             high_iso_noise_reduction: Some(HighIsoNoiseReduction::Normal),
             long_exposure_noise_reduction: None,
             multi_frame_noise_reduction: None,
+            vignetting_correction: vignette_control(VignetteControl::Normal),
+            distortion_correction: auto_distortion_control(AutoDistortionControl::On),
+            chromatic_aberration_compensation: None,
+            scene: None,
         },
     },
     // The JPEG of frame 4 of the D600 session, the shot whose NEF
@@ -3083,6 +3102,10 @@ const FIXTURE_METADATA: &[SampleMetadata] = &[
             high_iso_noise_reduction: Some(HighIsoNoiseReduction::Normal),
             long_exposure_noise_reduction: None,
             multi_frame_noise_reduction: None,
+            vignetting_correction: vignette_control(VignetteControl::Off),
+            distortion_correction: auto_distortion_control(AutoDistortionControl::On),
+            chromatic_aberration_compensation: None,
+            scene: None,
         },
     },
 ];
@@ -3701,6 +3724,10 @@ const METADATA: &[SampleMetadata] = &[
             high_iso_noise_reduction: Some(HighIsoNoiseReduction::Normal),
             long_exposure_noise_reduction: Some(true),
             multi_frame_noise_reduction: Some(false),
+            vignetting_correction: shading_compensation(LensCompensation::Auto),
+            distortion_correction: distortion_compensation(LensCompensation::Off),
+            chromatic_aberration_compensation: Some(LensCompensation::Auto),
+            scene: None,
         },
     },
     // ILCE-7RM2 (Wikimedia Commons Ulpu_Pajari_puhumassa_vastaanotettuaan_tiedonjulkistamisen_valtionpalkinnon_2.jpg)
@@ -3801,6 +3828,10 @@ const METADATA: &[SampleMetadata] = &[
             high_iso_noise_reduction: Some(HighIsoNoiseReduction::Normal),
             long_exposure_noise_reduction: Some(true),
             multi_frame_noise_reduction: Some(false),
+            vignetting_correction: shading_compensation(LensCompensation::Auto),
+            distortion_correction: distortion_compensation(LensCompensation::Auto),
+            chromatic_aberration_compensation: Some(LensCompensation::Auto),
+            scene: scene_selection(SceneSelection::IntelligentAuto),
         },
     },
     // DSC-RX100M4 (Wikimedia Commons 여의도한강공원샛강생태공원문화다리_09.jpg)
@@ -3893,6 +3924,10 @@ const METADATA: &[SampleMetadata] = &[
             high_iso_noise_reduction: Some(HighIsoNoiseReduction::Normal),
             long_exposure_noise_reduction: Some(false),
             multi_frame_noise_reduction: Some(false),
+            vignetting_correction: None,
+            distortion_correction: None,
+            chromatic_aberration_compensation: None,
+            scene: None,
         },
     },
     // ILCE-6000 (Wikimedia Commons 140319_MS_Queen_Elizabeth_Kobe_Japan01o.JPG)
@@ -3985,6 +4020,10 @@ const METADATA: &[SampleMetadata] = &[
             high_iso_noise_reduction: Some(HighIsoNoiseReduction::Normal),
             long_exposure_noise_reduction: Some(true),
             multi_frame_noise_reduction: Some(false),
+            vignetting_correction: shading_compensation(LensCompensation::Auto),
+            distortion_correction: distortion_compensation(LensCompensation::Off),
+            chromatic_aberration_compensation: Some(LensCompensation::Auto),
+            scene: None,
         },
     },
     // DSLR-A100 (Wikimedia Commons "Krone"_flag_on_line_5_tram_(2564030031).jpg)
@@ -4066,6 +4105,10 @@ const METADATA: &[SampleMetadata] = &[
             high_iso_noise_reduction: None,
             long_exposure_noise_reduction: None,
             multi_frame_noise_reduction: None,
+            vignetting_correction: None,
+            distortion_correction: None,
+            chromatic_aberration_compensation: None,
+            scene: None,
         },
     },
     // NIKON D5300 (Wikimedia Commons "Tours"_French_restaurant_in_Omotesando.JPG)
@@ -4162,6 +4205,10 @@ const METADATA: &[SampleMetadata] = &[
             high_iso_noise_reduction: Some(HighIsoNoiseReduction::Normal),
             long_exposure_noise_reduction: None,
             multi_frame_noise_reduction: None,
+            vignetting_correction: None,
+            distortion_correction: auto_distortion_control(AutoDistortionControl::Off),
+            chromatic_aberration_compensation: None,
+            scene: scene_mode("AUTO(FLASH OFF)"),
         },
     },
     // NIKON D70 (Wikimedia Commons "Stadswandeling".JPG)
@@ -4246,6 +4293,10 @@ const METADATA: &[SampleMetadata] = &[
             high_iso_noise_reduction: None,
             long_exposure_noise_reduction: None,
             multi_frame_noise_reduction: None,
+            vignetting_correction: None,
+            distortion_correction: None,
+            chromatic_aberration_compensation: None,
+            scene: None,
         },
     },
     // NIKON E800 (Wikimedia Commons MIKI-eki.jpg)
@@ -4322,6 +4373,10 @@ const METADATA: &[SampleMetadata] = &[
             high_iso_noise_reduction: None,
             long_exposure_noise_reduction: None,
             multi_frame_noise_reduction: None,
+            vignetting_correction: None,
+            distortion_correction: None,
+            chromatic_aberration_compensation: None,
+            scene: None,
         },
     },
     // NIKON E900 (Wikimedia Commons Petro_Star_refinery.jpg)
@@ -4398,6 +4453,10 @@ const METADATA: &[SampleMetadata] = &[
             high_iso_noise_reduction: None,
             long_exposure_noise_reduction: None,
             multi_frame_noise_reduction: None,
+            vignetting_correction: None,
+            distortion_correction: None,
+            chromatic_aberration_compensation: None,
+            scene: None,
         },
     },
     // NIKON E950 (Wikimedia Commons Starr_020628-0045_Prosopis_pallida.jpg)
@@ -4474,6 +4533,10 @@ const METADATA: &[SampleMetadata] = &[
             high_iso_noise_reduction: None,
             long_exposure_noise_reduction: None,
             multi_frame_noise_reduction: None,
+            vignetting_correction: None,
+            distortion_correction: None,
+            chromatic_aberration_compensation: None,
+            scene: None,
         },
     },
     // Canon PowerShot G7 X (Wikimedia Commons DC-3_OH-LCH_at_EFJM_20160717.jpg)
@@ -4550,6 +4613,10 @@ const METADATA: &[SampleMetadata] = &[
             high_iso_noise_reduction: None,
             long_exposure_noise_reduction: None,
             multi_frame_noise_reduction: None,
+            vignetting_correction: None,
+            distortion_correction: None,
+            chromatic_aberration_compensation: None,
+            scene: None,
         },
     },
 ];

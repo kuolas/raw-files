@@ -23,15 +23,16 @@ use std::panic::{self, AssertUnwindSafe};
 use std::path::{Path, PathBuf};
 
 use raw_files::{
-    ActiveDLighting, AutoHdrExposureDifference, Bracketing, Camera, CameraFile, ColorSpace,
-    Contrast, DRangeOptimizer, Directory, DynamicRangeOptimization, ErrorKind, ExposureProgram,
-    FieldType, FlashControl, FlashMode, FlashSource, FlashSync, FluorescentLamp, FocusAreaMode,
-    FocusLayoutPoint, FocusMode, FocusOrigin, Format, GainControl, HdrExposureDifferential,
-    HdrSmoothing, HdrStrength, HighDynamicRange, HighIsoNoiseReduction, ImageArea, JpegCompression,
-    JpegQuality, Make, Metadata, MeteringMode, Orientation, PictureControlValue, PictureStyle,
+    ActiveDLighting, AutoDistortionControl, AutoHdrExposureDifference, Bracketing, Camera,
+    CameraFile, ColorSpace, Contrast, DRangeOptimizer, Directory, DistortionCorrection,
+    DynamicRangeOptimization, ErrorKind, ExposureProgram, FieldType, FlashControl, FlashMode,
+    FlashSource, FlashSync, FluorescentLamp, FocusAreaMode, FocusLayoutPoint, FocusMode,
+    FocusOrigin, Format, GainControl, HdrExposureDifferential, HdrSmoothing, HdrStrength,
+    HighDynamicRange, HighIsoNoiseReduction, ImageArea, JpegCompression, JpegQuality,
+    LensCompensation, Make, Metadata, MeteringMode, Orientation, PictureControlValue, PictureStyle,
     Point, Preview, PreviewFormat, Rational, RawCompression, RawImageSize, ReleaseMode, Saturation,
-    SceneCaptureType, Sharpness, Shutter, SignedRational, Size, StabilizationMode,
-    WhiteBalanceMode,
+    Scene, SceneCaptureType, SceneSelection, Sharpness, Shutter, SignedRational, Size,
+    StabilizationMode, VignetteControl, VignettingCorrection, WhiteBalanceMode,
 };
 
 /// The path of the sample file `name`, or `None`, with a note on stderr,
@@ -459,8 +460,10 @@ pub struct SamplePlacedLayout {
 /// sharpness, the scene capture type, whether the process was custom, and
 /// the gain control; the maker's picture style
 /// ([`SamplePictureStyle`]); the dynamic range optimization; the high
-/// dynamic range setting ([`SampleHighDynamicRange`]); and the high ISO,
-/// long exposure and multi-frame noise reductions.
+/// dynamic range setting ([`SampleHighDynamicRange`]); the high ISO,
+/// long exposure and multi-frame noise reductions; the vignetting and
+/// distortion corrections and the chromatic aberration compensation; and
+/// the scene ([`SampleScene`]).
 ///
 /// Every row writes every field, `None` included, one to a line, so that
 /// a value read later changes one line of a row.
@@ -503,6 +506,10 @@ pub struct SampleSettings {
     pub high_iso_noise_reduction: Option<HighIsoNoiseReduction>,
     pub long_exposure_noise_reduction: Option<bool>,
     pub multi_frame_noise_reduction: Option<bool>,
+    pub vignetting_correction: Option<VignettingCorrection>,
+    pub distortion_correction: Option<DistortionCorrection>,
+    pub chromatic_aberration_compensation: Option<LensCompensation>,
+    pub scene: Option<SampleScene>,
 }
 
 /// The high dynamic range setting of a sample file, as the reader must
@@ -549,6 +556,53 @@ pub const fn active_d_lighting(step: ActiveDLighting) -> Option<DynamicRangeOpti
 /// optimization, for a row.
 pub const fn d_range_optimizer(step: DRangeOptimizer) -> Option<DynamicRangeOptimization> {
     Some(DynamicRangeOptimization::DRangeOptimizer(step))
+}
+
+/// Nikon's vignette control step `step` as the vignetting correction, for
+/// a row.
+pub const fn vignette_control(step: VignetteControl) -> Option<VignettingCorrection> {
+    Some(VignettingCorrection::VignetteControl(step))
+}
+
+/// Sony's shading compensation `compensation` as the vignetting
+/// correction, for a row.
+pub const fn shading_compensation(compensation: LensCompensation) -> Option<VignettingCorrection> {
+    Some(VignettingCorrection::ShadingCompensation(compensation))
+}
+
+/// Nikon's auto distortion control `control` as the distortion
+/// correction, for a row.
+pub const fn auto_distortion_control(
+    control: AutoDistortionControl,
+) -> Option<DistortionCorrection> {
+    Some(DistortionCorrection::AutoDistortionControl(control))
+}
+
+/// Sony's distortion compensation `compensation` as the distortion
+/// correction, for a row.
+pub const fn distortion_compensation(
+    compensation: LensCompensation,
+) -> Option<DistortionCorrection> {
+    Some(DistortionCorrection::DistortionCompensation(compensation))
+}
+
+/// The scene of a sample file, as the reader must give it ([`Scene`]):
+/// Nikon's scene mode, its text, or Sony's Scene Selection. A row cannot
+/// build the library's own value, whose Nikon variant holds a `String`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SampleScene {
+    SceneMode(&'static str),
+    SceneSelection(SceneSelection),
+}
+
+/// Nikon's scene mode `text` as the scene, for a row.
+pub const fn scene_mode(text: &'static str) -> Option<SampleScene> {
+    Some(SampleScene::SceneMode(text))
+}
+
+/// Sony's Scene Selection `selection` as the scene, for a row.
+pub const fn scene_selection(selection: SceneSelection) -> Option<SampleScene> {
+    Some(SampleScene::SceneSelection(selection))
 }
 
 /// The picture style of a sample file, as the reader must give it
@@ -1279,6 +1333,37 @@ pub fn check_metadata(expected: &SampleMetadata, format: Format, folder: Folder)
         expected.multi_frame_noise_reduction,
         "{label}: multi-frame noise reduction"
     );
+    assert_eq!(
+        settings.vignetting_correction(),
+        expected.vignetting_correction,
+        "{label}: vignetting correction"
+    );
+    assert_eq!(
+        settings.distortion_correction(),
+        expected.distortion_correction,
+        "{label}: distortion correction"
+    );
+    assert_eq!(
+        settings.chromatic_aberration_compensation(),
+        expected.chromatic_aberration_compensation,
+        "{label}: chromatic aberration compensation"
+    );
+    check_scene(settings.scene(), expected.scene, label);
+}
+
+/// Checks the scene a sample file gives, `scene`, against its row's,
+/// `expected`.
+fn check_scene(scene: Option<&Scene>, expected: Option<SampleScene>, label: &str) {
+    match (scene, expected) {
+        (None, None) => {}
+        (Some(Scene::SceneMode(text)), Some(SampleScene::SceneMode(expected))) => {
+            assert_eq!(text, expected, "{label}: scene mode");
+        }
+        (Some(Scene::SceneSelection(selection)), Some(SampleScene::SceneSelection(expected))) => {
+            assert_eq!(*selection, expected, "{label}: Scene Selection");
+        }
+        (scene, expected) => panic!("{label}: scene {scene:?}, expected {expected:?}"),
+    }
 }
 
 /// Checks the high dynamic range setting a sample file gives, `setting`,

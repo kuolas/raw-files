@@ -555,6 +555,21 @@ struct SettingsTally {
     long_exposure_noise_reduction_on: usize,
     multi_frame_noise_reduction: usize,
     multi_frame_noise_reduction_on: usize,
+    /// Files with a vignetting correction and with a distortion
+    /// correction, each by the maker's word for the setting and the
+    /// value's name, such as ("Vignette control", "Normal"); with a
+    /// chromatic aberration compensation, by its name.
+    vignetting_correction: usize,
+    vignetting_corrections: BTreeMap<(&'static str, &'static str), usize>,
+    distortion_correction: usize,
+    distortion_corrections: BTreeMap<(&'static str, &'static str), usize>,
+    chromatic_aberration_compensation: usize,
+    chromatic_aberration_compensations: BTreeMap<&'static str, usize>,
+    /// Files with a scene, by the maker's word for the setting and the
+    /// scene's name: Nikon's text as the camera writes it, a camera's own
+    /// word and never anything a person typed, or the name of Sony's.
+    scene: usize,
+    scenes: BTreeMap<(&'static str, String), usize>,
 }
 
 impl SettingsTally {
@@ -944,6 +959,34 @@ impl SettingsTally {
         if let Some(on) = settings.multi_frame_noise_reduction() {
             self.multi_frame_noise_reduction += 1;
             self.multi_frame_noise_reduction_on += usize::from(on);
+        }
+        if let Some(correction) = settings.vignetting_correction() {
+            self.vignetting_correction += 1;
+            *self
+                .vignetting_corrections
+                .entry((correction.setting_name(), correction.name()))
+                .or_default() += 1;
+        }
+        if let Some(correction) = settings.distortion_correction() {
+            self.distortion_correction += 1;
+            *self
+                .distortion_corrections
+                .entry((correction.setting_name(), correction.name()))
+                .or_default() += 1;
+        }
+        if let Some(compensation) = settings.chromatic_aberration_compensation() {
+            count(
+                &mut self.chromatic_aberration_compensation,
+                &mut self.chromatic_aberration_compensations,
+                compensation.name(),
+            );
+        }
+        if let Some(scene) = settings.scene() {
+            self.scene += 1;
+            *self
+                .scenes
+                .entry((scene.setting_name(), scene.name().to_string()))
+                .or_default() += 1;
         }
     }
 }
@@ -1707,6 +1750,19 @@ impl Tally {
             s.long_exposure_noise_reduction_on,
             s.multi_frame_noise_reduction,
             s.multi_frame_noise_reduction_on
+        );
+        println!(
+            "files with a vignetting correction: {}, by setting and step: {:?}; with a distortion correction: {}, by setting and choice: {:?}; with a chromatic aberration compensation: {}, by choice: {:?}",
+            s.vignetting_correction,
+            s.vignetting_corrections,
+            s.distortion_correction,
+            s.distortion_corrections,
+            s.chromatic_aberration_compensation,
+            s.chromatic_aberration_compensations
+        );
+        println!(
+            "files with a scene: {}, by setting and scene: {:?}",
+            s.scene, s.scenes
         );
         let f = &self.focus;
         println!(
@@ -3469,4 +3525,57 @@ fn the_settings_tally_counts_the_dynamic_range_and_noise_settings() {
     assert_eq!(tally.long_exposure_noise_reduction_on, 1);
     assert_eq!(tally.multi_frame_noise_reduction, 1);
     assert_eq!(tally.multi_frame_noise_reduction_on, 0);
+}
+
+#[test]
+fn the_settings_tally_counts_the_lens_corrections_and_the_scene() {
+    use raw_files::{
+        AutoDistortionControl, CameraSettings, LensCompensation, Scene, SceneSelection,
+        VignetteControl,
+    };
+
+    // Each maker's settings as a file of each might give them, two Nikon
+    // files in one auto mode, and a file with none.
+    let nikon = CameraSettings::default()
+        .with_vignetting_correction(VignetteControl::Normal.into())
+        .with_distortion_correction(AutoDistortionControl::On.into())
+        .with_scene(Scene::SceneMode("AUTO".to_string()));
+    let sony = CameraSettings::default()
+        .with_vignetting_correction(LensCompensation::Auto.into())
+        .with_distortion_correction(LensCompensation::Off.into())
+        .with_chromatic_aberration_compensation(LensCompensation::Auto)
+        .with_scene(SceneSelection::IntelligentAuto.into());
+    let mut tally = SettingsTally::default();
+    for settings in [nikon.clone(), nikon, sony, CameraSettings::default()] {
+        tally.record(&Metadata::default().with_camera_settings(settings));
+    }
+    assert_eq!(tally.vignetting_correction, 3);
+    assert_eq!(
+        tally.vignetting_corrections,
+        BTreeMap::from([
+            (("Shading Comp.", "Auto"), 1),
+            (("Vignette control", "Normal"), 2)
+        ])
+    );
+    assert_eq!(tally.distortion_correction, 3);
+    assert_eq!(
+        tally.distortion_corrections,
+        BTreeMap::from([
+            (("Auto distortion control", "On"), 2),
+            (("Distortion Comp.", "Off"), 1)
+        ])
+    );
+    assert_eq!(tally.chromatic_aberration_compensation, 1);
+    assert_eq!(
+        tally.chromatic_aberration_compensations,
+        BTreeMap::from([("Auto", 1)])
+    );
+    assert_eq!(tally.scene, 3);
+    assert_eq!(
+        tally.scenes,
+        BTreeMap::from([
+            (("Scene Selection", "Intelligent auto".to_string()), 1),
+            (("Scene mode", "AUTO".to_string()), 2)
+        ])
+    );
 }
