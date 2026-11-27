@@ -392,6 +392,21 @@ does. An entry that can break a caller opens with **Breaking:**.
   - `DynamicRangeOptimization::setting_name` gives the maker's word for
     the setting, and `name` the step's name. Each maker's type converts
     into it with `From`.
+- `CameraSettings::high_dynamic_range` says whether the camera combined
+  exposures into one picture of a high dynamic range, a
+  `HighDynamicRange` under its maker's own name.
+  `with_high_dynamic_range` sets it
+  ([#230](https://github.com/kuolas/raw-files/issues/230)).
+  - Its first variant is Nikon's `Hdr`, on or off, read from the record
+    HDRInfo (0x0035) at versions 0100, 0101 and 0200.
+  - Where HDR is on, `Hdr` gives the parts its version records. Version
+    0200 gives an `HdrStrength`. Versions 0100 and 0101 give an
+    `HdrExposureDifferential`, auto or a number of EV, and an
+    `HdrSmoothing`.
+  - Nikon's DSLRs and Z bodies record it in their JPEGs alone.
+  - `HighDynamicRange::setting_name` gives the maker's word for the
+    setting, and `is_on` whether it was on. Each maker's type converts
+    into it with `From`.
 
 ### Changed
 
