@@ -357,16 +357,19 @@ does. An entry that can break a caller opens with **Breaking:**.
   - Each value is a `PictureControlValue`: `Auto`, or `Steps` as
     recorded. A value the camera marks not available gives `None`.
   - It is read from Nikon's PictureControlData, or from the Coolpix
-    bodies' copy under 0x00BD, at version 0100 with its 58 bytes. A
-    record of another version or length gives no style.
-  - The 68-byte record of version 0200 is read too, with its clarity.
-    Its values count quarter steps, as `Steps` keeps them: five steps
-    are `20/4`.
-  - So is the 108-byte record of versions 0300, 0301, 0302 and 0310,
-    with mid-range sharpening. `PictureControl::quick_sharp` gives the
-    Z bodies' Quick sharp, in quick adjust's place. Its adjustment kind
-    and Quick sharp are read two bytes before the places documented for
-    them, where the files hold them.
+    bodies' copy under 0x00BD, at the versions files hold, each of its
+    own length. A record of another version or length gives no style.
+  - Version 0100 is 58 bytes long, and its values count whole steps.
+  - Version 0200 is 68 bytes long and adds clarity. Its values count
+    quarter steps, as `Steps` keeps them: five steps are `20/4`.
+  - Versions 0300, 0301, 0302 and 0310 are 108 bytes long, count
+    quarter steps too and add mid-range sharpening.
+    `PictureControl::quick_sharp` gives the Z bodies' Quick sharp, in
+    quick adjust's place. This record's adjustment kind and Quick sharp
+    are read two bytes before the places documented for them, where the
+    files hold them.
+  - Quick adjust and Quick sharp count whole steps: every measured file
+    gives them a divisor of 1.
   - Sony's `CreativeStyle` and `CreativeLook` are its other variants,
     each with its name as recorded and its contrast, saturation and
     sharpness as the camera's steps. They are read from Sony's
@@ -423,8 +426,8 @@ does. An entry that can break a caller opens with **Breaking:**.
     raw file's 0 gives `None`, since it holds 0 where its JPEG holds
     the step.
 - `CameraSettings::long_exposure_noise_reduction` says whether the
-  camera was set to subtract a dark frame from long exposures, and
-  `multi_frame_noise_reduction` whether Sony's camera combined a burst
+  camera was set to subtract a dark frame from long exposures;
+  `multi_frame_noise_reduction`, whether Sony's camera combined a burst
   into one picture. Each has its `with_…` builder
   ([#230](https://github.com/kuolas/raw-files/issues/230)).
   - Nikon's text in 0x0095 says whether the reduction ran on the
