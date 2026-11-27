@@ -32,6 +32,7 @@ Kuolas, who maintains raw-files.
 | [ADR021](adr021-what-the-file-records-and-what-raw-files-reads-into-it.md) | What the file records and what raw-files reads into it | Accepted |
 | [ADR022](adr022-names-as-their-makers-write-them.md) | Names and published facts as their makers write them | Accepted |
 | [ADR023](adr023-every-entry-a-file-records.md) | Every entry a file records | Accepted |
+| [ADR024](adr024-xmp-and-iptc.md) | XMP and IPTC | Accepted |
 
 ## When to write one
 
