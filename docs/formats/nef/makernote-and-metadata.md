@@ -2185,11 +2185,12 @@ settings
 ([ADR011](../../architecture-decisions/adr011-metadata-from-standard-tags.md)):
 
 - the picture style, Nikon's Picture Control, with its values;
-- Exif's six processing values.
+- Exif's six processing values;
+- Active D-Lighting.
 
 It will read:
 
-- Active D-Lighting and HDR;
+- HDR;
 - the high ISO and long exposure noise reductions;
 - vignette control and auto distortion control;
 - the scene mode.
@@ -2413,7 +2414,7 @@ every other file the name equals the base.
 **Active D-Lighting.** It keeps detail in highlights and shadows, by
 adjusting the exposure before the shot [P][25] (pp. 137 to 138).
 0x0022 ActiveD-Lighting is one SHORT [S][1], on 263 public files of 76
-bodies and on all 48,428 of mine. raw-files will read it as the
+bodies and on all 48,428 of mine. raw-files reads it as the
 `ActiveDLighting` of a `DynamicRangeOptimization`:
 
 | Code | The documentation's name [S][1] | Mark | Files, public / mine |
@@ -2428,8 +2429,7 @@ bodies and on all 48,428 of mine. raw-files will read it as the
 
 **[F]** The D600 offers auto, extra high, high, normal, low and off
 [P][25] (p. 137). No manual read for this section names the four
-numbered steps. The list will be read whole, since files hold part of
-it.
+numbered steps. The list is read whole, since files hold part of it.
 
 **HDR.** The camera combines two exposures into one JPEG, and cannot
 record a NEF under it [P][25] (pp. 139 to 141). 0x0035 HDRInfo is a
@@ -2793,10 +2793,10 @@ plain MakerNote tags where Exif has no value, and decrypt nothing [I]:
 - the picture style, the Picture Control, from 0x0023, else 0x00BD,
   at its six versions. In the 108-byte record the adjustment kind and
   Quick sharp lie at bytes 52 and 53;
-- the processing settings of
+- Active D-Lighting from 0x0022;
+- the other processing settings of
   [section 8.11](#811-picture-style-and-processing), which raw-files
   will read:
-  - Active D-Lighting from 0x0022;
   - HDR from 0x0035 at its three versions, its parts only where it is
     on;
   - the high ISO noise reduction from 0x00B1;

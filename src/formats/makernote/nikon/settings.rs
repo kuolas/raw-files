@@ -5,8 +5,8 @@
 //! compression, the JPEG quality and compression, the color space, the
 //! focus mode, the AF-area mode, AF fine-tune, the stabilization, auto ISO,
 //! the exposure fine-tuning, the release mode and bracketing, daylight
-//! saving time, the flash's source, control, sync and compensation, and
-//! the Picture Control.
+//! saving time, the flash's source, control, sync and compensation, the
+//! Picture Control and Active D-Lighting.
 //!
 //! The MakerNote records how the camera was set for the picture beyond
 //! what the Exif tags record (ADR011). [`camera_settings`] reads each
@@ -47,7 +47,9 @@
 //!   ([`flash_sync_of_text`]), and its compensation from
 //!   FlashExposureComp ([`flash_compensation`]);
 //! - the picture style from PictureControlData, else from the Coolpix
-//!   bodies' copy of it ([`picture_control_record`], [`picture_control`]).
+//!   bodies' copy of it ([`picture_control_record`], [`picture_control`]);
+//! - the dynamic range optimization from ActiveD-Lighting
+//!   ([`active_d_lighting`]).
 //!
 //! A code or a text gives a value only where its meaning is known, as the
 //! next paragraph says. Anything else costs that value alone.
@@ -72,10 +74,10 @@ use super::picture_control::picture_control;
 use super::rules;
 use crate::camera::BodyFacts;
 use crate::camera_settings::{
-    AfFineTune, Bracketing, CameraSettings, ColorSpace, Flash, FlashControl, FlashSource,
-    FlashSync, FocusAreaMode, FocusMode, ImageArea, JpegCompression, JpegQuality, PictureStyle,
-    RawCompression, RawImageSize, ReleaseMode, Shutter, Stabilization, StabilizationMode,
-    WhiteBalanceFineTune, WhiteBalanceMode,
+    ActiveDLighting, AfFineTune, Bracketing, CameraSettings, ColorSpace, DynamicRangeOptimization,
+    Flash, FlashControl, FlashSource, FlashSync, FocusAreaMode, FocusMode, ImageArea,
+    JpegCompression, JpegQuality, PictureStyle, RawCompression, RawImageSize, ReleaseMode, Shutter,
+    Stabilization, StabilizationMode, WhiteBalanceFineTune, WhiteBalanceMode,
 };
 use crate::container::tiff::Ifd;
 use crate::error::Result;
@@ -198,6 +200,8 @@ const NIKON_COMPRESSED: u32 = 34713;
 ///   records, or, on a body without it, the Coolpix bodies' copy
 ///   ([`picture_control_record`]), read at its version's layout
 ///   ([`picture_control`]), in a raw file and a JPEG alike.
+/// - **The dynamic range optimization** is the Active D-Lighting step
+///   that ActiveD-Lighting's code names ([`active_d_lighting`]).
 ///
 /// Nikon records no electronic front curtain setting, so it stays as
 /// `settings` has it, `None`. The exposure program and the metering mode
@@ -320,6 +324,10 @@ pub(super) fn camera_settings<R: Read + Seek>(
         .as_deref()
         .and_then(picture_control)
         .map(PictureStyle::PictureControl);
+    settings.dynamic_range_optimization = ifd
+        .held(rules::ACTIVE_D_LIGHTING)
+        .and_then(|[code]| active_d_lighting(code))
+        .map(DynamicRangeOptimization::ActiveDLighting);
     Ok(settings)
 }
 
@@ -344,6 +352,34 @@ fn picture_control_record<R: Read + Seek>(
     } else {
         ifd.get(src, rules::PICTURE_CONTROL)
     }
+}
+
+/// The Active D-Lighting step an ActiveD-Lighting `code` names, in the
+/// list ExifTool's published documentation gives, read whole, since files
+/// hold part of it (NEF notes, section 8.11):
+///
+/// - 0 [`Off`](ActiveDLighting::Off), 1 [`Low`](ActiveDLighting::Low), 3
+///   [`Normal`](ActiveDLighting::Normal), 5 [`High`](ActiveDLighting::High)
+///   and 65535 [`Auto`](ActiveDLighting::Auto), each on files;
+/// - 7 [`ExtraHigh`](ActiveDLighting::ExtraHigh), and 8 to 11
+///   [`ExtraHigh1`](ActiveDLighting::ExtraHigh1) to
+///   [`ExtraHigh4`](ActiveDLighting::ExtraHigh4), documented only.
+///
+/// `None` for every other code, such as 2, 4 or 6, which the list lacks.
+fn active_d_lighting(code: u32) -> Option<ActiveDLighting> {
+    Some(match code {
+        0 => ActiveDLighting::Off,
+        1 => ActiveDLighting::Low,
+        3 => ActiveDLighting::Normal,
+        5 => ActiveDLighting::High,
+        7 => ActiveDLighting::ExtraHigh,
+        8 => ActiveDLighting::ExtraHigh1,
+        9 => ActiveDLighting::ExtraHigh2,
+        10 => ActiveDLighting::ExtraHigh3,
+        11 => ActiveDLighting::ExtraHigh4,
+        65535 => ActiveDLighting::Auto,
+        _ => return None,
+    })
 }
 
 /// `exif_flash`, the flash the Exif tags gave, with the parts the
@@ -1119,11 +1155,11 @@ mod tests {
         tags_block, whole,
     };
     use super::super::{
-        AF_INFO, AF_INFO2, AF_TUNE, COLOR_SPACE, COLOR_TEMPERATURE, COMPRESSION_RECORD,
-        COOLPIX_PICTURE_CONTROL, CROP_HI_SPEED, EXPOSURE_TUNING, FINE_TUNE, FINE_TUNE_STEPS,
-        FLASH_EXPOSURE_COMP, FLASH_SETTING, FLASH_TYPE, FOCUS_MODE, IMAGE_SIZE_RAW, ISO_SELECTION,
-        JPG_COMPRESSION, NEF_COMPRESSION, PICTURE_CONTROL, QUALITY, SHOOTING_MODE, SHUTTER_MODE,
-        VR_INFO, WHITE_BALANCE, WORLD_TIME, metadata,
+        ACTIVE_D_LIGHTING, AF_INFO, AF_INFO2, AF_TUNE, COLOR_SPACE, COLOR_TEMPERATURE,
+        COMPRESSION_RECORD, COOLPIX_PICTURE_CONTROL, CROP_HI_SPEED, EXPOSURE_TUNING, FINE_TUNE,
+        FINE_TUNE_STEPS, FLASH_EXPOSURE_COMP, FLASH_SETTING, FLASH_TYPE, FOCUS_MODE,
+        IMAGE_SIZE_RAW, ISO_SELECTION, JPG_COMPRESSION, NEF_COMPRESSION, PICTURE_CONTROL, QUALITY,
+        SHOOTING_MODE, SHUTTER_MODE, VR_INFO, WHITE_BALANCE, WORLD_TIME, metadata,
     };
     use super::*;
     use crate::camera_settings::{
@@ -4022,6 +4058,76 @@ mod tests {
                 Some(WhiteBalanceMode::Daylight),
                 "{order:?}"
             );
+        }
+    }
+
+    // Active D-Lighting.
+
+    /// Each code of ActiveD-Lighting's list with the step it names, and
+    /// codes the list lacks.
+    const ACTIVE_D_LIGHTINGS: [(u16, Option<ActiveDLighting>); 15] = [
+        (0, Some(ActiveDLighting::Off)),
+        (1, Some(ActiveDLighting::Low)),
+        (3, Some(ActiveDLighting::Normal)),
+        (5, Some(ActiveDLighting::High)),
+        (7, Some(ActiveDLighting::ExtraHigh)),
+        (8, Some(ActiveDLighting::ExtraHigh1)),
+        (9, Some(ActiveDLighting::ExtraHigh2)),
+        (10, Some(ActiveDLighting::ExtraHigh3)),
+        (11, Some(ActiveDLighting::ExtraHigh4)),
+        (65535, Some(ActiveDLighting::Auto)),
+        (2, None),
+        (4, None),
+        (6, None),
+        (12, None),
+        (65534, None),
+    ];
+
+    #[test]
+    fn each_active_d_lighting_code_gives_its_step_in_a_raw_file_and_a_jpeg() {
+        for order in ORDERS {
+            for (code, step) in ACTIVE_D_LIGHTINGS {
+                let tags = |inner: &mut TiffBuilder, ifd: IfdId| {
+                    inner.short(ifd, ACTIVE_D_LIGHTING, &[code]);
+                };
+                let expected = step.map(DynamicRangeOptimization::ActiveDLighting);
+                let raw = settings_of(order, tags);
+                assert_eq!(
+                    raw.dynamic_range_optimization, expected,
+                    "{order:?}, {code}"
+                );
+                let jpeg = jpeg_settings(order, tags, |_, _| {});
+                assert_eq!(
+                    jpeg.dynamic_range_optimization, expected,
+                    "{order:?}, {code}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn an_active_d_lighting_of_another_shape_gives_none_and_costs_nothing_else() {
+        for order in ORDERS {
+            // One LONG, two SHORTs, and two UNDEFINED bytes.
+            for place in 0..3 {
+                let settings = settings_of(order, |inner, ifd| {
+                    match place {
+                        0 => inner.long(ifd, ACTIVE_D_LIGHTING, &[3]),
+                        1 => inner.short(ifd, ACTIVE_D_LIGHTING, &[3, 3]),
+                        _ => inner.undefined(ifd, ACTIVE_D_LIGHTING, &[3, 0]),
+                    };
+                    inner.ascii(ifd, WHITE_BALANCE, &padded("SUNNY"));
+                });
+                assert_eq!(
+                    settings.dynamic_range_optimization, None,
+                    "{order:?}, {place}"
+                );
+                assert_eq!(
+                    settings.white_balance.mode,
+                    Some(WhiteBalanceMode::Daylight),
+                    "{order:?}, {place}"
+                );
+            }
         }
     }
 }
