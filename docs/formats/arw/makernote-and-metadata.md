@@ -1916,21 +1916,24 @@ another mode drops it.
 
 ### 9.11 Picture style and processing
 
-How the camera made its JPEG from the shot. raw-files will read, as
-camera settings
+How the camera made its JPEG from the shot. raw-files reads, as camera
+settings
 ([ADR011](../../architecture-decisions/adr011-metadata-from-standard-tags.md)):
 
 - the picture style, Sony's Creative Style or Creative Look, with its
   contrast, saturation and sharpness;
+- Exif's six processing values.
+
+It will read:
+
 - the D-Range Optimizer and Auto HDR;
 - the high ISO, long exposure and multi-frame noise reductions;
 - the three lens compensations;
-- the scene;
-- Exif's six processing values.
+- the scene.
 
-Each setting will keep Sony's own name and kinds. Where Nikon has a
-setting for the same thing, one value of the camera settings will hold
-either maker's
+Each setting keeps Sony's own name and kinds. Where Nikon has a setting
+for the same thing, one value of the camera settings holds either
+maker's
 ([NEF notes](../nef/makernote-and-metadata.md#811-picture-style-and-processing)).
 Nothing needs deciphering.
 
@@ -1965,9 +1968,8 @@ may adjust [P][33] (p. 74). Four MakerNote tags record it [S][1]:
 | 0x2005 Saturation | one SLONG | the saturation | 202 |
 | 0x2006 Sharpness | one SLONG | the sharpness | 202 |
 
-**[F]** All four are on every one of my files. raw-files will give a
-style when the file records any of the four, each part from its own
-tag. Of the public files, 195 hold all four, seven DSLRs hold the three
+**[F]** All four are on every one of my files. raw-files gives a style
+when any of the four gives a value, each part from its own tag. Of the public files, 195 hold all four, seven DSLRs hold the three
 numbers alone, and the DSC-R1 and the DSLR-A100 the name alone. Five
 hold none: the DSC-F828 and the DSLR-A200, A300, A350 and A700.
 
@@ -1984,11 +1986,11 @@ the five further values in 0x2032 to 0x2036 [S][1]. **[F]**
   where Exif's Sharpness says normal. It is 3 on the ZV-1M2's file,
   where Exif says soft. On the public files without the five tags it
   is 0 wherever Exif says normal.
-- raw-files will read a file that records any of 0x2032 to 0x2036 as
-  a `CreativeLook`, and any other as a `CreativeStyle`. Each will give
-  its name, contrast, saturation and sharpness as recorded.
-- The five further tags will be read for their presence alone. Their
-  values will not be given
+- raw-files reads a file that records any of 0x2032 to 0x2036 as a
+  `CreativeLook`, and any other as a `CreativeStyle`. Each gives its
+  name, contrast, saturation and sharpness as recorded.
+- The five further tags are read for their presence alone. Their
+  values are not given
   ([section 14.5](#145-what-the-view-leaves-out)).
 
 | Name in 0xB020 | Creative Style files, public / mine | Creative Look files, public |
@@ -2003,8 +2005,8 @@ the five further values in 0x2032 to 0x2036 [S][1]. **[F]**
 | `None`, on the DSLR-A100 | 1 / 0 | 0 |
 | `Off`, on the ILME-FX3 and ILME-FX30 | 0 / 0 | 2 |
 
-**[F]** raw-files will give the name as recorded, cleaned as every
-text, `Off` and `None` included, and will keep no list of names. A
+**[F]** raw-files gives the name as recorded, cleaned as every text,
+`Off` and `None` included, and keeps no list of names. A
 Creative Look's name is written out: the bodies whose menu says VV
 write `Vivid`.
 
@@ -2025,9 +2027,9 @@ write `Vivid`.
   Sony's manual says the three can be adjusted, without a range
   [P][33] (p. 74).
 - 0x2007 Brightness is 0 on all 189 public files that hold it and on
-  all of mine. It will not be read.
+  all of mine. It is not read.
 - 0xB029 ColorMode repeats the name as a code on every file with both.
-  It will not be read.
+  It is not read.
 
 **The D-Range Optimizer.** The camera analyzes the picture's contrast
 area by area, and sets its brightness and gradation from it [P][33]

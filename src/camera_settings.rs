@@ -20,7 +20,8 @@
 //! choices in words that fit any maker, with a
 //! [`name`](ExposureProgram::name) to show. The picture style keeps each
 //! maker's own words instead: [`PictureStyle`] holds Nikon's
-//! [`PictureControl`] under its own name.
+//! [`PictureControl`], Sony's [`CreativeStyle`] or its [`CreativeLook`],
+//! each under its own name.
 //!
 //! Every value is optional. A file may not record it, or may record it in
 //! a way that cannot be read, such as a code no variant names; either way
@@ -54,8 +55,9 @@
 //!   setting, which only Sony records; the focus mode, the AF-area mode,
 //!   the stabilization, without a mode, the exposure fine-tuning, the
 //!   release mode and bracketing, the flash's source when it is external
-//!   and its compensation, and the JPEG quality. A Sony raw file says how
-//!   a compressed raw is compressed in codes of Sony's own.
+//!   and its compensation, the JPEG quality, and the Creative Style or
+//!   Creative Look, Sony's picture style. A Sony raw file says how a
+//!   compressed raw is compressed in codes of Sony's own.
 //!
 //! Where a Nikon MakerNote records its crop as "off", or holds no crop,
 //! raw-files gives the body's sensor format from a table of its own, for
@@ -63,7 +65,7 @@
 //! holds no raw size, it gives large for a body the table says offers no
 //! raw sizes.
 //!
-//! On Sony files eight settings are `None`:
+//! On Sony files seven settings are `None`:
 //!
 //! - the shutter and the image area: Sony records them only in enciphered
 //!   blocks, which raw-files does not read;
@@ -72,12 +74,12 @@
 //! - AF fine-tune and auto ISO: Sony keeps its AF micro adjustment and
 //!   ISO setting in enciphered or unread blocks;
 //! - daylight saving time: Sony records none in a plain tag;
-//! - the JPEG compression: it is a setting of Nikon's alone;
-//! - the picture style: Sony's Creative Style is not read yet.
+//! - the JPEG compression: it is a setting of Nikon's alone.
 //!
 //! A program that uses raw-files can build these values for its own
-//! tests, without a camera file: [`CameraSettings`], [`WhiteBalance`]
-//! and [`PictureControl`] through their `with_…` methods, and a
+//! tests, without a camera file: [`CameraSettings`], [`WhiteBalance`],
+//! [`PictureControl`], [`CreativeStyle`] and [`CreativeLook`] through
+//! their `with_…` methods, and a
 //! [`WhiteBalanceFineTune`], a [`Flash`], an [`AfFineTune`] and a
 //! [`Stabilization`] through their constructors.
 //! [`CameraSettings`]'s docs show how.
@@ -110,9 +112,9 @@ use crate::rational::SignedRational;
 /// MakerNote or its own codes record, it gives from Nikon's MakerNote and
 /// Sony's, each those its MakerNote records in plain tags, and from each
 /// maker's compression codes; the shutter, the image area, the raw image
-/// size, AF fine-tune, auto ISO, daylight saving time, the JPEG
-/// compression and the picture style are `None` for every Sony file. Each
-/// getter says where its value comes from.
+/// size, AF fine-tune, auto ISO, daylight saving time and the JPEG
+/// compression are `None` for every Sony file. Each getter says where its
+/// value comes from.
 ///
 /// `CameraSettings::default()` is the empty record, with every value
 /// `None` and an empty [`WhiteBalance`]. A caller's tests start from it and
@@ -967,7 +969,7 @@ impl CameraSettings {
     ///
     /// It gives a direction only. A maker's finer value, such as the steps
     /// of a Nikon Picture Control's contrast, is part of the maker's picture
-    /// style.
+    /// style ([`picture_style`](Self::picture_style)).
     ///
     /// Read from Exif's Contrast, one SHORT: 0 normal, 1 soft and 2 hard,
     /// for every maker, in a raw file and a JPEG alike. No MakerNote fills
@@ -1006,7 +1008,7 @@ impl CameraSettings {
     ///
     /// It gives a direction only. A maker's finer value, such as the steps
     /// of a Nikon Picture Control's saturation, is part of the maker's
-    /// picture style.
+    /// picture style ([`picture_style`](Self::picture_style)).
     ///
     /// Read from Exif's Saturation, one SHORT: 0 normal, 1 low saturation
     /// and 2 high saturation, for every maker, in a raw file and a JPEG
@@ -1044,7 +1046,7 @@ impl CameraSettings {
     ///
     /// It gives a direction only. A maker's finer value, such as the steps
     /// of a Nikon Picture Control's sharpening, is part of the maker's
-    /// picture style.
+    /// picture style ([`picture_style`](Self::picture_style)).
     ///
     /// Read from Exif's Sharpness, one SHORT: 0 normal, 1 soft and 2 hard,
     /// for every maker, in a raw file and a JPEG alike. No MakerNote fills
@@ -1198,26 +1200,37 @@ impl CameraSettings {
     }
 
     /// The picture style the camera processed the picture in, under its
-    /// maker's own name: Nikon's [`PictureControl`], with its name and
-    /// each of its values ([`PictureStyle`]).
+    /// maker's own name: Nikon's [`PictureControl`], or Sony's
+    /// [`CreativeStyle`] or [`CreativeLook`], with its name and its values
+    /// ([`PictureStyle`]).
     ///
-    /// Read from Nikon's MakerNote, in a raw file and a JPEG alike: the
-    /// record PictureControlData (0x0023), or the same record under
-    /// 0x00BD, which the Coolpix bodies write, where a file holds no
-    /// 0x0023. The record is read at the versions and lengths that
-    /// measured files hold: 0100, of 58 bytes; 0200, of 68; 0300, 0301,
-    /// 0302 and 0310, of 108.
+    /// Read from the maker's MakerNote, in a raw file and a JPEG alike:
+    ///
+    /// - Nikon's from the record PictureControlData (0x0023), or from the
+    ///   same record under 0x00BD, which the Coolpix bodies write, where a
+    ///   file holds no 0x0023. The record is read at the versions and
+    ///   lengths that measured files hold: 0100, of 58 bytes; 0200, of 68;
+    ///   0300, 0301, 0302 and 0310, of 108.
+    /// - Sony's from CreativeStyle's name (0xB020) and the contrast,
+    ///   saturation and sharpness beside it (0x2004 to 0x2006). It is a
+    ///   Creative Look when the file also records any of the look's five
+    ///   further values (0x2032 to 0x2036), and a Creative Style
+    ///   otherwise.
     ///
     /// `None` when:
     ///
     /// - the file records no picture style, as every file of another
-    ///   maker does;
-    /// - the record is of another version, or of another length than its
-    ///   version's: no measured file shows which layout it takes;
-    /// - the record is not of type UNDEFINED.
+    ///   maker does, and five of Sony's oldest bodies, such as the
+    ///   DSC-F828;
+    /// - Nikon's record is of another version, or of another length than
+    ///   its version's: no measured file shows which layout it takes;
+    /// - Nikon's record is not of type UNDEFINED;
+    /// - none of Sony's four tags gives a value.
     ///
-    /// What files record is in the
-    /// [NEF notes](https://github.com/kuolas/raw-files/blob/master/docs/formats/nef/makernote-and-metadata.md#811-picture-style-and-processing).
+    /// What files record is in the NEF notes on
+    /// [the Picture Control](https://github.com/kuolas/raw-files/blob/master/docs/formats/nef/makernote-and-metadata.md#811-picture-style-and-processing)
+    /// and the ARW notes on
+    /// [the Creative Style](https://github.com/kuolas/raw-files/blob/master/docs/formats/arw/makernote-and-metadata.md#911-picture-style-and-processing).
     ///
     /// # Examples
     ///
@@ -3790,7 +3803,10 @@ impl fmt::Display for GainControl {
 /// photographer picks and may adjust. Each maker names it and cuts its
 /// values in its own way, so each keeps its own type:
 ///
-/// - [`PictureControl`](Self::PictureControl), Nikon's Picture Control.
+/// - [`PictureControl`](Self::PictureControl), Nikon's Picture Control;
+/// - [`CreativeStyle`](Self::CreativeStyle), Sony's Creative Style;
+/// - [`CreativeLook`](Self::CreativeLook), Sony's Creative Look, which its
+///   later bodies have in the Creative Style's place.
 ///
 /// [`setting_name`](Self::setting_name) gives the maker's word for the
 /// setting, for a viewer's label, and [`name`](Self::name) the style's
@@ -3803,51 +3819,67 @@ impl fmt::Display for GainControl {
 ///
 /// # Examples
 ///
-/// A Nikon Picture Control, labeled for a viewer and read by its variant:
+/// Each maker's style, labeled for a viewer and read by its variant:
 ///
 /// ```
-/// use raw_files::{PictureControl, PictureControlValue, PictureStyle, SignedRational};
+/// use raw_files::{
+///     CreativeStyle, PictureControl, PictureControlValue, PictureStyle, SignedRational,
+/// };
 ///
 /// let five = PictureControlValue::Steps(SignedRational { numerator: 20, denominator: 4 });
-/// let style = PictureStyle::from(
+/// let nikon = PictureStyle::from(
 ///     PictureControl::default()
 ///         .with_name("VIVID")
 ///         .with_base("VIVID")
 ///         .with_sharpening(five),
 /// );
+/// let sony = PictureStyle::from(CreativeStyle::default().with_name("Vivid").with_sharpness(1));
 ///
-/// assert_eq!(style.setting_name(), "Picture Control");
-/// assert_eq!(style.name(), Some("VIVID"));
-/// match &style {
-///     PictureStyle::PictureControl(control) => {
-///         assert_eq!(control.sharpening(), Some(five));
-///     }
-///     _ => unreachable!("built as a Picture Control"),
+/// for style in [&nikon, &sony] {
+///     let name = style.name().unwrap_or("unnamed");
+///     let sharpness = match style {
+///         PictureStyle::PictureControl(control) => format!("{:?}", control.sharpening()),
+///         PictureStyle::CreativeStyle(creative) => format!("{:?}", creative.sharpness()),
+///         _ => String::new(),
+///     };
+///     println!("{}: {name} {sharpness}", style.setting_name());
 /// }
+/// assert_eq!(nikon.setting_name(), "Picture Control");
+/// assert_eq!(sony.setting_name(), "Creative Style");
+/// assert_eq!(sony.name(), Some("Vivid"));
 /// ```
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum PictureStyle {
     /// Nikon's Picture Control.
     PictureControl(PictureControl),
+    /// Sony's Creative Style.
+    CreativeStyle(CreativeStyle),
+    /// Sony's Creative Look.
+    CreativeLook(CreativeLook),
 }
 
 impl PictureStyle {
     /// The maker's word for the setting, for a viewer's label: "Picture
-    /// Control".
+    /// Control", "Creative Style" or "Creative Look".
     pub fn setting_name(&self) -> &'static str {
         match self {
             PictureStyle::PictureControl(_) => "Picture Control",
+            PictureStyle::CreativeStyle(_) => "Creative Style",
+            PictureStyle::CreativeLook(_) => "Creative Look",
         }
     }
 
     /// The style's name as the file records it, whichever maker's style
-    /// it is, such as `STANDARD` or a name the photographer typed: the
-    /// [`name`](PictureControl::name) of the variant's own type. `None`
-    /// when that type gives none.
+    /// it is, such as `STANDARD`, `Vivid` or a name the photographer
+    /// typed: the `name` of the variant's own type,
+    /// [`PictureControl::name`], [`CreativeStyle::name`] or
+    /// [`CreativeLook::name`]. `None` when that type gives none.
     pub fn name(&self) -> Option<&str> {
         match self {
             PictureStyle::PictureControl(control) => control.name(),
+            PictureStyle::CreativeStyle(style) => style.name(),
+            PictureStyle::CreativeLook(look) => look.name(),
         }
     }
 }
@@ -3857,6 +3889,22 @@ impl From<PictureControl> for PictureStyle {
     /// [`PictureControl`](PictureStyle::PictureControl) variant.
     fn from(control: PictureControl) -> Self {
         PictureStyle::PictureControl(control)
+    }
+}
+
+impl From<CreativeStyle> for PictureStyle {
+    /// The Creative Style as a picture style, its
+    /// [`CreativeStyle`](PictureStyle::CreativeStyle) variant.
+    fn from(style: CreativeStyle) -> Self {
+        PictureStyle::CreativeStyle(style)
+    }
+}
+
+impl From<CreativeLook> for PictureStyle {
+    /// The Creative Look as a picture style, its
+    /// [`CreativeLook`](PictureStyle::CreativeLook) variant.
+    fn from(look: CreativeLook) -> Self {
+        PictureStyle::CreativeLook(look)
     }
 }
 
@@ -4193,6 +4241,235 @@ impl PictureControl {
     #[must_use]
     pub fn with_toning_saturation(mut self, value: PictureControlValue) -> Self {
         self.toning_saturation = Some(value);
+        self
+    }
+}
+
+/// Sony's Creative Style: the preset of image processing the camera
+/// processed the picture in, with the photographer's contrast, saturation
+/// and sharpness.
+///
+/// The name is as the file records it, such as `Standard`, `Vivid`, `BW`,
+/// or `Off` and `None`, which files hold too: raw-files keeps no list of
+/// Creative Style names. The three values are the camera's steps from the
+/// style's own value, as recorded: 0 is the style's own, and Sony's later
+/// bodies have a [`CreativeLook`] in its place, whose sharpness counts on
+/// another scale.
+///
+/// Read from Sony's MakerNote, in a raw file and a JPEG alike: the name
+/// from CreativeStyle (0xB020), and the contrast, saturation and sharpness
+/// from Contrast, Saturation and Sharpness (0x2004 to 0x2006), each one
+/// SLONG. A file gives a Creative Style when at least one of the four
+/// gives a value and the file records none of a Creative Look's further
+/// values. Each part is `None` when its tag is missing or breaks its rule,
+/// and a damaged part costs only itself. What files record is in the
+/// [ARW notes](https://github.com/kuolas/raw-files/blob/master/docs/formats/arw/makernote-and-metadata.md#911-picture-style-and-processing).
+///
+/// `CreativeStyle::default()` is the empty style, with every part `None`;
+/// a caller's tests set the parts they need with the `with_…` methods,
+/// each named after the method that reads the part back, each replacing
+/// any value set before and storing it as given. `CreativeStyle` is
+/// `Clone` and not `Copy`.
+///
+/// # Examples
+///
+/// ```
+/// use raw_files::CreativeStyle;
+///
+/// let style = CreativeStyle::default()
+///     .with_name("Vivid")
+///     .with_contrast(0)
+///     .with_saturation(1)
+///     .with_sharpness(0);
+/// assert_eq!(style.name(), Some("Vivid"));
+/// assert_eq!(style.saturation(), Some(1));
+/// ```
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
+pub struct CreativeStyle {
+    pub(crate) name: Option<String>,
+    pub(crate) contrast: Option<i32>,
+    pub(crate) saturation: Option<i32>,
+    pub(crate) sharpness: Option<i32>,
+}
+
+impl CreativeStyle {
+    /// The style's name as the file records it, such as `Standard`,
+    /// cleaned as every text.
+    ///
+    /// `None` when the file records none, as seven of Sony's DSLRs do,
+    /// when the text is blank, or when the tag is not ASCII.
+    pub fn name(&self) -> Option<&str> {
+        self.name.as_deref()
+    }
+
+    /// The contrast, in the camera's steps from the style's own, 0.
+    ///
+    /// `None` when the file records none, as the DSC-R1 and the DSLR-A100
+    /// do, or when the tag is not one SLONG.
+    pub fn contrast(&self) -> Option<i32> {
+        self.contrast
+    }
+
+    /// The saturation, in the camera's steps from the style's own, 0.
+    ///
+    /// `None` when the file records none, as the DSC-R1 and the DSLR-A100
+    /// do, or when the tag is not one SLONG.
+    pub fn saturation(&self) -> Option<i32> {
+        self.saturation
+    }
+
+    /// The sharpness, in the camera's steps from the style's own, 0.
+    ///
+    /// `None` when the file records none, as the DSC-R1 and the DSLR-A100
+    /// do, or when the tag is not one SLONG.
+    pub fn sharpness(&self) -> Option<i32> {
+        self.sharpness
+    }
+
+    /// Sets the name, in place of any set before;
+    /// [`name`](Self::name) reads it.
+    #[must_use]
+    pub fn with_name(mut self, name: impl Into<String>) -> Self {
+        self.name = Some(name.into());
+        self
+    }
+
+    /// Sets the contrast, in place of any set before;
+    /// [`contrast`](Self::contrast) reads it.
+    #[must_use]
+    pub fn with_contrast(mut self, steps: i32) -> Self {
+        self.contrast = Some(steps);
+        self
+    }
+
+    /// Sets the saturation, in place of any set before;
+    /// [`saturation`](Self::saturation) reads it.
+    #[must_use]
+    pub fn with_saturation(mut self, steps: i32) -> Self {
+        self.saturation = Some(steps);
+        self
+    }
+
+    /// Sets the sharpness, in place of any set before;
+    /// [`sharpness`](Self::sharpness) reads it.
+    #[must_use]
+    pub fn with_sharpness(mut self, steps: i32) -> Self {
+        self.sharpness = Some(steps);
+        self
+    }
+}
+
+/// Sony's Creative Look: the picture style that Sony's later bodies, from
+/// the ILCE-7SM3 on, have in the [`CreativeStyle`]'s place, with the
+/// photographer's contrast, saturation and sharpness.
+///
+/// The name is as the file records it, such as `Standard` or `Off`, and
+/// written out where the camera's menu abbreviates it: a look the menu
+/// calls VV is `Vivid`. raw-files keeps no list of names. The three values
+/// are the camera's steps, as recorded, and the sharpness counts on
+/// another scale than a Creative Style's: its default is 4, where a
+/// Creative Style's is 0.
+///
+/// Read from Sony's MakerNote, in the same four tags as a Creative Style:
+/// the name from CreativeStyle (0xB020), and the contrast, saturation and
+/// sharpness from 0x2004 to 0x2006, each one SLONG. A file gives a
+/// Creative Look in place of a Creative Style when it also records any of
+/// the look's five further values, 0x2032 to 0x2036: highlights, shadows,
+/// fade, sharpness range and clarity. Those five are not given. An entry
+/// the MakerNote skipped as damaged is not counted among them, so a look
+/// whose five entries were all damaged reads as a Creative Style. Each part
+/// is `None` when its tag is missing or breaks its rule, and a damaged
+/// part costs only itself. What files record is in the
+/// [ARW notes](https://github.com/kuolas/raw-files/blob/master/docs/formats/arw/makernote-and-metadata.md#911-picture-style-and-processing).
+///
+/// `CreativeLook::default()` is the empty look, with every part `None`;
+/// a caller's tests set the parts they need with the `with_…` methods,
+/// each named after the method that reads the part back, each replacing
+/// any value set before and storing it as given. `CreativeLook` is
+/// `Clone` and not `Copy`.
+///
+/// # Examples
+///
+/// ```
+/// use raw_files::CreativeLook;
+///
+/// let look = CreativeLook::default().with_name("Standard").with_sharpness(4);
+/// assert_eq!(look.sharpness(), Some(4));
+/// assert_eq!(look.contrast(), None);
+/// ```
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
+pub struct CreativeLook {
+    pub(crate) name: Option<String>,
+    pub(crate) contrast: Option<i32>,
+    pub(crate) saturation: Option<i32>,
+    pub(crate) sharpness: Option<i32>,
+}
+
+impl CreativeLook {
+    /// The look's name as the file records it, such as `Standard`,
+    /// cleaned as every text.
+    ///
+    /// `None` when the file records none, when the text is blank, or when
+    /// the tag is not ASCII.
+    pub fn name(&self) -> Option<&str> {
+        self.name.as_deref()
+    }
+
+    /// The contrast, in the camera's steps from the look's own, 0.
+    ///
+    /// `None` when the file records none, or when the tag is not one
+    /// SLONG.
+    pub fn contrast(&self) -> Option<i32> {
+        self.contrast
+    }
+
+    /// The saturation, in the camera's steps from the look's own, 0.
+    ///
+    /// `None` when the file records none, or when the tag is not one
+    /// SLONG.
+    pub fn saturation(&self) -> Option<i32> {
+        self.saturation
+    }
+
+    /// The sharpness, in the camera's steps, as recorded: 4 is the look's
+    /// own, where a Creative Style's is 0, and Exif's Sharpness says
+    /// normal beside both.
+    ///
+    /// `None` when the file records none, or when the tag is not one
+    /// SLONG.
+    pub fn sharpness(&self) -> Option<i32> {
+        self.sharpness
+    }
+
+    /// Sets the name, in place of any set before;
+    /// [`name`](Self::name) reads it.
+    #[must_use]
+    pub fn with_name(mut self, name: impl Into<String>) -> Self {
+        self.name = Some(name.into());
+        self
+    }
+
+    /// Sets the contrast, in place of any set before;
+    /// [`contrast`](Self::contrast) reads it.
+    #[must_use]
+    pub fn with_contrast(mut self, steps: i32) -> Self {
+        self.contrast = Some(steps);
+        self
+    }
+
+    /// Sets the saturation, in place of any set before;
+    /// [`saturation`](Self::saturation) reads it.
+    #[must_use]
+    pub fn with_saturation(mut self, steps: i32) -> Self {
+        self.saturation = Some(steps);
+        self
+    }
+
+    /// Sets the sharpness, in place of any set before;
+    /// [`sharpness`](Self::sharpness) reads it.
+    #[must_use]
+    pub fn with_sharpness(mut self, steps: i32) -> Self {
+        self.sharpness = Some(steps);
         self
     }
 }
@@ -5108,15 +5385,190 @@ mod tests {
         }
     }
 
+    /// A Creative Style with every part set, each value different.
+    fn full_creative_style() -> CreativeStyle {
+        CreativeStyle {
+            name: Some("Vivid".into()),
+            contrast: Some(-3),
+            saturation: Some(2),
+            sharpness: Some(1),
+        }
+    }
+
+    /// A Creative Look with every part set, each value different.
+    fn full_creative_look() -> CreativeLook {
+        CreativeLook {
+            name: Some("Standard".into()),
+            contrast: Some(1),
+            saturation: Some(-3),
+            sharpness: Some(4),
+        }
+    }
+
     #[test]
     fn a_picture_style_gives_its_makers_word_and_its_name() {
-        let style = PictureStyle::from(full_control());
-        assert_eq!(style, PictureStyle::PictureControl(full_control()));
-        assert_eq!(style.setting_name(), "Picture Control");
-        assert_eq!(style.name(), Some("VIVID-KR"));
-        let unnamed = PictureStyle::from(PictureControl::default());
-        assert_eq!(unnamed.setting_name(), "Picture Control");
-        assert_eq!(unnamed.name(), None);
+        let cases = [
+            (
+                PictureStyle::from(full_control()),
+                PictureStyle::PictureControl(full_control()),
+                "Picture Control",
+                "VIVID-KR",
+            ),
+            (
+                PictureStyle::from(full_creative_style()),
+                PictureStyle::CreativeStyle(full_creative_style()),
+                "Creative Style",
+                "Vivid",
+            ),
+            (
+                PictureStyle::from(full_creative_look()),
+                PictureStyle::CreativeLook(full_creative_look()),
+                "Creative Look",
+                "Standard",
+            ),
+        ];
+        for (style, variant, setting, name) in cases {
+            assert_eq!(style, variant);
+            assert_eq!(style.setting_name(), setting);
+            assert_eq!(style.name(), Some(name));
+        }
+        for unnamed in [
+            PictureStyle::from(PictureControl::default()),
+            PictureStyle::from(CreativeStyle::default()),
+            PictureStyle::from(CreativeLook::default()),
+        ] {
+            assert_eq!(unnamed.name(), None, "{unnamed:?}");
+        }
+    }
+
+    #[test]
+    fn a_creative_style_and_a_creative_look_give_what_was_set() {
+        let style = full_creative_style();
+        assert_eq!(style.name(), Some("Vivid"));
+        assert_eq!(style.contrast(), Some(-3));
+        assert_eq!(style.saturation(), Some(2));
+        assert_eq!(style.sharpness(), Some(1));
+        let look = full_creative_look();
+        assert_eq!(look.name(), Some("Standard"));
+        assert_eq!(look.contrast(), Some(1));
+        assert_eq!(look.saturation(), Some(-3));
+        assert_eq!(look.sharpness(), Some(4));
+        let empty = CreativeStyle::default();
+        assert_eq!(
+            (
+                empty.name(),
+                empty.contrast(),
+                empty.saturation(),
+                empty.sharpness()
+            ),
+            (None, None, None, None)
+        );
+        let empty = CreativeLook::default();
+        assert_eq!(
+            (
+                empty.name(),
+                empty.contrast(),
+                empty.saturation(),
+                empty.sharpness()
+            ),
+            (None, None, None, None)
+        );
+    }
+
+    #[test]
+    fn each_creative_style_and_look_builder_sets_its_own_value_and_no_other() {
+        for start in [CreativeStyle::default(), full_creative_style()] {
+            let cases = [
+                (
+                    start.clone().with_name("Neutral"),
+                    CreativeStyle {
+                        name: Some("Neutral".into()),
+                        ..start.clone()
+                    },
+                ),
+                (
+                    start.clone().with_contrast(0),
+                    CreativeStyle {
+                        contrast: Some(0),
+                        ..start.clone()
+                    },
+                ),
+                (
+                    start.clone().with_saturation(0),
+                    CreativeStyle {
+                        saturation: Some(0),
+                        ..start.clone()
+                    },
+                ),
+                (
+                    start.clone().with_sharpness(0),
+                    CreativeStyle {
+                        sharpness: Some(0),
+                        ..start.clone()
+                    },
+                ),
+            ];
+            for (place, (built, expected)) in cases.into_iter().enumerate() {
+                assert_eq!(built, expected, "builder {place} from {start:?}");
+            }
+        }
+        for start in [CreativeLook::default(), full_creative_look()] {
+            let cases = [
+                (
+                    start.clone().with_name("Off"),
+                    CreativeLook {
+                        name: Some("Off".into()),
+                        ..start.clone()
+                    },
+                ),
+                (
+                    start.clone().with_contrast(0),
+                    CreativeLook {
+                        contrast: Some(0),
+                        ..start.clone()
+                    },
+                ),
+                (
+                    start.clone().with_saturation(0),
+                    CreativeLook {
+                        saturation: Some(0),
+                        ..start.clone()
+                    },
+                ),
+                (
+                    start.clone().with_sharpness(0),
+                    CreativeLook {
+                        sharpness: Some(0),
+                        ..start.clone()
+                    },
+                ),
+            ];
+            for (place, (built, expected)) in cases.into_iter().enumerate() {
+                assert_eq!(built, expected, "builder {place} from {start:?}");
+            }
+        }
+        // A chain equals the value built field by field, and a later value
+        // replaces an earlier one.
+        let style = CreativeStyle::default()
+            .with_name("BW")
+            .with_contrast(9)
+            .with_saturation(9)
+            .with_sharpness(9)
+            .with_name("Vivid")
+            .with_contrast(-3)
+            .with_saturation(2)
+            .with_sharpness(1);
+        assert_eq!(style, full_creative_style());
+        let look = CreativeLook::default()
+            .with_name("Off")
+            .with_contrast(9)
+            .with_saturation(9)
+            .with_sharpness(9)
+            .with_name("Standard")
+            .with_contrast(1)
+            .with_saturation(-3)
+            .with_sharpness(4);
+        assert_eq!(look, full_creative_look());
     }
 
     #[test]

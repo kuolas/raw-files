@@ -421,10 +421,10 @@ mod value_error;
 pub use authorship::Authorship;
 pub use camera::{Camera, Make};
 pub use camera_settings::{
-    AfFineTune, Bracketing, CameraSettings, ColorSpace, Contrast, ExposureProgram, Flash,
-    FlashControl, FlashMode, FlashSource, FlashSync, FluorescentLamp, FocusAreaMode, FocusMode,
-    GainControl, ImageArea, JpegCompression, JpegQuality, MeteringMode, PictureControl,
-    PictureControlAdjustment, PictureControlFilterEffect, PictureControlToning,
+    AfFineTune, Bracketing, CameraSettings, ColorSpace, Contrast, CreativeLook, CreativeStyle,
+    ExposureProgram, Flash, FlashControl, FlashMode, FlashSource, FlashSync, FluorescentLamp,
+    FocusAreaMode, FocusMode, GainControl, ImageArea, JpegCompression, JpegQuality, MeteringMode,
+    PictureControl, PictureControlAdjustment, PictureControlFilterEffect, PictureControlToning,
     PictureControlValue, PictureStyle, RawCompression, RawImageSize, ReleaseMode, Saturation,
     SceneCaptureType, Sharpness, Shutter, Stabilization, StabilizationMode, WhiteBalance,
     WhiteBalanceFineTune, WhiteBalanceMode,

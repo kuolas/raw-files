@@ -2194,8 +2194,8 @@ It will read:
 - vignette control and auto distortion control;
 - the scene mode.
 
-Each setting will keep Nikon's own name and kinds. Where Sony has a
-setting for the same thing, one value of the camera settings will hold
+Each setting keeps Nikon's own name and kinds. Where Sony has a
+setting for the same thing, one value of the camera settings holds
 either maker's
 ([ARW notes](../arw/makernote-and-metadata.md#911-picture-style-and-processing)).
 

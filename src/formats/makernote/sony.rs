@@ -57,14 +57,15 @@ use std::io::{Read, Seek};
 
 use super::{MakerNoteBlock, Picture, Reader, checked_color_temperature};
 use crate::camera_settings::{
-    Bracketing, CameraSettings, FlashSource, FocusAreaMode, FocusMode, JpegQuality, RawCompression,
-    ReleaseMode, Stabilization, WhiteBalanceFineTune, WhiteBalanceMode,
+    Bracketing, CameraSettings, CreativeLook, CreativeStyle, FlashSource, FocusAreaMode, FocusMode,
+    JpegQuality, PictureStyle, RawCompression, ReleaseMode, Stabilization, WhiteBalanceFineTune,
+    WhiteBalanceMode,
 };
 use crate::container::tiff::{Ifd, Rule, Tree};
 use crate::entries::{Directory, Entries, Lookup};
 use crate::error::Result;
 use crate::focus::{Focus, FocusOrigin, FocusPoints};
-use crate::formats::tiff_metadata::{RawStorage, Standard};
+use crate::formats::tiff_metadata::{self, RawStorage, Standard};
 use crate::geometry::{Point, Size};
 use crate::io::Source;
 use crate::limits::Limits;
@@ -128,6 +129,25 @@ pub(in crate::formats) const FOCUS_LOCATION: u16 = 0x2027;
 /// EV, `0/6` on every file checked.
 pub(in crate::formats) const EXPOSURE_FINE_TUNE: u16 = 0x202D;
 
+/// The Sony MakerNote tag that records the contrast of the picture style
+/// (Contrast): one SLONG, the camera's steps from the style's own, 0.
+const CONTRAST: u16 = 0x2004;
+
+/// The Sony MakerNote tag that records the saturation of the picture style
+/// (Saturation): one SLONG, as [`CONTRAST`].
+const SATURATION: u16 = 0x2005;
+
+/// The Sony MakerNote tag that records the sharpness of the picture style
+/// (Sharpness): one SLONG, the camera's steps, 0 by default under a
+/// Creative Style and 4 under a Creative Look.
+const SHARPNESS: u16 = 0x2006;
+
+/// The Sony MakerNote tags that record a Creative Look's five further
+/// values, 0x2032 to 0x2036, which ExifTool's documentation names
+/// Shadows, Highlights, Fade, SharpnessRange and Clarity. Their presence
+/// marks the picture style as a Creative Look; their values are not read.
+const CREATIVE_LOOK_VALUES: std::ops::RangeInclusive<u16> = 0x2032..=0x2036;
+
 /// The Sony MakerNote tag that records the image quality on the ILCE-7RM3,
 /// the RX100M6 and later bodies (0x202E, which ExifTool's documentation
 /// calls Quality2): two SHORTs, the kind of raw file, then the quality step
@@ -143,6 +163,11 @@ const FOCUS_FRAME_SIZE: u16 = 0x2037;
 /// The Sony MakerNote tag that repeats FocusLocation on the newest bodies
 /// (FocusLocation2): the same four SHORTs, with the same values.
 const FOCUS_LOCATION2: u16 = 0x204A;
+
+/// The Sony MakerNote tag that records the name of the picture style
+/// (CreativeStyle): ASCII text, such as `Standard` or `Vivid`, 16 bytes
+/// with the NUL on nearly every file.
+const CREATIVE_STYLE: u16 = 0xB020;
 
 /// The Sony MakerNote tag that records a color temperature, in kelvin
 /// (ColorTemperature): one LONG, the one chosen under a chosen color
@@ -173,11 +198,12 @@ pub(in crate::formats) const RELEASE_MODE: u16 = 0xB049;
 /// The fine-tuning's rule names SLONG alone, so that a negative value is
 /// never read as a large one.
 mod rules {
-    use crate::container::tiff::{FieldType, Held, Rule};
+    use crate::container::tiff::{FieldType, Held, Rule, Text};
     use crate::rational::SignedRational;
 
     const LONG: &[FieldType] = &[FieldType::Long];
     const SHORT: &[FieldType] = &[FieldType::Short];
+    const SLONG: &[FieldType] = &[FieldType::SLong];
 
     pub(super) const WHITE_BALANCE: Held<[u32; 1]> = Held::new(super::WHITE_BALANCE, LONG);
     pub(super) const FINE_TUNE: Rule<[i32; 2]> = Rule::new(super::FINE_TUNE, &[FieldType::SLong]);
@@ -202,6 +228,11 @@ mod rules {
     pub(super) const QUALITY: Held<[u32; 1]> = Held::new(super::QUALITY, LONG);
     pub(super) const QUALITY2: Held<[u32; 2]> = Held::new(super::QUALITY2, SHORT);
     pub(super) const JPEG_QUALITY: Held<[u32; 1]> = Held::new(super::JPEG_QUALITY, SHORT);
+    pub(super) const CREATIVE_STYLE: Rule<Text> =
+        Rule::new(super::CREATIVE_STYLE, &[FieldType::Ascii]);
+    pub(super) const CONTRAST: Held<[i32; 1]> = Held::new(super::CONTRAST, SLONG);
+    pub(super) const SATURATION: Held<[i32; 1]> = Held::new(super::SATURATION, SLONG);
+    pub(super) const SHARPNESS: Held<[i32; 1]> = Held::new(super::SHARPNESS, SLONG);
 }
 
 /// The header of the DSLR-A100's MakerNote (`SONY DSC `, then three NULs),
@@ -522,6 +553,9 @@ fn area<R: Read + Seek>(src: &mut Source<R>, makernote: &MakerNote) -> Result<Op
 /// - **The JPEG quality** is the first of Quality2, Quality in the JPEG
 ///   that `picture` says the file is, and JPEGQuality that names a step
 ///   ([`jpeg_quality`]).
+/// - **The picture style** is the Creative Style or the Creative Look that
+///   CreativeStyle's name and the three values beside it record
+///   ([`picture_style`]).
 ///
 /// The shutter used, the image area and the raw image size stay as
 /// `settings` has them, `None`. Sony records the first two only in
@@ -575,6 +609,7 @@ fn camera_settings<R: Read + Seek>(
             settings.bracketing = Some(bracketing);
         }
     }
+    settings.picture_style = picture_style(src, ifd)?;
     if let Some(flash) = settings.flash.as_mut() {
         if let Some(source) = ifd
             .held(rules::FLASH_ACTION)
@@ -587,6 +622,51 @@ fn camera_settings<R: Read + Seek>(
         }
     }
     Ok(settings)
+}
+
+/// The picture style that the MakerNote's IFD `ifd` records: its name,
+/// CreativeStyle's text, read by the text rule ([`tiff_metadata::text`]),
+/// and its contrast, saturation and sharpness, each one SLONG as recorded.
+/// Each part is read on its own, so that a damaged one costs only itself.
+///
+/// It is a [`CreativeLook`] when the IFD also holds an entry of any of a
+/// Creative Look's five further values ([`CREATIVE_LOOK_VALUES`]),
+/// whatever its type, and a [`CreativeStyle`] otherwise (ARW notes,
+/// section 9.11). An entry the IFD skipped as damaged keeps no tag, so
+/// it is not counted: a look whose five entries were all skipped reads as
+/// a Creative Style. Giving no style whenever the IFD skipped an entry
+/// would cost every file with any damaged entry its style. `None` when none of the four parts gives a value: a
+/// look's further values alone give no style. ColorMode (0xB029), which
+/// repeats the name as a code, is not read.
+///
+/// # Errors
+///
+/// `Io` when the reader fails.
+fn picture_style<R: Read + Seek>(src: &mut Source<R>, ifd: &Ifd) -> Result<Option<PictureStyle>> {
+    let name = tiff_metadata::text(src, ifd, rules::CREATIVE_STYLE)?;
+    let [contrast, saturation, sharpness] = [rules::CONTRAST, rules::SATURATION, rules::SHARPNESS]
+        .map(|rule| ifd.held(rule).map(|[steps]| steps));
+    if name.is_none() && contrast.is_none() && saturation.is_none() && sharpness.is_none() {
+        return Ok(None);
+    }
+    let look = CREATIVE_LOOK_VALUES
+        .clone()
+        .any(|tag| ifd.entry(tag).is_some());
+    Ok(Some(if look {
+        PictureStyle::CreativeLook(CreativeLook {
+            name,
+            contrast,
+            saturation,
+            sharpness,
+        })
+    } else {
+        PictureStyle::CreativeStyle(CreativeStyle {
+            name,
+            contrast,
+            saturation,
+            sharpness,
+        })
+    }))
 }
 
 /// The JPEG quality step that the MakerNote's IFD `ifd` records, from the
@@ -3087,11 +3167,15 @@ mod tests {
     /// flexible spot, the stabilization on, one frame for each press, the
     /// flash not fired and its compensation at zero, as a raw file written
     /// with a JPEG beside it, whose JPEG quality the body records in no
-    /// plain tag.
+    /// plain tag, under a Creative Style with its contrast, saturation and
+    /// sharpness at 0.
     ///
     /// The ILCE-7M2 records no ExposureStandardAdjustment and no Quality2,
     /// so neither is added: the tests of the exposure fine-tuning and the
-    /// JPEG quality add them.
+    /// JPEG quality add them. CreativeStyle's text, which the body records,
+    /// is not added either: its value would lie after the fine-tuning's,
+    /// which a test needs to be the block's last. The tests of the picture
+    /// style add it.
     fn settings_tags(builder: &mut TiffBuilder, ifd: IfdId) {
         builder
             .long(ifd, QUALITY, &[6])
@@ -3105,15 +3189,18 @@ mod tests {
             .long(ifd, COLOR_TEMPERATURE, &[3200])
             .long(ifd, IMAGE_STABILIZATION, &[1])
             .short(ifd, JPEG_QUALITY, &[65535])
-            .short(ifd, RELEASE_MODE, &[0]);
+            .short(ifd, RELEASE_MODE, &[0])
+            .slong(ifd, CONTRAST, &[0])
+            .slong(ifd, SATURATION, &[0])
+            .slong(ifd, SHARPNESS, &[0]);
     }
 
     /// What [`settings_tags`] gives, from `settings`, for an E-mount body
     /// such as the ILCE-7M2: AF-C, the flexible spot as a single point,
     /// the stabilization on, a single frame and no bracketing, and, where
-    /// `settings` holds a flash, a compensation of zero. FlashAction's 0
-    /// names no source, and Quality's 6 and JPEGQuality's 65535 no JPEG
-    /// quality.
+    /// `settings` holds a flash, a compensation of zero, and a Creative
+    /// Style at 0, with no name. FlashAction's 0 names no source, and
+    /// Quality's 6 and JPEGQuality's 65535 no JPEG quality.
     fn with_settings_tags(settings: CameraSettings) -> CameraSettings {
         let white_balance = WhiteBalance::default()
             .with_mode(WhiteBalanceMode::ColorTemperature)
@@ -3126,7 +3213,13 @@ mod tests {
             .with_focus_area_mode(FocusAreaMode::Single)
             .with_stabilization(Stabilization::on())
             .with_release_mode(ReleaseMode::Single)
-            .with_bracketing(Bracketing::Off);
+            .with_bracketing(Bracketing::Off)
+            .with_picture_style(PictureStyle::CreativeStyle(CreativeStyle {
+                name: None,
+                contrast: Some(0),
+                saturation: Some(0),
+                sharpness: Some(0),
+            }));
         if let Some(flash) = settings.flash {
             let zero = SignedRational::new(0, 10).expect("a denominator of 10");
             settings = settings.with_flash(flash.with_compensation(zero));
@@ -3605,5 +3698,178 @@ mod tests {
         )
         .expect_err("the read fails");
         assert_eq!(err.kind(), ErrorKind::Io, "{err:?}");
+    }
+
+    // The picture style.
+
+    /// A Creative Style of `name` and the three values.
+    fn creative_style(
+        name: Option<&str>,
+        [contrast, saturation, sharpness]: [Option<i32>; 3],
+    ) -> Option<PictureStyle> {
+        Some(PictureStyle::CreativeStyle(CreativeStyle {
+            name: name.map(Into::into),
+            contrast,
+            saturation,
+            sharpness,
+        }))
+    }
+
+    #[test]
+    fn the_four_tags_give_a_creative_style_in_both_byte_orders() {
+        for order in ORDERS {
+            let settings = settings_of(order, |builder, ifd| {
+                builder
+                    .ascii(ifd, CREATIVE_STYLE, "Vivid")
+                    .slong(ifd, CONTRAST, &[-3])
+                    .slong(ifd, SATURATION, &[2])
+                    .slong(ifd, SHARPNESS, &[1]);
+            });
+            assert_eq!(
+                settings.picture_style,
+                creative_style(Some("Vivid"), [Some(-3), Some(2), Some(1)]),
+                "{order:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn each_of_the_four_tags_alone_gives_a_creative_style() {
+        type Add = fn(&mut TiffBuilder, IfdId);
+        let cases: [(Add, Option<PictureStyle>); 4] = [
+            (
+                |builder, ifd| {
+                    builder.ascii(ifd, CREATIVE_STYLE, "Real");
+                },
+                creative_style(Some("Real"), [None; 3]),
+            ),
+            (
+                |builder, ifd| {
+                    builder.slong(ifd, CONTRAST, &[1]);
+                },
+                creative_style(None, [Some(1), None, None]),
+            ),
+            (
+                |builder, ifd| {
+                    builder.slong(ifd, SATURATION, &[-2]);
+                },
+                creative_style(None, [None, Some(-2), None]),
+            ),
+            (
+                |builder, ifd| {
+                    builder.slong(ifd, SHARPNESS, &[3]);
+                },
+                creative_style(None, [None, None, Some(3)]),
+            ),
+        ];
+        for order in ORDERS {
+            for (place, (add, expected)) in cases.iter().enumerate() {
+                let settings = settings_of(order, add);
+                assert_eq!(&settings.picture_style, expected, "{order:?}, case {place}");
+            }
+        }
+    }
+
+    #[test]
+    fn a_name_is_kept_as_recorded_whatever_its_letters() {
+        for order in ORDERS {
+            for (text, name) in [
+                ("Standard", "Standard"),
+                ("None", "None"),
+                ("Off", "Off"),
+                ("BW", "BW"),
+                ("vIvId 2", "vIvId 2"),
+                ("  Clear  ", "Clear"),
+            ] {
+                let settings = settings_of(order, |builder, ifd| {
+                    builder.ascii(ifd, CREATIVE_STYLE, text);
+                });
+                assert_eq!(
+                    settings.picture_style.as_ref().and_then(PictureStyle::name),
+                    Some(name),
+                    "{order:?}, {text:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn a_part_of_another_type_gives_none_and_costs_only_itself() {
+        for order in ORDERS {
+            // A LONG for an SLONG, and the name as UNDEFINED bytes.
+            let settings = settings_of(order, |builder, ifd| {
+                builder
+                    .undefined(ifd, CREATIVE_STYLE, b"Vivid\0")
+                    .long(ifd, CONTRAST, &[1])
+                    .slong(ifd, SATURATION, &[2])
+                    .slong(ifd, SHARPNESS, &[1, 2]);
+            });
+            assert_eq!(
+                settings.picture_style,
+                creative_style(None, [None, Some(2), None]),
+                "{order:?}"
+            );
+            // Nothing that can be read gives no style.
+            let settings = settings_of(order, |builder, ifd| {
+                builder
+                    .ascii(ifd, CREATIVE_STYLE, "   ")
+                    .long(ifd, CONTRAST, &[1]);
+            });
+            assert_eq!(settings.picture_style, None, "{order:?}");
+        }
+    }
+
+    #[test]
+    fn any_of_a_looks_further_values_makes_it_a_creative_look() {
+        for order in ORDERS {
+            // Named here, not taken from the reader's constant, so that a
+            // range cut short is caught.
+            for tag in [0x2032, 0x2033, 0x2034, 0x2035, 0x2036] {
+                let settings = settings_of(order, |builder, ifd| {
+                    builder
+                        .ascii(ifd, CREATIVE_STYLE, "Standard")
+                        .slong(ifd, CONTRAST, &[0])
+                        .slong(ifd, SATURATION, &[-3])
+                        .slong(ifd, SHARPNESS, &[4])
+                        .slong(ifd, tag, &[0]);
+                });
+                assert_eq!(
+                    settings.picture_style,
+                    Some(PictureStyle::CreativeLook(CreativeLook {
+                        name: Some("Standard".into()),
+                        contrast: Some(0),
+                        saturation: Some(-3),
+                        sharpness: Some(4),
+                    })),
+                    "{order:?}, {tag:#06x}"
+                );
+            }
+            // Its further values alone give no style, and a tag beside
+            // them, 0x2031 or 0x2037, does not make a look.
+            let alone = settings_of(order, |builder, ifd| {
+                builder.slong(ifd, 0x2032, &[0]);
+            });
+            assert_eq!(alone.picture_style, None, "{order:?}");
+            for tag in [0x2031, 0x2037] {
+                let settings = settings_of(order, |builder, ifd| {
+                    builder.slong(ifd, SHARPNESS, &[0]).slong(ifd, tag, &[0]);
+                });
+                assert_eq!(
+                    settings.picture_style,
+                    creative_style(None, [None, None, Some(0)]),
+                    "{order:?}, {tag:#06x}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn a_file_with_no_style_tag_gives_no_style() {
+        for order in ORDERS {
+            let settings = settings_of(order, |builder, ifd| {
+                builder.long(ifd, WHITE_BALANCE, &[0]);
+            });
+            assert_eq!(settings.picture_style, None, "{order:?}");
+        }
     }
 }
