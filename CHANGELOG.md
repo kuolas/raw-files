@@ -386,6 +386,9 @@ does. An entry that can break a caller opens with **Breaking:**.
   - Its first variant is Nikon's `ActiveDLighting`, read from
     ActiveD-Lighting (0x0022). Its steps are off, low, normal, high,
     extra high, extra high 1 to 4 and auto.
+  - Sony's `DRangeOptimizer` is its other variant, read from 0xB025.
+    Its steps are off, standard, advanced auto, auto, advanced levels 1
+    to 5 and levels 1 to 8. 0xB04F, which repeats it, is not read.
   - `DynamicRangeOptimization::setting_name` gives the maker's word for
     the setting, and `name` the step's name. Each maker's type converts
     into it with `From`.

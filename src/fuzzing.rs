@@ -593,5 +593,8 @@ fn read_dynamic_range_optimization(optimization: DynamicRangeOptimization) {
         DynamicRangeOptimization::ActiveDLighting(step) => {
             let _ = step.to_string();
         }
+        DynamicRangeOptimization::DRangeOptimizer(step) => {
+            let _ = step.to_string();
+        }
     }
 }

@@ -23,7 +23,7 @@
 //! maker's own words instead: [`PictureStyle`] holds Nikon's
 //! [`PictureControl`], Sony's [`CreativeStyle`] or its [`CreativeLook`],
 //! each under its own name, and [`DynamicRangeOptimization`] holds Nikon's
-//! [`ActiveDLighting`].
+//! [`ActiveDLighting`] or Sony's [`DRangeOptimizer`].
 //!
 //! Every value is optional. A file may not record it, or may record it in
 //! a way that cannot be read, such as a code no variant names; either way
@@ -58,9 +58,10 @@
 //!   setting, which only Sony records; the focus mode, the AF-area mode,
 //!   the stabilization, without a mode, the exposure fine-tuning, the
 //!   release mode and bracketing, the flash's source when it is external
-//!   and its compensation, the JPEG quality, and the Creative Style or
-//!   Creative Look, Sony's picture style. A Sony raw file says how a
-//!   compressed raw is compressed in codes of Sony's own.
+//!   and its compensation, the JPEG quality, the Creative Style or
+//!   Creative Look, Sony's picture style, and the D-Range Optimizer. A
+//!   Sony raw file says how a compressed raw is compressed in codes of
+//!   Sony's own.
 //!
 //! Where a Nikon MakerNote records its crop as "off", or holds no crop,
 //! raw-files gives the body's sensor format from a table of its own, for
@@ -1259,28 +1260,37 @@ impl CameraSettings {
 
     /// How the camera optimized the picture's dynamic range, keeping
     /// detail in its highlights and shadows, under its maker's own name:
-    /// Nikon's [`ActiveDLighting`] ([`DynamicRangeOptimization`]).
+    /// Nikon's [`ActiveDLighting`] or Sony's [`DRangeOptimizer`]
+    /// ([`DynamicRangeOptimization`]).
     ///
-    /// Read from the maker's MakerNote, in a raw file and a JPEG alike:
+    /// Read from the maker's MakerNote, in a raw file and a JPEG alike, by
+    /// the lists ExifTool's documentation gives, each read whole, since
+    /// files hold part of it:
     ///
     /// - Nikon's Active D-Lighting from ActiveD-Lighting (0x0022), one
-    ///   SHORT, by the list ExifTool's documentation gives: 0 off, 1 low,
-    ///   3 normal, 5 high, 7 extra high, 8 to 11 extra high 1 to 4, and
-    ///   65535 auto. The list is read whole, since files hold part of it.
+    ///   SHORT: 0 off, 1 low, 3 normal, 5 high, 7 extra high, 8 to 11
+    ///   extra high 1 to 4, and 65535 auto.
+    /// - Sony's D-Range Optimizer from DynamicRangeOptimizer (0xB025), one
+    ///   LONG: 0 off, 1 standard, 2 advanced auto, 3 auto, 8 to 12
+    ///   advanced levels 1 to 5, and 16 to 23 levels 1 to 8. 0xB04F, which
+    ///   repeats it in three steps, is not read.
     ///
     /// `None` when:
     ///
-    /// - the file records none, as every file of another maker does;
-    /// - the code is one the list lacks, such as 2;
-    /// - the tag is not one SHORT.
+    /// - the file records none, as every file of another maker does, and
+    ///   two of Sony's oldest bodies, the DSC-F828 and the DSC-R1;
+    /// - the code is one its list lacks, such as Nikon's 2 or Sony's 4;
+    /// - the tag is not Nikon's one SHORT or Sony's one LONG.
     ///
     /// What files record is in the NEF notes on
-    /// [Active D-Lighting](https://github.com/kuolas/raw-files/blob/master/docs/formats/nef/makernote-and-metadata.md#811-picture-style-and-processing).
+    /// [Active D-Lighting](https://github.com/kuolas/raw-files/blob/master/docs/formats/nef/makernote-and-metadata.md#811-picture-style-and-processing)
+    /// and the ARW notes on
+    /// [the D-Range Optimizer](https://github.com/kuolas/raw-files/blob/master/docs/formats/arw/makernote-and-metadata.md#911-picture-style-and-processing).
     ///
     /// # Examples
     ///
     /// ```no_run
-    /// use raw_files::{ActiveDLighting, CameraFile, DynamicRangeOptimization};
+    /// use raw_files::{ActiveDLighting, CameraFile, DRangeOptimizer, DynamicRangeOptimization};
     ///
     /// # fn main() -> raw_files::Result<()> {
     /// let file = CameraFile::open("photo.nef")?;
@@ -1288,7 +1298,8 @@ impl CameraSettings {
     /// if let Some(optimization) = settings.dynamic_range_optimization() {
     ///     println!("{}: {}", optimization.setting_name(), optimization.name());
     ///     match optimization {
-    ///         DynamicRangeOptimization::ActiveDLighting(ActiveDLighting::Auto) => {
+    ///         DynamicRangeOptimization::ActiveDLighting(ActiveDLighting::Auto)
+    ///         | DynamicRangeOptimization::DRangeOptimizer(DRangeOptimizer::Auto) => {
     ///             println!("the camera chose the strength");
     ///         }
     ///         _ => {}
@@ -4754,7 +4765,9 @@ impl fmt::Display for PictureControlToning {
 /// type:
 ///
 /// - [`ActiveDLighting`](Self::ActiveDLighting), Nikon's Active
-///   D-Lighting.
+///   D-Lighting;
+/// - [`DRangeOptimizer`](Self::DRangeOptimizer), Sony's D-Range
+///   Optimizer.
 ///
 /// [`setting_name`](Self::setting_name) gives the maker's word for the
 /// setting, for a viewer's label, and [`name`](Self::name) the step's
@@ -4769,42 +4782,54 @@ impl fmt::Display for PictureControlToning {
 ///
 /// # Examples
 ///
-/// Nikon's setting, labeled for a viewer and read by its variant:
+/// Each maker's setting, labeled for a viewer and read by its variant:
 ///
 /// ```
-/// use raw_files::{ActiveDLighting, DynamicRangeOptimization};
+/// use raw_files::{ActiveDLighting, DRangeOptimizer, DynamicRangeOptimization};
 ///
 /// let nikon = DynamicRangeOptimization::from(ActiveDLighting::Auto);
-/// println!("{}: {}", nikon.setting_name(), nikon.name());
-/// let chosen_by_the_camera = match nikon {
-///     DynamicRangeOptimization::ActiveDLighting(step) => step == ActiveDLighting::Auto,
-///     _ => false,
-/// };
-/// assert!(chosen_by_the_camera);
+/// let sony = DynamicRangeOptimization::from(DRangeOptimizer::Level3);
+///
+/// for optimization in [nikon, sony] {
+///     println!("{}: {}", optimization.setting_name(), optimization.name());
+///     let chosen_by_the_camera = match optimization {
+///         DynamicRangeOptimization::ActiveDLighting(step) => step == ActiveDLighting::Auto,
+///         DynamicRangeOptimization::DRangeOptimizer(step) => step == DRangeOptimizer::Auto,
+///         _ => false,
+///     };
+///     println!("chosen by the camera: {chosen_by_the_camera}");
+/// }
 /// assert_eq!(nikon.setting_name(), "Active D-Lighting");
 /// assert_eq!(nikon.name(), "Auto");
+/// assert_eq!(sony.setting_name(), "D-Range Optimizer");
+/// assert_eq!(sony.name(), "Level 3");
 /// ```
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum DynamicRangeOptimization {
     /// Nikon's Active D-Lighting.
     ActiveDLighting(ActiveDLighting),
+    /// Sony's D-Range Optimizer.
+    DRangeOptimizer(DRangeOptimizer),
 }
 
 impl DynamicRangeOptimization {
     /// The maker's word for the setting, for a viewer's label: "Active
-    /// D-Lighting".
+    /// D-Lighting" or "D-Range Optimizer".
     pub fn setting_name(&self) -> &'static str {
         match self {
             DynamicRangeOptimization::ActiveDLighting(_) => "Active D-Lighting",
+            DynamicRangeOptimization::DRangeOptimizer(_) => "D-Range Optimizer",
         }
     }
 
     /// The step's name, whichever maker's setting it is, such as "Auto":
-    /// the `name` of the variant's own type, [`ActiveDLighting::name`].
+    /// the `name` of the variant's own type, [`ActiveDLighting::name`] or
+    /// [`DRangeOptimizer::name`].
     pub fn name(&self) -> &'static str {
         match self {
             DynamicRangeOptimization::ActiveDLighting(step) => step.name(),
+            DynamicRangeOptimization::DRangeOptimizer(step) => step.name(),
         }
     }
 }
@@ -4893,6 +4918,121 @@ impl ActiveDLighting {
 
 impl fmt::Display for ActiveDLighting {
     /// Writes [`name`](ActiveDLighting::name).
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.name())
+    }
+}
+
+impl From<DRangeOptimizer> for DynamicRangeOptimization {
+    /// The D-Range Optimizer's step as a dynamic range optimization, its
+    /// [`DRangeOptimizer`](DynamicRangeOptimization::DRangeOptimizer)
+    /// variant.
+    fn from(step: DRangeOptimizer) -> Self {
+        DynamicRangeOptimization::DRangeOptimizer(step)
+    }
+}
+
+/// Sony's D-Range Optimizer: how the camera set the picture's brightness
+/// and gradation from its contrast, analyzed area by area, or that it was
+/// off.
+///
+/// Sony's manual for the SLT-A99 names the setting and gives no list of
+/// its levels. The variants follow ExifTool's documentation, whose words
+/// for the levels are "Advanced Lv1" to "Advanced Lv5" and "Lv1" to
+/// "Lv8":
+///
+/// - [`Off`](Self::Off), and [`Auto`](Self::Auto), under which the camera
+///   chose the level;
+/// - [`Standard`](Self::Standard) and [`AdvancedAuto`](Self::AdvancedAuto),
+///   which the measured files hold on A-mount DSLRs alone;
+/// - [`AdvancedLevel1`](Self::AdvancedLevel1) to
+///   [`AdvancedLevel5`](Self::AdvancedLevel5);
+/// - [`Level1`](Self::Level1) to [`Level8`](Self::Level8), a level the
+///   photographer chose, from the weakest to the strongest.
+///
+/// `DRangeOptimizer` is `#[non_exhaustive]`, so match on it with a
+/// wildcard arm. It orders as its variants are listed, which is the order
+/// of Sony's codes, and a new variant is added after the existing ones,
+/// so an order once observed holds. Its [`name`](Self::name)s, which
+/// `Display` writes too, are "Off", "Standard", "Advanced auto", "Auto",
+/// "Advanced level 1" to "Advanced level 5" and "Level 1" to "Level 8".
+///
+/// # Examples
+///
+/// ```
+/// use raw_files::DRangeOptimizer;
+///
+/// assert_eq!(DRangeOptimizer::AdvancedAuto.name(), "Advanced auto");
+/// assert_eq!(DRangeOptimizer::Level5.to_string(), "Level 5");
+/// assert!(DRangeOptimizer::Level1 < DRangeOptimizer::Level8);
+/// ```
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[non_exhaustive]
+pub enum DRangeOptimizer {
+    /// The D-Range Optimizer off.
+    Off,
+    /// The standard step of the A-mount DSLRs.
+    Standard,
+    /// The advanced auto step of the A-mount DSLRs.
+    AdvancedAuto,
+    /// The camera chose the level.
+    Auto,
+    /// The documentation's Advanced Lv1, the weakest advanced level.
+    AdvancedLevel1,
+    /// The documentation's Advanced Lv2.
+    AdvancedLevel2,
+    /// The documentation's Advanced Lv3.
+    AdvancedLevel3,
+    /// The documentation's Advanced Lv4.
+    AdvancedLevel4,
+    /// The documentation's Advanced Lv5, the strongest advanced level.
+    AdvancedLevel5,
+    /// The documentation's Lv1, the weakest level.
+    Level1,
+    /// The documentation's Lv2.
+    Level2,
+    /// The documentation's Lv3.
+    Level3,
+    /// The documentation's Lv4.
+    Level4,
+    /// The documentation's Lv5.
+    Level5,
+    /// The documentation's Lv6.
+    Level6,
+    /// The documentation's Lv7.
+    Level7,
+    /// The documentation's Lv8, the strongest level.
+    Level8,
+}
+
+impl DRangeOptimizer {
+    /// The step's name, for an information panel, such as "Level 3"; the
+    /// type's docs list them all.
+    pub fn name(self) -> &'static str {
+        match self {
+            DRangeOptimizer::Off => "Off",
+            DRangeOptimizer::Standard => "Standard",
+            DRangeOptimizer::AdvancedAuto => "Advanced auto",
+            DRangeOptimizer::Auto => "Auto",
+            DRangeOptimizer::AdvancedLevel1 => "Advanced level 1",
+            DRangeOptimizer::AdvancedLevel2 => "Advanced level 2",
+            DRangeOptimizer::AdvancedLevel3 => "Advanced level 3",
+            DRangeOptimizer::AdvancedLevel4 => "Advanced level 4",
+            DRangeOptimizer::AdvancedLevel5 => "Advanced level 5",
+            DRangeOptimizer::Level1 => "Level 1",
+            DRangeOptimizer::Level2 => "Level 2",
+            DRangeOptimizer::Level3 => "Level 3",
+            DRangeOptimizer::Level4 => "Level 4",
+            DRangeOptimizer::Level5 => "Level 5",
+            DRangeOptimizer::Level6 => "Level 6",
+            DRangeOptimizer::Level7 => "Level 7",
+            DRangeOptimizer::Level8 => "Level 8",
+        }
+    }
+}
+
+impl fmt::Display for DRangeOptimizer {
+    /// Writes [`name`](DRangeOptimizer::name).
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(self.name())
     }
@@ -5685,6 +5825,15 @@ mod tests {
                 DynamicRangeOptimization::ActiveDLighting(step)
             );
             assert_eq!(optimization.setting_name(), "Active D-Lighting");
+            assert_eq!(optimization.name(), step.name());
+        }
+        for step in all_d_range_optimizers() {
+            let optimization = DynamicRangeOptimization::from(step);
+            assert_eq!(
+                optimization,
+                DynamicRangeOptimization::DRangeOptimizer(step)
+            );
+            assert_eq!(optimization.setting_name(), "D-Range Optimizer");
             assert_eq!(optimization.name(), step.name());
         }
     }
@@ -6587,6 +6736,37 @@ mod tests {
         all
     }
 
+    fn all_d_range_optimizers() -> [DRangeOptimizer; 17] {
+        use DRangeOptimizer::*;
+        let all = [
+            Off,
+            Standard,
+            AdvancedAuto,
+            Auto,
+            AdvancedLevel1,
+            AdvancedLevel2,
+            AdvancedLevel3,
+            AdvancedLevel4,
+            AdvancedLevel5,
+            Level1,
+            Level2,
+            Level3,
+            Level4,
+            Level5,
+            Level6,
+            Level7,
+            Level8,
+        ];
+        for step in all {
+            match step {
+                Off | Standard | AdvancedAuto | Auto | AdvancedLevel1 | AdvancedLevel2
+                | AdvancedLevel3 | AdvancedLevel4 | AdvancedLevel5 | Level1 | Level2 | Level3
+                | Level4 | Level5 | Level6 | Level7 | Level8 => {}
+            }
+        }
+        all
+    }
+
     #[test]
     fn every_name_is_the_one_documented_and_display_writes_it() {
         // The names are stable once released: a program may show or store
@@ -6842,6 +7022,29 @@ mod tests {
                 "Auto",
             ],
         );
+        assert_names(
+            &all_d_range_optimizers(),
+            DRangeOptimizer::name,
+            &[
+                "Off",
+                "Standard",
+                "Advanced auto",
+                "Auto",
+                "Advanced level 1",
+                "Advanced level 2",
+                "Advanced level 3",
+                "Advanced level 4",
+                "Advanced level 5",
+                "Level 1",
+                "Level 2",
+                "Level 3",
+                "Level 4",
+                "Level 5",
+                "Level 6",
+                "Level 7",
+                "Level 8",
+            ],
+        );
     }
 
     #[test]
@@ -6877,6 +7080,7 @@ mod tests {
         assert_ordered(&all_picture_control_filter_effects());
         assert_ordered(&all_picture_control_tonings());
         assert_ordered(&all_active_d_lightings());
+        assert_ordered(&all_d_range_optimizers());
     }
 
     #[test]

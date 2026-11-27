@@ -125,7 +125,7 @@ a frame, observed on files, or documented only.
 ([ADR011](architecture-decisions/adr011-metadata-from-standard-tags.md),
 [#230](https://github.com/kuolas/raw-files/issues/230)):
 
-- the dynamic range optimization and the high dynamic range setting;
+- the high dynamic range setting;
 - the high ISO, long exposure and multi-frame noise reductions;
 - the vignetting and distortion corrections, and the chromatic
   aberration compensation;
@@ -135,7 +135,9 @@ Exif's contrast, saturation, sharpness, scene capture type, custom
 rendering and gain control are read already, for any maker, from Exif
 alone. The picture style is read already too, from each maker's
 MakerNote: a `PictureStyle` holds Nikon's Picture Control, or Sony's
-Creative Style or Creative Look, with its values.
+Creative Style or Creative Look, with its values. So is the dynamic
+range optimization: a `DynamicRangeOptimization` holds Nikon's Active
+D-Lighting or Sony's D-Range Optimizer.
 
 Each setting of the list will keep its maker's own name and kinds, as
 the picture style does. Where two makers each have a setting for one

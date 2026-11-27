@@ -66,7 +66,7 @@ Linux and Windows alike.
     values: on Nikon files the Picture Control, and on Sony files the
     Creative Style or the Creative Look.
   - the dynamic range optimization, under its maker's own name: on Nikon
-    files Active D-Lighting.
+    files Active D-Lighting, and on Sony files the D-Range Optimizer.
   - [`CameraSettings`](https://docs.rs/raw-files/latest/raw_files/struct.CameraSettings.html)
     says which a maker's files leave out: Sony's give no shutter, image
     area or raw image size.
