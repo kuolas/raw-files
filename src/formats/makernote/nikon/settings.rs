@@ -942,8 +942,13 @@ fn stabilization_mode(version: [u8; 4], code: u8) -> Option<StabilizationMode> {
 /// every one holds 1 and 6 after the count, and the four public D750 files
 /// that tune it hold -3 (NEF notes, section 8.10).
 ///
-/// `None` when the divisor is zero, which records no fraction.
+/// `None` when the divisor is zero, which records no fraction, and when
+/// the factor is zero, which would read any count as zero, as for the
+/// flash compensation ([`flash_compensation`]); no file holds either.
 fn exposure_fine_tune([count, factor, divisor]: [u8; 3]) -> Option<SignedRational> {
+    if factor == 0 {
+        return None;
+    }
     let numerator = i32::from(count.cast_signed()) * i32::from(factor);
     SignedRational::new(numerator, i32::from(divisor)).ok()
 }
@@ -3257,6 +3262,11 @@ mod tests {
     fn exposure_tuning_with_a_zero_divisor_or_of_another_shape_is_none() {
         for order in ORDERS {
             assert_eq!(exposure_tuning_of(order, &[0xFD, 1, 0]), None, "{order:?}");
+            // A zero factor would read any count as zero, so -6 is not a
+            // fine-tuning of 0/6, as for the flash compensation. No file
+            // holds one (#225).
+            assert_eq!(exposure_tuning_of(order, &[0xFA, 0, 6]), None, "{order:?}");
+            assert_eq!(exposure_tuning_of(order, &[0, 0, 6]), None, "{order:?}");
             // Four bytes, as some JPEGs a program made from a NEF hold;
             // two; three BYTEs.
             assert_eq!(

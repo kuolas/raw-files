@@ -610,6 +610,7 @@ impl CameraSettings {
     ///   oldest Nikon DSLRs and the D40 to the D80, and many Sony bodies
     ///   older than the ILCE-9, the ILCE-7M2 among them, do;
     /// - the denominator is zero;
+    /// - Nikon's factor is zero, which no file holds;
     /// - the tag has another type or count than the maker writes: some
     ///   JPEGs that a program made from a NEF file store Nikon's with four
     ///   bytes.

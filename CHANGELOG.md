@@ -193,9 +193,10 @@ does. An entry that can break a caller opens with **Breaking:**.
   `with_exposure_fine_tune` sets it
   ([#214](https://github.com/kuolas/raw-files/issues/214)). Nikon files
   give it from their MakerNote's ExposureTuning, three bytes read as a
-  count times a factor over a divisor, so that `fd 01 06` is -3/6 EV.
-  Sony files give it from their ExposureStandardAdjustment, one
-  SRATIONAL.
+  count times a factor over a divisor, so that `fd 01 06` is -3/6 EV; a
+  zero factor or divisor gives `None`
+  ([#225](https://github.com/kuolas/raw-files/issues/225)). Sony files
+  give it from their ExposureStandardAdjustment, one SRATIONAL.
 - `CameraSettings::release_mode` gives how the shutter was released, a
   `ReleaseMode`: a single frame, continuous, the self-timer or a remote.
   `CameraSettings::bracketing` gives whether the picture is one of a
