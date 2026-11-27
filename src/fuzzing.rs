@@ -563,5 +563,21 @@ fn read_picture_style(style: &PictureStyle) {
                 }
             }
         }
+        PictureStyle::CreativeStyle(style) => {
+            let _ = (
+                style.name(),
+                style.contrast(),
+                style.saturation(),
+                style.sharpness(),
+            );
+        }
+        PictureStyle::CreativeLook(look) => {
+            let _ = (
+                look.name(),
+                look.contrast(),
+                look.saturation(),
+                look.sharpness(),
+            );
+        }
     }
 }

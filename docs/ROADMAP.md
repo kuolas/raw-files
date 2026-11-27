@@ -125,8 +125,6 @@ a frame, observed on files, or documented only.
 ([ADR011](architecture-decisions/adr011-metadata-from-standard-tags.md),
 [#230](https://github.com/kuolas/raw-files/issues/230)):
 
-- the picture style: Nikon's Picture Control, or Sony's Creative Style
-  or Creative Look, with its values;
 - the dynamic range optimization and the high dynamic range setting;
 - the high ISO, long exposure and multi-frame noise reductions;
 - the vignetting and distortion corrections, and the chromatic
@@ -135,12 +133,14 @@ a frame, observed on files, or documented only.
 
 Exif's contrast, saturation, sharpness, scene capture type, custom
 rendering and gain control are read already, for any maker, from Exif
-alone.
+alone. The picture style is read already too, from each maker's
+MakerNote: a `PictureStyle` holds Nikon's Picture Control, or Sony's
+Creative Style or Creative Look, with its values.
 
-Each setting of the list will keep its maker's own name and kinds.
-Where two makers each have a setting for one thing, one value will hold
-either maker's. A `PictureStyle` will hold a Picture Control, a Creative
-Style or a Creative Look. The format notes say what each file records
+Each setting of the list will keep its maker's own name and kinds, as
+the picture style does. Where two makers each have a setting for one
+thing, one value will hold either maker's, in the picture style's
+shape. The format notes say what each file records
 ([NEF](formats/nef/makernote-and-metadata.md#811-picture-style-and-processing),
 [ARW](formats/arw/makernote-and-metadata.md#911-picture-style-and-processing),
 [JPEG](formats/jpeg/container-and-metadata.md#4-exif-the-app1-segment)).

@@ -367,6 +367,15 @@ does. An entry that can break a caller opens with **Breaking:**.
     Z bodies' Quick sharp, in quick adjust's place. Its adjustment kind
     and Quick sharp are read two bytes before the places documented for
     them, where the files hold them.
+  - Sony's `CreativeStyle` and `CreativeLook` are its other variants,
+    each with its name as recorded and its contrast, saturation and
+    sharpness as the camera's steps. They are read from Sony's
+    CreativeStyle (0xB020) and 0x2004 to 0x2006. A file that also
+    records any of the look's further values (0x2032 to 0x2036) gives a
+    Creative Look. A Creative Look's sharpness is 4 by default, where a
+    Creative Style's is 0.
+  - `CameraSettings::contrast`, `saturation` and `sharpness` link to it
+    for a maker's finer values.
   - `PictureStyle::setting_name` gives the maker's word for the setting,
     and `PictureStyle::name` the style's name. Each maker's type
     converts into a `PictureStyle` with `From`.

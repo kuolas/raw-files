@@ -3922,6 +3922,7 @@ mod tests {
     fn style_of(settings: &CameraSettings) -> Option<(Option<&str>, Option<PictureControlValue>)> {
         match settings.picture_style()? {
             PictureStyle::PictureControl(control) => Some((control.name(), control.sharpening())),
+            _ => None,
         }
     }
 

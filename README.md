@@ -63,7 +63,8 @@ Linux and Windows alike.
     directions of contrast, saturation and sharpness, the scene capture
     type, custom rendering and gain control;
   - the picture style, under its maker's own name, with its name and
-    values: on Nikon files the Picture Control.
+    values: on Nikon files the Picture Control, and on Sony files the
+    Creative Style or the Creative Look.
   - [`CameraSettings`](https://docs.rs/raw-files/latest/raw_files/struct.CameraSettings.html)
     says which a maker's files leave out: Sony's give no shutter, image
     area or raw image size.
