@@ -6,8 +6,8 @@
 //! focus mode, the AF-area mode, AF fine-tune, the stabilization, auto ISO,
 //! the exposure fine-tuning, the release mode and bracketing, daylight
 //! saving time, the flash's source, control, sync and compensation, the
-//! Picture Control, Active D-Lighting, HDR and the high ISO noise
-//! reduction.
+//! Picture Control, Active D-Lighting, HDR, and the high ISO and long
+//! exposure noise reductions.
 //!
 //! The MakerNote records how the camera was set for the picture beyond
 //! what the Exif tags record (ADR011). [`camera_settings`] reads each
@@ -53,7 +53,9 @@
 //!   ([`active_d_lighting`]);
 //! - the high dynamic range setting from HDRInfo ([`hdr`]);
 //! - the high ISO noise reduction from HighISONoiseReduction
-//!   ([`high_iso_noise_reduction`]).
+//!   ([`high_iso_noise_reduction`]);
+//! - the long exposure noise reduction from NoiseReduction's text
+//!   ([`long_exposure_noise_reduction_of_text`]).
 //!
 //! A code or a text gives a value only where its meaning is known, as the
 //! next paragraph says. Anything else costs that value alone.
@@ -212,6 +214,11 @@ const NIKON_COMPRESSED: u32 = 34713;
 /// - **The high ISO noise reduction** is the step HighISONoiseReduction's
 ///   code names ([`high_iso_noise_reduction`]), in a raw file and a JPEG
 ///   alike.
+/// - **The long exposure noise reduction** is on where NoiseReduction's
+///   text, read by the text rule, says it ran
+///   ([`long_exposure_noise_reduction_of_text`]), and `None` otherwise.
+///
+/// Nikon records no multi-frame noise reduction, so it stays `None`.
 ///
 /// Nikon records no electronic front curtain setting, so it stays as
 /// `settings` has it, `None`. The exposure program and the metering mode
@@ -346,6 +353,8 @@ pub(super) fn camera_settings<R: Read + Seek>(
     settings.high_iso_noise_reduction = ifd
         .held(rules::HIGH_ISO_NOISE_REDUCTION)
         .and_then(|[code]| high_iso_noise_reduction(code));
+    settings.long_exposure_noise_reduction = tiff_metadata::text(src, ifd, rules::NOISE_REDUCTION)?
+        .and_then(|text| long_exposure_noise_reduction_of_text(&text));
     Ok(settings)
 }
 
@@ -525,6 +534,22 @@ fn high_iso_noise_reduction(code: u32) -> Option<HighIsoNoiseReduction> {
         6 => HighIsoNoiseReduction::High,
         _ => return None,
     })
+}
+
+/// Whether the long exposure noise reduction was on, as a NoiseReduction
+/// `text`, as read, shows it, looked up whole: `FPNR`, which says the
+/// camera took a dark frame and subtracted it, gives `Some(true)`.
+///
+/// The text says whether the reduction ran on the picture, not how the
+/// camera was set, as the files show: on my D3200 every exposure over 1 s
+/// says `FPNR` and every shorter one `OFF`, and no file of mine or of the
+/// public set says `FPNR` under 1 s (NEF notes, section 8.11). So `OFF`
+/// proves nothing of the setting and gives `None`, and so does every other
+/// text. ExifTool's published documentation gives the tag as a string and
+/// lists no values; the D600's manual says the reduction runs at shutter
+/// speeds slower than 1 s.
+fn long_exposure_noise_reduction_of_text(text: &str) -> Option<bool> {
+    (text == "FPNR").then_some(true)
 }
 
 /// `exif_flash`, the flash the Exif tags gave, with the parts the
@@ -1304,8 +1329,8 @@ mod tests {
         COMPRESSION_RECORD, COOLPIX_PICTURE_CONTROL, CROP_HI_SPEED, EXPOSURE_TUNING, FINE_TUNE,
         FINE_TUNE_STEPS, FLASH_EXPOSURE_COMP, FLASH_SETTING, FLASH_TYPE, FOCUS_MODE, HDR_INFO,
         HIGH_ISO_NOISE_REDUCTION, IMAGE_SIZE_RAW, ISO_SELECTION, JPG_COMPRESSION, NEF_COMPRESSION,
-        PICTURE_CONTROL, QUALITY, SHOOTING_MODE, SHUTTER_MODE, VR_INFO, WHITE_BALANCE, WORLD_TIME,
-        metadata,
+        NOISE_REDUCTION, PICTURE_CONTROL, QUALITY, SHOOTING_MODE, SHUTTER_MODE, VR_INFO,
+        WHITE_BALANCE, WORLD_TIME, metadata,
     };
     use super::*;
     use crate::camera_settings::{
@@ -4490,6 +4515,59 @@ mod tests {
                     "{order:?}, {place}"
                 );
             }
+        }
+    }
+
+    // The long exposure noise reduction.
+
+    #[test]
+    fn fpnr_gives_the_long_exposure_noise_reduction_on_and_every_other_text_none() {
+        // `OFF` says the reduction did not run on this picture, not that it
+        // was set off, so a Nikon file never gives `Some(false)`.
+        let cases = [
+            ("FPNR", Some(true)),
+            ("OFF", None),
+            ("fpnr", None),
+            ("ON", None),
+            ("FPNR1", None),
+            ("", None),
+        ];
+        for order in ORDERS {
+            for (text, expected) in cases {
+                let tags = |inner: &mut TiffBuilder, ifd: IfdId| {
+                    inner.ascii(ifd, NOISE_REDUCTION, text);
+                };
+                let raw = settings_of(order, tags);
+                assert_eq!(
+                    raw.long_exposure_noise_reduction, expected,
+                    "{order:?}, {text:?}"
+                );
+                let jpeg = jpeg_settings(order, tags, |_, _| {});
+                assert_eq!(
+                    jpeg.long_exposure_noise_reduction, expected,
+                    "{order:?}, {text:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn a_noise_reduction_text_of_another_type_gives_none_and_costs_nothing_else() {
+        for order in ORDERS {
+            let settings = settings_of(order, |inner, ifd| {
+                inner.undefined(ifd, NOISE_REDUCTION, b"FPNR\0").ascii(
+                    ifd,
+                    WHITE_BALANCE,
+                    &padded("SUNNY"),
+                );
+            });
+            assert_eq!(settings.long_exposure_noise_reduction, None, "{order:?}");
+            assert_eq!(settings.multi_frame_noise_reduction, None, "{order:?}");
+            assert_eq!(
+                settings.white_balance.mode,
+                Some(WhiteBalanceMode::Daylight),
+                "{order:?}"
+            );
         }
     }
 }

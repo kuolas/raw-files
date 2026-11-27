@@ -12,8 +12,8 @@
 //! and how the camera processed the picture: the directions of contrast,
 //! saturation and sharpness, the scene capture type, custom rendering,
 //! gain control, the maker's picture style, its dynamic range
-//! optimization and its high dynamic range setting, and the high ISO
-//! noise reduction.
+//! optimization and its high dynamic range setting, and the high ISO, long
+//! exposure and multi-frame noise reductions.
 //! [`CameraSettings`] holds them all, and
 //! [`Metadata::camera_settings`](crate::Metadata::camera_settings) gives
 //! them for a file. [`WhiteBalance`], [`WhiteBalanceFineTune`], [`Flash`],
@@ -52,7 +52,8 @@
 //!   file, the raw image size and how a compressed raw is compressed; and
 //!   in a JPEG, its quality and the choice between size priority and
 //!   optimal quality; the Picture Control, Nikon's picture style; Active
-//!   D-Lighting; HDR; and the high ISO noise reduction.
+//!   D-Lighting; HDR; the high ISO noise reduction; and whether the long
+//!   exposure noise reduction ran, which says it was on.
 //! - Sony's MakerNote, in ARW files and their family and in the JPEGs of
 //!   Sony cameras, gives the white balance setting in place of Exif's,
 //!   with its fine-tuning and the color temperature of a chosen color
@@ -62,9 +63,9 @@
 //!   release mode and bracketing, the flash's source when it is external
 //!   and its compensation, the JPEG quality, the Creative Style or
 //!   Creative Look, Sony's picture style, the D-Range Optimizer, Auto HDR,
-//!   and the high ISO noise reduction, which a raw file's 0 does not give.
-//!   A Sony raw file says how a compressed raw is compressed in codes of
-//!   Sony's own.
+//!   the high ISO noise reduction, which a raw file's 0 does not give, and
+//!   the long exposure and multi-frame noise reductions. A Sony raw file
+//!   says how a compressed raw is compressed in codes of Sony's own.
 //!
 //! Where a Nikon MakerNote records its crop as "off", or holds no crop,
 //! raw-files gives the body's sensor format from a table of its own, for
@@ -104,8 +105,8 @@ use crate::rational::{Rational, SignedRational};
 /// directions of contrast, saturation and sharpness it processed the
 /// picture in, the scene capture type, custom rendering, gain control, the
 /// maker's picture style, dynamic range optimization and high dynamic
-/// range setting, and the high ISO noise reduction, for a viewer's
-/// information panel beside the exposure.
+/// range setting, and the noise reductions, for a viewer's information
+/// panel beside the exposure.
 ///
 /// Every value is `None` when the file does not record it or records it in
 /// a way that cannot be read, such as a code that no variant names. A
@@ -122,8 +123,10 @@ use crate::rational::{Rational, SignedRational};
 /// Sony's, each those its MakerNote records in plain tags, and from each
 /// maker's compression codes; the shutter, the image area, the raw image
 /// size, AF fine-tune, auto ISO, daylight saving time and the JPEG
-/// compression are `None` for every Sony file. Each getter says where its
-/// value comes from.
+/// compression are `None` for every Sony file; the electronic front
+/// curtain setting and the multi-frame noise reduction for every Nikon
+/// file, whose long exposure noise reduction is never `Some(false)`. Each
+/// getter says where its value comes from.
 ///
 /// `CameraSettings::default()` is the empty record, with every value
 /// `None` and an empty [`WhiteBalance`]. A caller's tests start from it and
@@ -222,6 +225,8 @@ pub struct CameraSettings {
     pub(crate) dynamic_range_optimization: Option<DynamicRangeOptimization>,
     pub(crate) high_dynamic_range: Option<HighDynamicRange>,
     pub(crate) high_iso_noise_reduction: Option<HighIsoNoiseReduction>,
+    pub(crate) long_exposure_noise_reduction: Option<bool>,
+    pub(crate) multi_frame_noise_reduction: Option<bool>,
 }
 
 impl CameraSettings {
@@ -1444,6 +1449,95 @@ impl CameraSettings {
         self.high_iso_noise_reduction
     }
 
+    /// Whether long exposure noise reduction was on: `Some(true)` when the
+    /// camera was set to take a dark frame after a long exposure and
+    /// subtract it, `Some(false)` when it was set not to. Both makers'
+    /// menus call the setting Long exposure NR. Nikon's D600 manual applies
+    /// it at shutter speeds slower than 1 s, and Sony's SLT-A99 manual to
+    /// exposures of 1 s or longer.
+    ///
+    /// Read from the maker's MakerNote, in a raw file and a JPEG alike:
+    ///
+    /// - Nikon's from the text of NoiseReduction (0x0095), looked up whole:
+    ///   `FPNR` gives `Some(true)`. The text says whether the reduction
+    ///   ran on this picture, not how the camera was set: on the files
+    ///   measured, `FPNR` stands only on exposures of 1 s or longer, and
+    ///   `OFF` on every shorter one, whatever the setting. So `OFF` gives
+    ///   `None`, and a Nikon file never gives `Some(false)`.
+    /// - Sony's from the low 16 bits of LongExposureNoiseReduction
+    ///   (0x2008), one LONG or one SLONG: 0 off and 1 on. Its high 16
+    ///   bits, which say whether the camera took the dark frame, are not
+    ///   read.
+    ///
+    /// `None` when:
+    ///
+    /// - the file records none, as every file of another maker does;
+    /// - Nikon's text is `OFF`, or any text but `FPNR`, or is not ASCII;
+    /// - Sony's low half is neither 0 nor 1, as in 0xFFFFFFFF, which the
+    ///   documentation calls "n/a";
+    /// - Sony's tag is not one LONG or one SLONG.
+    ///
+    /// What files record is in the NEF notes on
+    /// [the long exposure noise reduction](https://github.com/kuolas/raw-files/blob/master/docs/formats/nef/makernote-and-metadata.md#811-picture-style-and-processing)
+    /// and the ARW notes on
+    /// [the same](https://github.com/kuolas/raw-files/blob/master/docs/formats/arw/makernote-and-metadata.md#911-picture-style-and-processing).
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use raw_files::CameraFile;
+    ///
+    /// # fn main() -> raw_files::Result<()> {
+    /// let file = CameraFile::open("photo.arw")?;
+    /// match file.metadata().camera_settings().long_exposure_noise_reduction() {
+    ///     Some(true) => println!("long exposure NR: on"),
+    ///     Some(false) => println!("long exposure NR: off"),
+    ///     None => {}
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn long_exposure_noise_reduction(&self) -> Option<bool> {
+        self.long_exposure_noise_reduction
+    }
+
+    /// Whether Sony's multi-frame noise reduction was on: `Some(true)` when
+    /// the camera combined a burst into one picture with less noise,
+    /// `Some(false)` when it did not. Sony's menu calls it Multi Frame
+    /// Noise Reduct.; Nikon has no such setting.
+    ///
+    /// Read from Sony's MakerNote, from MultiFrameNoiseReduction (0x200B),
+    /// one LONG, in a raw file and a JPEG alike: 0 off and 1 on. Every
+    /// measured file holds 0. MultiFrameNREffect (0x2023), the effect's
+    /// level, is not read.
+    ///
+    /// `None` when:
+    ///
+    /// - the file records none, as every file of another maker does;
+    /// - the code is any other, such as 255, which the documentation calls
+    ///   "n/a";
+    /// - the tag is not one LONG.
+    ///
+    /// What files record is in the ARW notes on
+    /// [the multi-frame noise reduction](https://github.com/kuolas/raw-files/blob/master/docs/formats/arw/makernote-and-metadata.md#911-picture-style-and-processing).
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use raw_files::CameraFile;
+    ///
+    /// # fn main() -> raw_files::Result<()> {
+    /// let file = CameraFile::open("photo.arw")?;
+    /// if file.metadata().camera_settings().multi_frame_noise_reduction() == Some(true) {
+    ///     println!("a burst combined into one picture");
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn multi_frame_noise_reduction(&self) -> Option<bool> {
+        self.multi_frame_noise_reduction
+    }
+
     /// Sets the white balance, in place of the one it had;
     /// [`white_balance`](Self::white_balance) reads it.
     #[must_use]
@@ -1709,6 +1803,26 @@ impl CameraSettings {
     #[must_use]
     pub fn with_high_iso_noise_reduction(mut self, step: HighIsoNoiseReduction) -> Self {
         self.high_iso_noise_reduction = Some(step);
+        self
+    }
+
+    /// Sets whether long exposure noise reduction was on, in place of any
+    /// value set before;
+    /// [`long_exposure_noise_reduction`](Self::long_exposure_noise_reduction)
+    /// reads it.
+    #[must_use]
+    pub fn with_long_exposure_noise_reduction(mut self, on: bool) -> Self {
+        self.long_exposure_noise_reduction = Some(on);
+        self
+    }
+
+    /// Sets whether multi-frame noise reduction was on, in place of any
+    /// value set before;
+    /// [`multi_frame_noise_reduction`](Self::multi_frame_noise_reduction)
+    /// reads it.
+    #[must_use]
+    pub fn with_multi_frame_noise_reduction(mut self, on: bool) -> Self {
+        self.multi_frame_noise_reduction = Some(on);
         self
     }
 }
@@ -5834,6 +5948,8 @@ mod tests {
             )),
             high_dynamic_range: Some(HighDynamicRange::Hdr(full_hdr())),
             high_iso_noise_reduction: Some(HighIsoNoiseReduction::MediumHigh),
+            long_exposure_noise_reduction: Some(true),
+            multi_frame_noise_reduction: Some(false),
         }
     }
 
@@ -5916,6 +6032,8 @@ mod tests {
         assert_eq!(settings.dynamic_range_optimization(), None);
         assert_eq!(settings.high_dynamic_range(), None);
         assert_eq!(settings.high_iso_noise_reduction(), None);
+        assert_eq!(settings.long_exposure_noise_reduction(), None);
+        assert_eq!(settings.multi_frame_noise_reduction(), None);
 
         let control = PictureControl::default();
         assert_eq!(control.name(), None);
@@ -6045,6 +6163,8 @@ mod tests {
             settings.high_iso_noise_reduction(),
             Some(HighIsoNoiseReduction::MediumHigh)
         );
+        assert_eq!(settings.long_exposure_noise_reduction(), Some(true));
+        assert_eq!(settings.multi_frame_noise_reduction(), Some(false));
 
         let control = full_control();
         assert_eq!(control.name(), Some("VIVID-KR"));
@@ -6349,6 +6469,20 @@ mod tests {
                         .with_high_iso_noise_reduction(HighIsoNoiseReduction::Auto),
                     CameraSettings {
                         high_iso_noise_reduction: Some(HighIsoNoiseReduction::Auto),
+                        ..start.clone()
+                    },
+                ),
+                (
+                    start.clone().with_long_exposure_noise_reduction(false),
+                    CameraSettings {
+                        long_exposure_noise_reduction: Some(false),
+                        ..start.clone()
+                    },
+                ),
+                (
+                    start.clone().with_multi_frame_noise_reduction(true),
+                    CameraSettings {
+                        multi_frame_noise_reduction: Some(true),
                         ..start.clone()
                     },
                 ),
@@ -6868,7 +7002,9 @@ mod tests {
                     }))
                     .with_smoothing(HdrSmoothing::High),
             ))
-            .with_high_iso_noise_reduction(HighIsoNoiseReduction::MediumHigh);
+            .with_high_iso_noise_reduction(HighIsoNoiseReduction::MediumHigh)
+            .with_long_exposure_noise_reduction(true)
+            .with_multi_frame_noise_reduction(false);
         assert_eq!(settings, full_settings());
     }
 
@@ -6906,7 +7042,9 @@ mod tests {
             .with_picture_style(PictureControl::default().with_name("FLAT").into())
             .with_dynamic_range_optimization(ActiveDLighting::Low.into())
             .with_high_dynamic_range(Hdr::off().into())
-            .with_high_iso_noise_reduction(HighIsoNoiseReduction::Off);
+            .with_high_iso_noise_reduction(HighIsoNoiseReduction::Off)
+            .with_long_exposure_noise_reduction(false)
+            .with_multi_frame_noise_reduction(true);
         // Every value of `earlier` differs from the full record's, so each
         // builder below has one to replace.
         let full = full_settings();
@@ -6942,7 +7080,9 @@ mod tests {
             .with_picture_style(full_control().into())
             .with_dynamic_range_optimization(ActiveDLighting::High.into())
             .with_high_dynamic_range(full_hdr().into())
-            .with_high_iso_noise_reduction(HighIsoNoiseReduction::MediumHigh);
+            .with_high_iso_noise_reduction(HighIsoNoiseReduction::MediumHigh)
+            .with_long_exposure_noise_reduction(true)
+            .with_multi_frame_noise_reduction(false);
         assert_eq!(settings, full);
 
         let hdr = Hdr::on()

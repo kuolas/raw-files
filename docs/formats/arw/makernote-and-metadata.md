@@ -1924,11 +1924,10 @@ settings
   contrast, saturation and sharpness;
 - Exif's six processing values;
 - the D-Range Optimizer and Auto HDR;
-- the high ISO noise reduction.
+- the high ISO, long exposure and multi-frame noise reductions.
 
 It will read:
 
-- the long exposure and multi-frame noise reductions;
 - the three lens compensations;
 - the scene.
 
@@ -2127,7 +2126,7 @@ whether the dark frame was taken:
 | 0x00010001 | On (dark subtracted) | on | observed | 6 / 43 |
 | 0xFFFF0000 | Off (65535) | off | observed | 5 / 0 |
 | 0xFFFF0001 | On (65535) | on | observed | 3 / 0 |
-| 0xFFFFFFFF | n/a | will give none | documented only | 0 / 0 |
+| 0xFFFFFFFF | n/a | gives none | documented only | 0 / 0 |
 
 **[F]**
 
@@ -2135,9 +2134,9 @@ whether the dark frame was taken:
   frame taken are exposures of 1 s or longer. No file of 1 s or longer
   holds 1, and three public exposures of 1.3 s hold 0. The exposure
   time is Exif's ExposureTime.
-- **raw-files will read the low half**, 0 off and 1 on, from a LONG or
-  a SLONG. The high half, whether the dark frame was taken, will not
-  be read ([section 14.5](#145-what-the-view-leaves-out)).
+- **raw-files reads the low half**, 0 off and 1 on, from a LONG or a
+  SLONG. The high half, whether the dark frame was taken, is not read
+  ([section 14.5](#145-what-the-view-leaves-out)).
 - The 0xFFFF in the high half is on eight A-mount DSLRs, the DSLR-A700
   and A900 among them.
 
@@ -2145,8 +2144,8 @@ whether the dark frame was taken:
 picture with less noise [P][33] (p. 73). 0x200B
 MultiFrameNoiseReduction is one LONG: 0 off, 1 on, 255 "n/a" [S][1].
 It is on 184 public files and on all of mine, and is 0 on every one.
-**[F]** raw-files will read 0 as off and 1 as on. Off is observed, and
-on is documented only. 0x2023, the effect's level, will not be read.
+**[F]** raw-files reads 0 as off and 1 as on. Off is observed, and on
+is documented only. 0x2023, the effect's level, is not read.
 
 **The lens compensations.** Three menu settings, each auto or off:
 shading, chromatic aberration and distortion [P][33] (p. 43). Three
@@ -2477,12 +2476,12 @@ For the picture style and the processing settings of
   it in three steps;
 - Auto HDR from the first half of 0x200A;
 - the high ISO noise reduction from 0x2009, where a raw file's 0 gives
-  none.
+  none;
+- the long exposure noise reduction from the low half of 0x2008;
+- the multi-frame noise reduction from 0x200B.
 
 It will read:
 
-- the long exposure noise reduction from the low half of 0x2008;
-- the multi-frame noise reduction from 0x200B;
 - the shading, chromatic aberration and distortion compensations from
   0x2011 to 0x2013, never from the raw SubIFD's codes;
 - the scene from 0xB023, where 0 will give none.

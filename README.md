@@ -69,7 +69,9 @@ Linux and Windows alike.
     files Active D-Lighting, and on Sony files the D-Range Optimizer.
   - the high dynamic range setting, under its maker's own name, on or
     off with its parts: on Nikon files HDR, and on Sony files Auto HDR.
-  - the high ISO noise reduction, in each maker's steps.
+  - the noise reductions: the high ISO one, in each maker's steps, and
+    whether the long exposure one was on; on Sony files the multi-frame
+    one too.
   - [`CameraSettings`](https://docs.rs/raw-files/latest/raw_files/struct.CameraSettings.html)
     says which a maker's files leave out: Sony's give no shutter, image
     area or raw image size.

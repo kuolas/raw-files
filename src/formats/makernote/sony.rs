@@ -130,6 +130,12 @@ pub(in crate::formats) const FOCUS_LOCATION: u16 = 0x2027;
 /// EV, `0/6` on every file checked.
 pub(in crate::formats) const EXPOSURE_FINE_TUNE: u16 = 0x202D;
 
+/// The Sony MakerNote tag that records the long exposure noise reduction
+/// (LongExposureNoiseReduction): one LONG, or one SLONG on some older
+/// bodies. Its low 16 bits are the setting, 0 off and 1 on; its high 16
+/// bits say whether the camera took the dark frame.
+const LONG_EXPOSURE_NOISE_REDUCTION: u16 = 0x2008;
+
 /// The Sony MakerNote tag that records the high ISO noise reduction
 /// (HighISONoiseReduction): one SHORT, a code for its step, such as 0
 /// off, 2 normal and 256 auto. A raw file holds 0 where its JPEG holds
@@ -142,6 +148,10 @@ const HIGH_ISO_NOISE_REDUCTION: u16 = 0x2009;
 /// and 0x10 to 0x1A on with a difference of 1.0 to 6.0 EV in half steps;
 /// the second says whether the camera made the HDR picture.
 const AUTO_HDR: u16 = 0x200A;
+
+/// The Sony MakerNote tag that records the multi-frame noise reduction
+/// (MultiFrameNoiseReduction): one LONG, 0 off and 1 on.
+const MULTI_FRAME_NOISE_REDUCTION: u16 = 0x200B;
 
 /// The Sony MakerNote tag that records the contrast of the picture style
 /// (Contrast): one SLONG, the camera's steps from the style's own, 0.
@@ -246,6 +256,14 @@ mod rules {
     pub(super) const AUTO_HDR: Held<[u32; 1]> = Held::new(super::AUTO_HDR, LONG);
     pub(super) const HIGH_ISO_NOISE_REDUCTION: Held<[u32; 1]> =
         Held::new(super::HIGH_ISO_NOISE_REDUCTION, SHORT);
+    pub(super) const LONG_EXPOSURE_NOISE_REDUCTION: Held<[u32; 1]> =
+        Held::new(super::LONG_EXPOSURE_NOISE_REDUCTION, LONG);
+    /// The same tag as one SLONG, as eleven bodies from the DSLR-A450 to
+    /// the NEX-C3 write it.
+    pub(super) const SIGNED_LONG_EXPOSURE_NOISE_REDUCTION: Held<[i32; 1]> =
+        Held::new(super::LONG_EXPOSURE_NOISE_REDUCTION, SLONG);
+    pub(super) const MULTI_FRAME_NOISE_REDUCTION: Held<[u32; 1]> =
+        Held::new(super::MULTI_FRAME_NOISE_REDUCTION, LONG);
     pub(super) const IMAGE_STABILIZATION: Held<[u32; 1]> =
         Held::new(super::IMAGE_STABILIZATION, LONG);
     pub(super) const RELEASE_MODE: Held<[u32; 1]> = Held::new(super::RELEASE_MODE, SHORT);
@@ -590,6 +608,12 @@ fn area<R: Read + Seek>(src: &mut Source<R>, makernote: &MakerNote) -> Result<Op
 ///   code names in the file that `picture` says it is
 ///   ([`high_iso_noise_reduction`]): a raw file's 0 gives none. 0xB050,
 ///   the DSC bodies' second tag, is not read.
+/// - **The long exposure noise reduction** is the low half of
+///   LongExposureNoiseReduction, one LONG or one SLONG
+///   ([`long_exposure_noise_reduction`]). The high half, whether the
+///   camera took the dark frame, is not read.
+/// - **The multi-frame noise reduction** is MultiFrameNoiseReduction's
+///   ([`multi_frame_noise_reduction`]).
 ///
 /// The shutter used, the image area and the raw image size stay as
 /// `settings` has them, `None`. Sony records the first two only in
@@ -655,6 +679,17 @@ fn camera_settings<R: Read + Seek>(
     settings.high_iso_noise_reduction = ifd
         .held(rules::HIGH_ISO_NOISE_REDUCTION)
         .and_then(|[code]| high_iso_noise_reduction(code, picture));
+    settings.long_exposure_noise_reduction = ifd
+        .held(rules::LONG_EXPOSURE_NOISE_REDUCTION)
+        .map(|[value]| value)
+        .or_else(|| {
+            ifd.held(rules::SIGNED_LONG_EXPOSURE_NOISE_REDUCTION)
+                .map(|[value]| value.cast_unsigned())
+        })
+        .and_then(long_exposure_noise_reduction);
+    settings.multi_frame_noise_reduction = ifd
+        .held(rules::MULTI_FRAME_NOISE_REDUCTION)
+        .and_then(|[code]| multi_frame_noise_reduction(code));
     if let Some(flash) = settings.flash.as_mut() {
         if let Some(source) = ifd
             .held(rules::FLASH_ACTION)
@@ -819,6 +854,38 @@ fn high_iso_noise_reduction(code: u32, picture: Picture) -> Option<HighIsoNoiseR
         256 => HighIsoNoiseReduction::Auto,
         _ => return None,
     })
+}
+
+/// Whether the long exposure noise reduction was on, as the low 16 bits
+/// of a LongExposureNoiseReduction `value` record it: 0 off and 1 on
+/// (ARW notes, section 9.11).
+///
+/// ExifTool's published documentation names whole values: 0 "Off", 1 "On
+/// (unused)", 0x00010001 "On (dark subtracted)", and 0xFFFF0000 and
+/// 0xFFFF0001, which eight older DSLRs write, "Off (65535)" and "On
+/// (65535)". Their low half is the setting, and the files agree: every
+/// file whose high half says the dark frame was taken is an exposure of
+/// 1 s or longer. The high half is not read. `None` for any other low
+/// half, as in 0xFFFFFFFF, "n/a".
+fn long_exposure_noise_reduction(value: u32) -> Option<bool> {
+    match value & 0xFFFF {
+        0 => Some(false),
+        1 => Some(true),
+        _ => None,
+    }
+}
+
+/// Whether the multi-frame noise reduction was on, as a
+/// MultiFrameNoiseReduction `code` records it: 0 off, which every
+/// measured file holds, and 1 on, documented only (ARW notes, section
+/// 9.11). `None` for every other code, the documentation's 255, "n/a",
+/// among them.
+fn multi_frame_noise_reduction(code: u32) -> Option<bool> {
+    match code {
+        0 => Some(false),
+        1 => Some(true),
+        _ => None,
+    }
 }
 
 /// The JPEG quality step that the MakerNote's IFD `ifd` records, from the
@@ -3347,7 +3414,9 @@ mod tests {
             .slong(ifd, SHARPNESS, &[0])
             .long(ifd, DYNAMIC_RANGE_OPTIMIZER, &[3])
             .long(ifd, AUTO_HDR, &[0])
-            .short(ifd, HIGH_ISO_NOISE_REDUCTION, &[0]);
+            .short(ifd, HIGH_ISO_NOISE_REDUCTION, &[0])
+            .long(ifd, LONG_EXPOSURE_NOISE_REDUCTION, &[1])
+            .long(ifd, MULTI_FRAME_NOISE_REDUCTION, &[0]);
     }
 
     /// What [`settings_tags`] gives, from `settings`, for an E-mount body
@@ -3356,8 +3425,9 @@ mod tests {
     /// `settings` holds a flash, a compensation of zero, a Creative Style
     /// at 0, with no name, the D-Range Optimizer on auto and Auto HDR off.
     /// The high ISO noise reduction's 0, which a raw file holds where its
-    /// JPEG holds the step, gives none. FlashAction's 0 names no source,
-    /// and
+    /// JPEG holds the step, gives none. The long exposure noise reduction
+    /// is on, as the ILCE-7M2's 1 records it, and the multi-frame one
+    /// off. FlashAction's 0 names no source, and
     /// Quality's 6 and JPEGQuality's 65535 no JPEG quality.
     fn with_settings_tags(settings: CameraSettings) -> CameraSettings {
         let white_balance = WhiteBalance::default()
@@ -3379,7 +3449,9 @@ mod tests {
                 sharpness: Some(0),
             }))
             .with_dynamic_range_optimization(DRangeOptimizer::Auto.into())
-            .with_high_dynamic_range(AutoHdr::off().into());
+            .with_high_dynamic_range(AutoHdr::off().into())
+            .with_long_exposure_noise_reduction(true)
+            .with_multi_frame_noise_reduction(false);
         if let Some(flash) = settings.flash {
             let zero = SignedRational::new(0, 10).expect("a denominator of 10");
             settings = settings.with_flash(flash.with_compensation(zero));
@@ -4303,6 +4375,100 @@ mod tests {
                 });
                 assert_eq!(
                     settings.high_iso_noise_reduction, None,
+                    "{order:?}, {place}"
+                );
+                assert_eq!(
+                    settings.white_balance.mode,
+                    Some(WhiteBalanceMode::Daylight),
+                    "{order:?}, {place}"
+                );
+            }
+        }
+    }
+
+    // The long exposure and multi-frame noise reductions.
+
+    #[test]
+    fn the_long_exposure_noise_reduction_is_the_low_half_from_a_long_or_an_slong() {
+        let cases = [
+            // The whole values the documentation names: off, on (unused),
+            // on (dark subtracted), and the older DSLRs' off and on with
+            // 0xFFFF in the high half; then "n/a".
+            (0x0000_0000, Some(false)),
+            (0x0000_0001, Some(true)),
+            (0x0001_0001, Some(true)),
+            (0xFFFF_0000, Some(false)),
+            (0xFFFF_0001, Some(true)),
+            (0xFFFF_FFFF, None),
+            // Low halves the list lacks.
+            (0x0000_0002, None),
+            (0x0001_0002, None),
+            (0x0000_FFFF, None),
+        ];
+        for order in ORDERS {
+            for picture in [Picture::Raw, Picture::Jpeg] {
+                for (value, expected) in cases {
+                    let long = picture_settings_of(order, picture, |builder, ifd| {
+                        builder.long(ifd, LONG_EXPOSURE_NOISE_REDUCTION, &[value]);
+                    });
+                    assert_eq!(
+                        long.long_exposure_noise_reduction, expected,
+                        "{order:?}, {picture:?}, LONG {value:#x}"
+                    );
+                    let slong = picture_settings_of(order, picture, |builder, ifd| {
+                        builder.slong(ifd, LONG_EXPOSURE_NOISE_REDUCTION, &[value.cast_signed()]);
+                    });
+                    assert_eq!(
+                        slong.long_exposure_noise_reduction, expected,
+                        "{order:?}, {picture:?}, SLONG {value:#x}"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn each_multi_frame_noise_reduction_code_gives_on_or_off() {
+        let cases = [(0, Some(false)), (1, Some(true)), (2, None), (255, None)];
+        for order in ORDERS {
+            for picture in [Picture::Raw, Picture::Jpeg] {
+                for (code, expected) in cases {
+                    let settings = picture_settings_of(order, picture, |builder, ifd| {
+                        builder.long(ifd, MULTI_FRAME_NOISE_REDUCTION, &[code]);
+                    });
+                    assert_eq!(
+                        settings.multi_frame_noise_reduction, expected,
+                        "{order:?}, {picture:?}, {code}"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn a_noise_reduction_of_another_shape_gives_none_and_costs_nothing_else() {
+        for order in ORDERS {
+            // One SHORT, and two LONGs, of each tag; and the multi-frame
+            // one as one SLONG, which only the long exposure one may be.
+            for place in 0..3 {
+                let settings = settings_of(order, |builder, ifd| {
+                    match place {
+                        0 => builder
+                            .short(ifd, LONG_EXPOSURE_NOISE_REDUCTION, &[1])
+                            .short(ifd, MULTI_FRAME_NOISE_REDUCTION, &[1]),
+                        1 => builder
+                            .long(ifd, LONG_EXPOSURE_NOISE_REDUCTION, &[1, 1])
+                            .long(ifd, MULTI_FRAME_NOISE_REDUCTION, &[1, 1]),
+                        _ => builder.slong(ifd, MULTI_FRAME_NOISE_REDUCTION, &[1]),
+                    };
+                    builder.long(ifd, WHITE_BALANCE, &[16]);
+                });
+                assert_eq!(
+                    settings.long_exposure_noise_reduction, None,
+                    "{order:?}, {place}"
+                );
+                assert_eq!(
+                    settings.multi_frame_noise_reduction, None,
                     "{order:?}, {place}"
                 );
                 assert_eq!(

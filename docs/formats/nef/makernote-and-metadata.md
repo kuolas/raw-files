@@ -2187,11 +2187,10 @@ settings
 - the picture style, Nikon's Picture Control, with its values;
 - Exif's six processing values;
 - Active D-Lighting and HDR;
-- the high ISO noise reduction.
+- the high ISO and long exposure noise reductions.
 
 It will read:
 
-- the long exposure noise reduction;
 - vignette control and auto distortion control;
 - the scene mode.
 
@@ -2511,7 +2510,7 @@ public one is a COOLPIX P7000's, at 4.81 s.
   set. On my D3200 every exposure over 1 s says `FPNR` (248 files), and
   every shorter one says `OFF` (10,139). A setting does not change
   with each exposure.
-- **So `FPNR` will give on, and `OFF` will give `None`.** `FPNR` shows
+- **So `FPNR` gives on, and `OFF` gives `None`.** `FPNR` shows
   that the setting was on. `OFF` shows nothing below 1 s. Above it,
   `OFF` can also stand with the setting on: a camera switched off
   while it processes saves the picture without the reduction [P][25]
@@ -2519,7 +2518,7 @@ public one is a COOLPIX P7000's, at 4.81 s.
 - **Exif's CustomRendered follows it on two bodies.** On my D3200 and
   D7200 it is 1 on exactly the `FPNR` files. On my Z 9 it is 1 on
   every file, and on the public P7000's file it is 0.
-- Both texts are observed. Any other text will give `None`.
+- Both texts are observed. Any other text gives `None`.
 
 **Vignette control.** It reduces the drop in brightness at a picture's
 edges [P][25] (p. 218). 0x002A VignetteControl is one SHORT [S][1], on
@@ -2798,11 +2797,11 @@ plain MakerNote tags where Exif has no value, and decrypt nothing [I]:
 - HDR from 0x0035 at its three versions, its parts only where it is
   on;
 - the high ISO noise reduction from 0x00B1;
+- the long exposure noise reduction from 0x0095, where `FPNR` gives on
+  and `OFF` none;
 - the other processing settings of
   [section 8.11](#811-picture-style-and-processing), which raw-files
   will read:
-  - the long exposure noise reduction from 0x0095, where `FPNR` will
-    give on and `OFF` none;
   - vignette control from 0x002A, and auto distortion control from
     byte 4 of 0x002B;
   - the scene mode from 0x00AB, else 0x008F, where a blank text will
