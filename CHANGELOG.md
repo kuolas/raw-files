@@ -404,6 +404,10 @@ does. An entry that can break a caller opens with **Breaking:**.
     `HdrExposureDifferential`, auto or a number of EV, and an
     `HdrSmoothing`.
   - Nikon's DSLRs and Z bodies record it in their JPEGs alone.
+  - Sony's `AutoHdr` is its other variant, read from the first half of
+    0x200A. It gives an `AutoHdrExposureDifference`, auto or a number of
+    EV in halves. Whether the camera made the HDR picture, the second
+    half, is not read.
   - `HighDynamicRange::setting_name` gives the maker's word for the
     setting, and `is_on` whether it was on. Each maker's type converts
     into it with `From`.

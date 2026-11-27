@@ -17,8 +17,8 @@
 use std::io::{Cursor, Read, Seek};
 
 use crate::camera_settings::{
-    DynamicRangeOptimization, HdrExposureDifferential, HighDynamicRange, PictureControlValue,
-    PictureStyle,
+    AutoHdrExposureDifference, DynamicRangeOptimization, HdrExposureDifferential, HighDynamicRange,
+    PictureControlValue, PictureStyle,
 };
 use crate::container::jpeg::{mpf, probe, segments};
 use crate::container::tiff::{Block, FieldType, First, Held, Rule, Text, Tree, walk};
@@ -615,6 +615,12 @@ fn read_high_dynamic_range(setting: HighDynamicRange) {
             let _ = hdr.strength().map(|strength| strength.to_string());
             let _ = hdr.smoothing().map(|smoothing| smoothing.to_string());
             if let Some(HdrExposureDifferential::Ev(ev)) = hdr.exposure_differential() {
+                let _ = (ev.to_string(), ev.reduced(), ev.to_f64());
+            }
+        }
+        HighDynamicRange::AutoHdr(auto_hdr) => {
+            let _ = auto_hdr.is_on();
+            if let Some(AutoHdrExposureDifference::Ev(ev)) = auto_hdr.exposure_difference() {
                 let _ = (ev.to_string(), ev.reduced(), ev.to_f64());
             }
         }

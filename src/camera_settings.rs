@@ -16,15 +16,15 @@
 //! [`CameraSettings`] holds them all, and
 //! [`Metadata::camera_settings`](crate::Metadata::camera_settings) gives
 //! them for a file. [`WhiteBalance`], [`WhiteBalanceFineTune`], [`Flash`],
-//! [`AfFineTune`], [`Stabilization`] and [`Hdr`] hold the settings made of
-//! several parts; each enum, such as [`ExposureProgram`], names one
-//! setting's choices in words that fit any maker, with a
+//! [`AfFineTune`], [`Stabilization`], [`Hdr`] and [`AutoHdr`] hold the
+//! settings made of several parts; each enum, such as [`ExposureProgram`],
+//! names one setting's choices in words that fit any maker, with a
 //! [`name`](ExposureProgram::name) to show. The picture style keeps each
 //! maker's own words instead: [`PictureStyle`] holds Nikon's
 //! [`PictureControl`], Sony's [`CreativeStyle`] or its [`CreativeLook`],
 //! each under its own name, [`DynamicRangeOptimization`] holds Nikon's
 //! [`ActiveDLighting`] or Sony's [`DRangeOptimizer`], and
-//! [`HighDynamicRange`] Nikon's [`Hdr`].
+//! [`HighDynamicRange`] Nikon's [`Hdr`] or Sony's [`AutoHdr`].
 //!
 //! Every value is optional. A file may not record it, or may record it in
 //! a way that cannot be read, such as a code no variant names; either way
@@ -60,9 +60,9 @@
 //!   the stabilization, without a mode, the exposure fine-tuning, the
 //!   release mode and bracketing, the flash's source when it is external
 //!   and its compensation, the JPEG quality, the Creative Style or
-//!   Creative Look, Sony's picture style, and the D-Range Optimizer. A
-//!   Sony raw file says how a compressed raw is compressed in codes of
-//!   Sony's own.
+//!   Creative Look, Sony's picture style, the D-Range Optimizer and Auto
+//!   HDR. A Sony raw file says how a compressed raw is compressed in codes
+//!   of Sony's own.
 //!
 //! Where a Nikon MakerNote records its crop as "off", or holds no crop,
 //! raw-files gives the body's sensor format from a table of its own, for
@@ -86,7 +86,8 @@
 //! [`PictureControl`], [`CreativeStyle`] and [`CreativeLook`] through
 //! their `with_…` methods, and a
 //! [`WhiteBalanceFineTune`], a [`Flash`], an [`AfFineTune`], a
-//! [`Stabilization`] and an [`Hdr`] through their constructors.
+//! [`Stabilization`], an [`Hdr`] and an [`AutoHdr`] through their
+//! constructors.
 //! [`CameraSettings`]'s docs show how.
 
 use std::fmt;
@@ -1316,7 +1317,7 @@ impl CameraSettings {
 
     /// Whether the camera combined exposures into one picture of a high
     /// dynamic range, and how, under its maker's own name: Nikon's
-    /// [`Hdr`] ([`HighDynamicRange`]).
+    /// [`Hdr`] or Sony's [`AutoHdr`] ([`HighDynamicRange`]).
     ///
     /// Read from the maker's MakerNote:
     ///
@@ -1331,34 +1332,55 @@ impl CameraSettings {
     ///   of the 8-byte versions is not read. Nikon's DSLRs and Z bodies
     ///   write the record in their JPEGs alone; Coolpix and Nikon 1 bodies
     ///   write it in their raw files too.
+    /// - Sony's Auto HDR from the first of the two 16-bit numbers of HDR
+    ///   (0x200A), one LONG, in a raw file and a JPEG alike: 0 off, 1 on
+    ///   with the [`exposure_difference`](AutoHdr::exposure_difference)
+    ///   left to the camera, and 0x10 to 0x1A on with a difference of 1.0
+    ///   to 6.0 EV in steps of half an EV. The second number, whether the
+    ///   camera made the HDR picture, is not read. Every measured file
+    ///   holds 0.
     ///
     /// `None` when:
     ///
     /// - the file records none, as every file of another maker does, and
     ///   every NEF file of a Nikon DSLR or Z body measured;
-    /// - the record is of another version, or of another length than its
-    ///   version's, or starts with no version, as a COOLPIX P7100's does;
-    /// - byte 4 holds any other code, such as 48, which the documentation
-    ///   calls auto and which says neither on nor off; no file holds it;
-    /// - the record is not of type UNDEFINED.
+    /// - Nikon's record is of another version, or of another length than
+    ///   its version's, or starts with no version, as a COOLPIX P7100's
+    ///   does;
+    /// - Nikon's byte 4 holds any other code, such as 48, which the
+    ///   documentation calls auto and which says neither on nor off; no
+    ///   file holds it;
+    /// - Sony's first number is any other code, such as 2;
+    /// - the tag is not Nikon's record of type UNDEFINED or Sony's one
+    ///   LONG.
     ///
     /// What files record is in the NEF notes on
-    /// [HDR](https://github.com/kuolas/raw-files/blob/master/docs/formats/nef/makernote-and-metadata.md#811-picture-style-and-processing).
+    /// [HDR](https://github.com/kuolas/raw-files/blob/master/docs/formats/nef/makernote-and-metadata.md#811-picture-style-and-processing)
+    /// and the ARW notes on
+    /// [Auto HDR](https://github.com/kuolas/raw-files/blob/master/docs/formats/arw/makernote-and-metadata.md#911-picture-style-and-processing).
     ///
     /// # Examples
     ///
     /// ```no_run
-    /// use raw_files::{CameraFile, HighDynamicRange};
+    /// use raw_files::{AutoHdrExposureDifference, CameraFile, HighDynamicRange};
     ///
     /// # fn main() -> raw_files::Result<()> {
     /// let file = CameraFile::open("photo.jpg")?;
     /// if let Some(setting) = file.metadata().camera_settings().high_dynamic_range() {
     ///     let state = if setting.is_on() { "on" } else { "off" };
     ///     println!("{}: {state}", setting.setting_name());
-    ///     if let HighDynamicRange::Hdr(hdr) = setting {
-    ///         if let Some(strength) = hdr.strength() {
-    ///             println!("strength: {strength}");
+    ///     match setting {
+    ///         HighDynamicRange::Hdr(hdr) => {
+    ///             if let Some(strength) = hdr.strength() {
+    ///                 println!("strength: {strength}");
+    ///             }
     ///         }
+    ///         HighDynamicRange::AutoHdr(auto_hdr) => {
+    ///             if let Some(AutoHdrExposureDifference::Ev(ev)) = auto_hdr.exposure_difference() {
+    ///                 println!("exposure difference: {} EV", ev.to_f64());
+    ///             }
+    ///         }
+    ///         _ => {}
     ///     }
     /// }
     /// # Ok(())
@@ -5110,7 +5132,9 @@ impl fmt::Display for DRangeOptimizer {
 /// Each maker names the setting and records its parts in its own way, so
 /// each keeps its own type:
 ///
-/// - [`Hdr`](Self::Hdr), Nikon's HDR (high dynamic range).
+/// - [`Hdr`](Self::Hdr), Nikon's HDR (high dynamic range), which combines
+///   two exposures;
+/// - [`AutoHdr`](Self::AutoHdr), Sony's Auto HDR, which combines three.
 ///
 /// [`setting_name`](Self::setting_name) gives the maker's word for the
 /// setting, for a viewer's label, and [`is_on`](Self::is_on) whether it
@@ -5124,41 +5148,53 @@ impl fmt::Display for DRangeOptimizer {
 ///
 /// # Examples
 ///
-/// Nikon's setting, labeled for a viewer and read by its variant:
+/// Each maker's setting, labeled for a viewer and read by its variant:
 ///
 /// ```
-/// use raw_files::{Hdr, HdrStrength, HighDynamicRange};
+/// use raw_files::{AutoHdr, Hdr, HdrStrength, HighDynamicRange};
 ///
 /// let nikon = HighDynamicRange::from(Hdr::on().with_strength(HdrStrength::Auto));
-/// let state = if nikon.is_on() { "on" } else { "off" };
-/// println!("{}: {state}", nikon.setting_name());
-/// let strength = match nikon {
-///     HighDynamicRange::Hdr(hdr) => hdr.strength(),
-///     _ => None,
-/// };
+/// let sony = HighDynamicRange::from(AutoHdr::off());
+///
+/// for setting in [nikon, sony] {
+///     let state = if setting.is_on() { "on" } else { "off" };
+///     let detail = match setting {
+///         HighDynamicRange::Hdr(hdr) => format!("{:?}", hdr.strength()),
+///         HighDynamicRange::AutoHdr(auto_hdr) => format!("{:?}", auto_hdr.exposure_difference()),
+///         _ => String::new(),
+///     };
+///     println!("{}: {state} {detail}", setting.setting_name());
+/// }
 /// assert_eq!(nikon.setting_name(), "HDR");
-/// assert_eq!(strength, Some(HdrStrength::Auto));
+/// assert!(nikon.is_on());
+/// assert_eq!(sony.setting_name(), "Auto HDR");
+/// assert!(!sony.is_on());
 /// ```
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum HighDynamicRange {
     /// Nikon's HDR.
     Hdr(Hdr),
+    /// Sony's Auto HDR.
+    AutoHdr(AutoHdr),
 }
 
 impl HighDynamicRange {
-    /// The maker's word for the setting, for a viewer's label: "HDR".
+    /// The maker's word for the setting, for a viewer's label: "HDR" or
+    /// "Auto HDR".
     pub fn setting_name(&self) -> &'static str {
         match self {
             HighDynamicRange::Hdr(_) => "HDR",
+            HighDynamicRange::AutoHdr(_) => "Auto HDR",
         }
     }
 
     /// Whether the setting was on, whichever maker's it is: the `is_on`
-    /// of the variant's own type, [`Hdr::is_on`].
+    /// of the variant's own type, [`Hdr::is_on`] or [`AutoHdr::is_on`].
     pub fn is_on(&self) -> bool {
         match self {
             HighDynamicRange::Hdr(hdr) => hdr.is_on(),
+            HighDynamicRange::AutoHdr(auto_hdr) => auto_hdr.is_on(),
         }
     }
 }
@@ -5443,6 +5479,127 @@ impl fmt::Display for HdrSmoothing {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(self.name())
     }
+}
+
+impl From<AutoHdr> for HighDynamicRange {
+    /// Sony's Auto HDR as a high dynamic range setting, its
+    /// [`AutoHdr`](HighDynamicRange::AutoHdr) variant.
+    fn from(auto_hdr: AutoHdr) -> Self {
+        HighDynamicRange::AutoHdr(auto_hdr)
+    }
+}
+
+/// Sony's Auto HDR: whether the camera shot three exposures and overlaid
+/// them into one picture, and, when it did, the exposure difference
+/// between them.
+///
+/// There is no `Default`: a file that records no Auto HDR gives `None`
+/// for [`CameraSettings::high_dynamic_range`]. A file that records it off
+/// gives one that [`is_on`](Self::is_on) says is off, with no exposure
+/// difference.
+///
+/// # Examples
+///
+/// Auto HDR on with a difference of 2.5 EV, on with the difference left to
+/// the camera, and off:
+///
+/// ```
+/// use raw_files::{AutoHdr, AutoHdrExposureDifference, Rational};
+///
+/// let halves = Rational { numerator: 5, denominator: 2 };
+/// let chosen = AutoHdr::on().with_exposure_difference(AutoHdrExposureDifference::Ev(halves));
+/// assert!(chosen.is_on());
+/// assert_eq!(chosen.exposure_difference(), Some(AutoHdrExposureDifference::Ev(halves)));
+///
+/// let auto = AutoHdr::on().with_exposure_difference(AutoHdrExposureDifference::Auto);
+/// assert_eq!(auto.exposure_difference(), Some(AutoHdrExposureDifference::Auto));
+///
+/// let off = AutoHdr::off();
+/// assert!(!off.is_on());
+/// assert_eq!(off.exposure_difference(), None);
+/// ```
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct AutoHdr {
+    pub(crate) on: bool,
+    pub(crate) exposure_difference: Option<AutoHdrExposureDifference>,
+}
+
+impl AutoHdr {
+    /// Auto HDR that was on, with no exposure difference yet;
+    /// [`with_exposure_difference`](Self::with_exposure_difference) adds
+    /// it.
+    #[must_use]
+    pub fn on() -> Self {
+        Self {
+            on: true,
+            exposure_difference: None,
+        }
+    }
+
+    /// Auto HDR that was off, with no exposure difference.
+    #[must_use]
+    pub fn off() -> Self {
+        Self {
+            on: false,
+            exposure_difference: None,
+        }
+    }
+
+    /// This Auto HDR with the exposure difference `difference`, in place
+    /// of any it had. It is stored as given, whether or not Auto HDR is
+    /// on: the readers give it only when it is.
+    #[must_use]
+    pub fn with_exposure_difference(self, difference: AutoHdrExposureDifference) -> Self {
+        Self {
+            exposure_difference: Some(difference),
+            ..self
+        }
+    }
+
+    /// Whether Auto HDR was on.
+    pub fn is_on(&self) -> bool {
+        self.on
+    }
+
+    /// The difference in exposure between the three shots, or `None`
+    /// when none is recorded, as when Auto HDR is off.
+    pub fn exposure_difference(&self) -> Option<AutoHdrExposureDifference> {
+        self.exposure_difference
+    }
+}
+
+/// The difference in exposure between the three shots of Sony's Auto
+/// HDR: chosen by the camera, or a number of EV, from 1.0 to 6.0 EV in
+/// steps of half an EV.
+///
+/// The value is one or the other, as a [`PictureControlValue`] is auto or
+/// a count of steps. A number of EV is kept in halves, as the camera
+/// counts its steps: 1.0 EV is `2/2` and 2.5 EV `5/2`.
+///
+/// `AutoHdrExposureDifference` is `#[non_exhaustive]`, so match on it with
+/// a wildcard arm. It has no `Display`: how a number of EV is written is
+/// the viewer's choice.
+///
+/// # Examples
+///
+/// ```
+/// use raw_files::{AutoHdrExposureDifference, Rational};
+///
+/// let difference = AutoHdrExposureDifference::Ev(Rational { numerator: 5, denominator: 2 });
+/// let text = match difference {
+///     AutoHdrExposureDifference::Auto => "auto".to_string(),
+///     AutoHdrExposureDifference::Ev(ev) => format!("{} EV", ev.to_f64()),
+///     _ => String::new(),
+/// };
+/// assert_eq!(text, "2.5 EV");
+/// ```
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum AutoHdrExposureDifference {
+    /// The camera chose the difference from the scene.
+    Auto,
+    /// A difference of this many EV, in halves, from `2/2` to `12/2`.
+    Ev(Rational),
 }
 
 #[cfg(test)]
@@ -6299,12 +6456,38 @@ mod tests {
     }
 
     #[test]
+    fn on_and_off_build_an_auto_hdr_that_says_so_with_no_difference() {
+        for (auto_hdr, on) in [(AutoHdr::on(), true), (AutoHdr::off(), false)] {
+            assert_eq!(auto_hdr.is_on(), on);
+            assert_eq!(auto_hdr.exposure_difference(), None);
+        }
+        // The difference is stored as given, even on an Auto HDR that was
+        // off, and a later one replaces an earlier one.
+        let halves = AutoHdrExposureDifference::Ev(Rational {
+            numerator: 5,
+            denominator: 2,
+        });
+        let off = AutoHdr::off()
+            .with_exposure_difference(AutoHdrExposureDifference::Auto)
+            .with_exposure_difference(halves);
+        assert!(!off.is_on());
+        assert_eq!(off.exposure_difference(), Some(halves));
+    }
+
+    #[test]
     fn a_high_dynamic_range_gives_its_makers_word_and_whether_it_was_on() {
         for hdr in [Hdr::on(), Hdr::off(), full_hdr()] {
             let setting = HighDynamicRange::from(hdr);
             assert_eq!(setting, HighDynamicRange::Hdr(hdr));
             assert_eq!(setting.setting_name(), "HDR");
             assert_eq!(setting.is_on(), hdr.is_on());
+        }
+        let auto = AutoHdr::on().with_exposure_difference(AutoHdrExposureDifference::Auto);
+        for auto_hdr in [AutoHdr::on(), AutoHdr::off(), auto] {
+            let setting = HighDynamicRange::from(auto_hdr);
+            assert_eq!(setting, HighDynamicRange::AutoHdr(auto_hdr));
+            assert_eq!(setting.setting_name(), "Auto HDR");
+            assert_eq!(setting.is_on(), auto_hdr.is_on());
         }
     }
 

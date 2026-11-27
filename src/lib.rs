@@ -421,14 +421,15 @@ mod value_error;
 pub use authorship::Authorship;
 pub use camera::{Camera, Make};
 pub use camera_settings::{
-    ActiveDLighting, AfFineTune, Bracketing, CameraSettings, ColorSpace, Contrast, CreativeLook,
-    CreativeStyle, DRangeOptimizer, DynamicRangeOptimization, ExposureProgram, Flash, FlashControl,
-    FlashMode, FlashSource, FlashSync, FluorescentLamp, FocusAreaMode, FocusMode, GainControl, Hdr,
-    HdrExposureDifferential, HdrSmoothing, HdrStrength, HighDynamicRange, ImageArea,
-    JpegCompression, JpegQuality, MeteringMode, PictureControl, PictureControlAdjustment,
-    PictureControlFilterEffect, PictureControlToning, PictureControlValue, PictureStyle,
-    RawCompression, RawImageSize, ReleaseMode, Saturation, SceneCaptureType, Sharpness, Shutter,
-    Stabilization, StabilizationMode, WhiteBalance, WhiteBalanceFineTune, WhiteBalanceMode,
+    ActiveDLighting, AfFineTune, AutoHdr, AutoHdrExposureDifference, Bracketing, CameraSettings,
+    ColorSpace, Contrast, CreativeLook, CreativeStyle, DRangeOptimizer, DynamicRangeOptimization,
+    ExposureProgram, Flash, FlashControl, FlashMode, FlashSource, FlashSync, FluorescentLamp,
+    FocusAreaMode, FocusMode, GainControl, Hdr, HdrExposureDifferential, HdrSmoothing, HdrStrength,
+    HighDynamicRange, ImageArea, JpegCompression, JpegQuality, MeteringMode, PictureControl,
+    PictureControlAdjustment, PictureControlFilterEffect, PictureControlToning,
+    PictureControlValue, PictureStyle, RawCompression, RawImageSize, ReleaseMode, Saturation,
+    SceneCaptureType, Sharpness, Shutter, Stabilization, StabilizationMode, WhiteBalance,
+    WhiteBalanceFineTune, WhiteBalanceMode,
 };
 pub use datetime::DateTime;
 pub use entries::{Directory, Entries, Entry, FieldType, SkippedDirectory, Value, ValueDisplay};
