@@ -4428,8 +4428,10 @@ impl fmt::Display for GainControl {
 ///
 /// `PictureStyle` is `#[non_exhaustive]`, so match on it with a wildcard
 /// arm: another maker's setting is added as a variant. It is `Clone` and
-/// not `Copy`, and has no `Default`: a style is always one maker's. Each
-/// maker's type converts into it with `From`.
+/// not `Copy`, and has no `Default`: a style is always one maker's. It has
+/// no `Display` either: its name may be missing, and a style is a record
+/// of many parts, as [`WhiteBalance`] is. Each maker's type converts into
+/// it with `From`.
 ///
 /// # Examples
 ///
