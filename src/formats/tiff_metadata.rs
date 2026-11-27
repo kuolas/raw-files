@@ -896,6 +896,9 @@ fn camera_settings<R: Read + Seek>(
         // Only a maker's MakerNote records the picture style, in the
         // maker's own words.
         picture_style: None,
+        // Only a maker's MakerNote records how the camera optimized the
+        // dynamic range, in the maker's own words.
+        dynamic_range_optimization: None,
     })
 }
 

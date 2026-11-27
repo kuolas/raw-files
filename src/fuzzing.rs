@@ -16,7 +16,7 @@
 
 use std::io::{Cursor, Read, Seek};
 
-use crate::camera_settings::{PictureControlValue, PictureStyle};
+use crate::camera_settings::{DynamicRangeOptimization, PictureControlValue, PictureStyle};
 use crate::container::jpeg::{mpf, probe, segments};
 use crate::container::tiff::{Block, FieldType, First, Held, Rule, Text, Tree, walk};
 use crate::datetime::DateTime;
@@ -450,6 +450,9 @@ fn read_metadata(metadata: &Metadata) {
     if let Some(style) = settings.picture_style() {
         read_picture_style(style);
     }
+    if let Some(optimization) = settings.dynamic_range_optimization() {
+        read_dynamic_range_optimization(optimization);
+    }
     let tiny = Size {
         width: 1,
         height: 1,
@@ -578,6 +581,17 @@ fn read_picture_style(style: &PictureStyle) {
                 look.saturation(),
                 look.sharpness(),
             );
+        }
+    }
+}
+
+/// Calls every getter of the dynamic range optimization `optimization`,
+/// whichever maker's it is.
+fn read_dynamic_range_optimization(optimization: DynamicRangeOptimization) {
+    let _ = (optimization.setting_name(), optimization.name());
+    match optimization {
+        DynamicRangeOptimization::ActiveDLighting(step) => {
+            let _ = step.to_string();
         }
     }
 }

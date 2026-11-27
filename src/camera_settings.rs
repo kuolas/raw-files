@@ -11,7 +11,8 @@
 //! raw data's bit depth and compression, the JPEG quality and compression,
 //! and how the camera processed the picture: the directions of contrast,
 //! saturation and sharpness, the scene capture type, custom rendering,
-//! gain control and the maker's picture style.
+//! gain control, the maker's picture style and its dynamic range
+//! optimization.
 //! [`CameraSettings`] holds them all, and
 //! [`Metadata::camera_settings`](crate::Metadata::camera_settings) gives
 //! them for a file. [`WhiteBalance`], [`WhiteBalanceFineTune`], [`Flash`],
@@ -21,7 +22,8 @@
 //! [`name`](ExposureProgram::name) to show. The picture style keeps each
 //! maker's own words instead: [`PictureStyle`] holds Nikon's
 //! [`PictureControl`], Sony's [`CreativeStyle`] or its [`CreativeLook`],
-//! each under its own name.
+//! each under its own name, and [`DynamicRangeOptimization`] holds Nikon's
+//! [`ActiveDLighting`].
 //!
 //! Every value is optional. A file may not record it, or may record it in
 //! a way that cannot be read, such as a code no variant names; either way
@@ -47,7 +49,8 @@
 //!   Exif tags record none, as in every Nikon raw file checked; in a raw
 //!   file, the raw image size and how a compressed raw is compressed; and
 //!   in a JPEG, its quality and the choice between size priority and
-//!   optimal quality; and the Picture Control, Nikon's picture style.
+//!   optimal quality; the Picture Control, Nikon's picture style; and
+//!   Active D-Lighting.
 //! - Sony's MakerNote, in ARW files and their family and in the JPEGs of
 //!   Sony cameras, gives the white balance setting in place of Exif's,
 //!   with its fine-tuning and the color temperature of a chosen color
@@ -94,9 +97,9 @@ use crate::rational::SignedRational;
 /// ISO, exposure fine-tuning, release mode, bracketing, daylight saving
 /// time, raw bit depth and compression, JPEG quality and compression, the
 /// directions of contrast, saturation and sharpness it processed the
-/// picture in, the scene capture type, custom rendering, gain control and
-/// the maker's picture style, for a viewer's information panel beside the
-/// exposure.
+/// picture in, the scene capture type, custom rendering, gain control, the
+/// maker's picture style and its dynamic range optimization, for a
+/// viewer's information panel beside the exposure.
 ///
 /// Every value is `None` when the file does not record it or records it in
 /// a way that cannot be read, such as a code that no variant names. A
@@ -210,6 +213,7 @@ pub struct CameraSettings {
     pub(crate) custom_rendered: Option<bool>,
     pub(crate) gain_control: Option<GainControl>,
     pub(crate) picture_style: Option<PictureStyle>,
+    pub(crate) dynamic_range_optimization: Option<DynamicRangeOptimization>,
 }
 
 impl CameraSettings {
@@ -1253,6 +1257,50 @@ impl CameraSettings {
         self.picture_style.as_ref()
     }
 
+    /// How the camera optimized the picture's dynamic range, keeping
+    /// detail in its highlights and shadows, under its maker's own name:
+    /// Nikon's [`ActiveDLighting`] ([`DynamicRangeOptimization`]).
+    ///
+    /// Read from the maker's MakerNote, in a raw file and a JPEG alike:
+    ///
+    /// - Nikon's Active D-Lighting from ActiveD-Lighting (0x0022), one
+    ///   SHORT, by the list ExifTool's documentation gives: 0 off, 1 low,
+    ///   3 normal, 5 high, 7 extra high, 8 to 11 extra high 1 to 4, and
+    ///   65535 auto. The list is read whole, since files hold part of it.
+    ///
+    /// `None` when:
+    ///
+    /// - the file records none, as every file of another maker does;
+    /// - the code is one the list lacks, such as 2;
+    /// - the tag is not one SHORT.
+    ///
+    /// What files record is in the NEF notes on
+    /// [Active D-Lighting](https://github.com/kuolas/raw-files/blob/master/docs/formats/nef/makernote-and-metadata.md#811-picture-style-and-processing).
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use raw_files::{ActiveDLighting, CameraFile, DynamicRangeOptimization};
+    ///
+    /// # fn main() -> raw_files::Result<()> {
+    /// let file = CameraFile::open("photo.nef")?;
+    /// let settings = file.metadata().camera_settings();
+    /// if let Some(optimization) = settings.dynamic_range_optimization() {
+    ///     println!("{}: {}", optimization.setting_name(), optimization.name());
+    ///     match optimization {
+    ///         DynamicRangeOptimization::ActiveDLighting(ActiveDLighting::Auto) => {
+    ///             println!("the camera chose the strength");
+    ///         }
+    ///         _ => {}
+    ///     }
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn dynamic_range_optimization(&self) -> Option<DynamicRangeOptimization> {
+        self.dynamic_range_optimization
+    }
+
     /// Sets the white balance, in place of the one it had;
     /// [`white_balance`](Self::white_balance) reads it.
     #[must_use]
@@ -1487,6 +1535,19 @@ impl CameraSettings {
     #[must_use]
     pub fn with_picture_style(mut self, style: PictureStyle) -> Self {
         self.picture_style = Some(style);
+        self
+    }
+
+    /// Sets the dynamic range optimization, in place of any set before;
+    /// [`dynamic_range_optimization`](Self::dynamic_range_optimization)
+    /// reads it. Each maker's type converts into a
+    /// [`DynamicRangeOptimization`] with `From`.
+    #[must_use]
+    pub fn with_dynamic_range_optimization(
+        mut self,
+        optimization: DynamicRangeOptimization,
+    ) -> Self {
+        self.dynamic_range_optimization = Some(optimization);
         self
     }
 }
@@ -4684,6 +4745,159 @@ impl fmt::Display for PictureControlToning {
     }
 }
 
+/// How the camera optimized the picture's dynamic range, under its
+/// maker's own name: the variant says which maker's setting it is, and
+/// holds that setting's own type.
+///
+/// The setting keeps detail in a picture's highlights and shadows. Each
+/// maker names it and cuts its steps in its own way, so each keeps its own
+/// type:
+///
+/// - [`ActiveDLighting`](Self::ActiveDLighting), Nikon's Active
+///   D-Lighting.
+///
+/// [`setting_name`](Self::setting_name) gives the maker's word for the
+/// setting, for a viewer's label, and [`name`](Self::name) the step's
+/// name, whichever maker's it is.
+///
+/// `DynamicRangeOptimization` is `#[non_exhaustive]`, so match on it with
+/// a wildcard arm: another maker's setting is added as a variant. It is
+/// `Copy`, and has no `Default`: a setting is always one maker's. It has
+/// no `Display` either, as [`PictureStyle`] has none: a viewer writes the
+/// setting's name and the step's together. Each maker's type converts into
+/// it with `From`.
+///
+/// # Examples
+///
+/// Nikon's setting, labeled for a viewer and read by its variant:
+///
+/// ```
+/// use raw_files::{ActiveDLighting, DynamicRangeOptimization};
+///
+/// let nikon = DynamicRangeOptimization::from(ActiveDLighting::Auto);
+/// println!("{}: {}", nikon.setting_name(), nikon.name());
+/// let chosen_by_the_camera = match nikon {
+///     DynamicRangeOptimization::ActiveDLighting(step) => step == ActiveDLighting::Auto,
+///     _ => false,
+/// };
+/// assert!(chosen_by_the_camera);
+/// assert_eq!(nikon.setting_name(), "Active D-Lighting");
+/// assert_eq!(nikon.name(), "Auto");
+/// ```
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum DynamicRangeOptimization {
+    /// Nikon's Active D-Lighting.
+    ActiveDLighting(ActiveDLighting),
+}
+
+impl DynamicRangeOptimization {
+    /// The maker's word for the setting, for a viewer's label: "Active
+    /// D-Lighting".
+    pub fn setting_name(&self) -> &'static str {
+        match self {
+            DynamicRangeOptimization::ActiveDLighting(_) => "Active D-Lighting",
+        }
+    }
+
+    /// The step's name, whichever maker's setting it is, such as "Auto":
+    /// the `name` of the variant's own type, [`ActiveDLighting::name`].
+    pub fn name(&self) -> &'static str {
+        match self {
+            DynamicRangeOptimization::ActiveDLighting(step) => step.name(),
+        }
+    }
+}
+
+impl From<ActiveDLighting> for DynamicRangeOptimization {
+    /// The Active D-Lighting step as a dynamic range optimization, its
+    /// [`ActiveDLighting`](DynamicRangeOptimization::ActiveDLighting)
+    /// variant.
+    fn from(step: ActiveDLighting) -> Self {
+        DynamicRangeOptimization::ActiveDLighting(step)
+    }
+}
+
+/// Nikon's Active D-Lighting: how strongly the camera kept detail in the
+/// highlights and shadows, by adjusting the exposure before the shot, or
+/// that it was off.
+///
+/// The steps are those of Nikon's cameras: the D600's manual offers auto,
+/// extra high, high, normal, low and off. ExifTool's documentation also
+/// gives four numbered steps past extra high, Extra High 1 to Extra High
+/// 4, which no Nikon manual read for raw-files names; their variants rest
+/// on the documentation's words.
+///
+/// `ActiveDLighting` is `#[non_exhaustive]`, so match on it with a
+/// wildcard arm. The steps are listed from the weakest to the strongest,
+/// then auto, and `ActiveDLighting` orders as they are listed. A new step
+/// is added where the ladder puts it, between the existing ones if need
+/// be, so two steps keep the order once observed between them. Its
+/// [`name`](Self::name)s, which `Display` writes too, are "Off", "Low",
+/// "Normal", "High", "Extra high", "Extra high 1" to "Extra high 4" and
+/// "Auto".
+///
+/// # Examples
+///
+/// ```
+/// use raw_files::ActiveDLighting;
+///
+/// assert_eq!(ActiveDLighting::ExtraHigh.name(), "Extra high");
+/// assert_eq!(ActiveDLighting::ExtraHigh2.to_string(), "Extra high 2");
+/// assert!(ActiveDLighting::Low < ActiveDLighting::High);
+/// ```
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[non_exhaustive]
+pub enum ActiveDLighting {
+    /// Active D-Lighting off.
+    Off,
+    /// The low step.
+    Low,
+    /// The normal step.
+    Normal,
+    /// The high step.
+    High,
+    /// The extra high step.
+    ExtraHigh,
+    /// The documentation's Extra High 1, the first numbered step past
+    /// extra high.
+    ExtraHigh1,
+    /// The documentation's Extra High 2.
+    ExtraHigh2,
+    /// The documentation's Extra High 3.
+    ExtraHigh3,
+    /// The documentation's Extra High 4, the strongest.
+    ExtraHigh4,
+    /// The camera chose the strength from the scene.
+    Auto,
+}
+
+impl ActiveDLighting {
+    /// The step's name, for an information panel, such as "Extra high";
+    /// the type's docs list them all.
+    pub fn name(self) -> &'static str {
+        match self {
+            ActiveDLighting::Off => "Off",
+            ActiveDLighting::Low => "Low",
+            ActiveDLighting::Normal => "Normal",
+            ActiveDLighting::High => "High",
+            ActiveDLighting::ExtraHigh => "Extra high",
+            ActiveDLighting::ExtraHigh1 => "Extra high 1",
+            ActiveDLighting::ExtraHigh2 => "Extra high 2",
+            ActiveDLighting::ExtraHigh3 => "Extra high 3",
+            ActiveDLighting::ExtraHigh4 => "Extra high 4",
+            ActiveDLighting::Auto => "Auto",
+        }
+    }
+}
+
+impl fmt::Display for ActiveDLighting {
+    /// Writes [`name`](ActiveDLighting::name).
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.name())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -4757,6 +4971,9 @@ mod tests {
             custom_rendered: Some(true),
             gain_control: Some(GainControl::HighGainUp),
             picture_style: Some(PictureStyle::PictureControl(full_control())),
+            dynamic_range_optimization: Some(DynamicRangeOptimization::ActiveDLighting(
+                ActiveDLighting::High,
+            )),
         }
     }
 
@@ -4821,6 +5038,7 @@ mod tests {
         assert_eq!(settings.custom_rendered(), None);
         assert_eq!(settings.gain_control(), None);
         assert_eq!(settings.picture_style(), None);
+        assert_eq!(settings.dynamic_range_optimization(), None);
 
         let control = PictureControl::default();
         assert_eq!(control.name(), None);
@@ -4924,6 +5142,12 @@ mod tests {
         assert_eq!(
             settings.picture_style(),
             Some(&PictureStyle::PictureControl(full_control()))
+        );
+        assert_eq!(
+            settings.dynamic_range_optimization(),
+            Some(DynamicRangeOptimization::ActiveDLighting(
+                ActiveDLighting::High
+            ))
         );
 
         let control = full_control();
@@ -5205,6 +5429,17 @@ mod tests {
                         ..start.clone()
                     },
                 ),
+                (
+                    start
+                        .clone()
+                        .with_dynamic_range_optimization(ActiveDLighting::Off.into()),
+                    CameraSettings {
+                        dynamic_range_optimization: Some(
+                            DynamicRangeOptimization::ActiveDLighting(ActiveDLighting::Off),
+                        ),
+                        ..start.clone()
+                    },
+                ),
             ];
             for (place, (built, expected)) in cases.into_iter().enumerate() {
                 assert_eq!(built, expected, "builder {place} from {start:?}");
@@ -5442,6 +5677,19 @@ mod tests {
     }
 
     #[test]
+    fn a_dynamic_range_optimization_gives_its_makers_word_and_its_step() {
+        for step in all_active_d_lightings() {
+            let optimization = DynamicRangeOptimization::from(step);
+            assert_eq!(
+                optimization,
+                DynamicRangeOptimization::ActiveDLighting(step)
+            );
+            assert_eq!(optimization.setting_name(), "Active D-Lighting");
+            assert_eq!(optimization.name(), step.name());
+        }
+    }
+
+    #[test]
     fn a_creative_style_and_a_creative_look_give_what_was_set() {
         let style = full_creative_style();
         assert_eq!(style.name(), Some("Vivid"));
@@ -5638,7 +5886,8 @@ mod tests {
                     .with_filter_effect(PictureControlFilterEffect::Red)
                     .with_toning(PictureControlToning::Sepia)
                     .with_toning_saturation(steps(5, 4)),
-            ));
+            ))
+            .with_dynamic_range_optimization(DynamicRangeOptimization::from(ActiveDLighting::High));
         assert_eq!(settings, full_settings());
     }
 
@@ -5673,7 +5922,8 @@ mod tests {
             .with_scene_capture_type(SceneCaptureType::NightScene)
             .with_custom_rendered(false)
             .with_gain_control(GainControl::LowGainDown)
-            .with_picture_style(PictureControl::default().with_name("FLAT").into());
+            .with_picture_style(PictureControl::default().with_name("FLAT").into())
+            .with_dynamic_range_optimization(ActiveDLighting::Low.into());
         // Every value of `earlier` differs from the full record's, so each
         // builder below has one to replace.
         let full = full_settings();
@@ -5706,7 +5956,8 @@ mod tests {
             .with_scene_capture_type(SceneCaptureType::Portrait)
             .with_custom_rendered(true)
             .with_gain_control(GainControl::HighGainUp)
-            .with_picture_style(full_control().into());
+            .with_picture_style(full_control().into())
+            .with_dynamic_range_optimization(ActiveDLighting::High.into());
         assert_eq!(settings, full);
 
         let control = PictureControl::default()
@@ -6322,6 +6573,20 @@ mod tests {
         all
     }
 
+    fn all_active_d_lightings() -> [ActiveDLighting; 10] {
+        use ActiveDLighting::*;
+        let all = [
+            Off, Low, Normal, High, ExtraHigh, ExtraHigh1, ExtraHigh2, ExtraHigh3, ExtraHigh4, Auto,
+        ];
+        for step in all {
+            match step {
+                Off | Low | Normal | High | ExtraHigh | ExtraHigh1 | ExtraHigh2 | ExtraHigh3
+                | ExtraHigh4 | Auto => {}
+            }
+        }
+        all
+    }
+
     #[test]
     fn every_name_is_the_one_documented_and_display_writes_it() {
         // The names are stable once released: a program may show or store
@@ -6561,6 +6826,22 @@ mod tests {
                 "Red purple",
             ],
         );
+        assert_names(
+            &all_active_d_lightings(),
+            ActiveDLighting::name,
+            &[
+                "Off",
+                "Low",
+                "Normal",
+                "High",
+                "Extra high",
+                "Extra high 1",
+                "Extra high 2",
+                "Extra high 3",
+                "Extra high 4",
+                "Auto",
+            ],
+        );
     }
 
     #[test]
@@ -6595,6 +6876,7 @@ mod tests {
         assert_ordered(&all_picture_control_adjustments());
         assert_ordered(&all_picture_control_filter_effects());
         assert_ordered(&all_picture_control_tonings());
+        assert_ordered(&all_active_d_lightings());
     }
 
     #[test]

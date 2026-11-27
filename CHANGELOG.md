@@ -379,6 +379,16 @@ does. An entry that can break a caller opens with **Breaking:**.
   - `PictureStyle::setting_name` gives the maker's word for the setting,
     and `PictureStyle::name` the style's name. Each maker's type
     converts into a `PictureStyle` with `From`.
+- `CameraSettings::dynamic_range_optimization` gives how the camera
+  kept detail in highlights and shadows, a `DynamicRangeOptimization`
+  under its maker's own name. `with_dynamic_range_optimization` sets it
+  ([#230](https://github.com/kuolas/raw-files/issues/230)).
+  - Its first variant is Nikon's `ActiveDLighting`, read from
+    ActiveD-Lighting (0x0022). Its steps are off, low, normal, high,
+    extra high, extra high 1 to 4 and auto.
+  - `DynamicRangeOptimization::setting_name` gives the maker's word for
+    the setting, and `name` the step's name. Each maker's type converts
+    into it with `From`.
 
 ### Changed
 
