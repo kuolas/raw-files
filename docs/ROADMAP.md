@@ -149,9 +149,22 @@ format notes say what each file records
 [ARW](formats/arw/makernote-and-metadata.md#911-picture-style-and-processing),
 [JPEG](formats/jpeg/container-and-metadata.md#4-exif-the-app1-segment)).
 
+**What a photographer or a program adds** comes next
+([ADR024](architecture-decisions/adr024-xmp-and-iptc.md),
+[#237](https://github.com/kuolas/raw-files/issues/237)). That is the
+rating, the label, and the IPTC fields, such as the title, the keywords
+and the creator.
+
+- raw-files will read them from the XMP packet a file embeds and from
+  its older IPTC block, each given apart.
+- A caller will hand in an XMP sidecar, by its path, its bytes or a
+  reader; opening a file will still read that file alone.
+- Every XMP property will be given too, by its namespace and name.
+
+The [XMP and IPTC notes](formats/xmp-and-iptc.md) say what files hold.
+
 These groups of values follow, each read from the same directories:
 
-- the XMP and IPTC fields;
 - the lens by name;
 - what editing software, such as Nikon's, writes into the file;
 - what a maker records only in enciphered or encrypted blocks. Reading
@@ -262,9 +275,10 @@ release's changes.
   ([#214](https://github.com/kuolas/raw-files/issues/214)), and how the
   camera made its JPEG
   ([#230](https://github.com/kuolas/raw-files/issues/230)).
-- **Next**: more of full metadata, group by group, beginning with the
-  XMP and IPTC fields
-  ([#50](https://github.com/kuolas/raw-files/issues/50)). The values
+- **Next**: more of full metadata, group by group
+  ([#50](https://github.com/kuolas/raw-files/issues/50)), beginning with
+  the XMP and IPTC fields
+  ([#237](https://github.com/kuolas/raw-files/issues/237)). The values
   only enciphered or encrypted blocks hold come last.
 
 ## Open questions
