@@ -192,7 +192,7 @@ use std::rc::Rc;
 use raw_files::{
     Altitude, Authorship, Camera, CameraFile, DateTime, Direction, Directory, FocusLayout,
     FocusOrigin, FocusPoints, Format, Latitude, Lens, Location, Longitude, Metadata, North,
-    PlacedFocusLayout, Point, Rational, Size, Value,
+    PictureStyle, PlacedFocusLayout, Point, Rational, Size, Value,
 };
 
 /// A file that counts the bytes its reads return, into a counter the caller
@@ -521,9 +521,49 @@ struct SettingsTally {
     custom_rendered_on: usize,
     gain_control: usize,
     gain_controls: BTreeMap<&'static str, usize>,
+    /// Files with a picture style, by the maker's word for it, such as
+    /// "Picture Control"; the Picture Controls by the version of their
+    /// record, which the raw view gives
+    /// ([`SettingsTally::record_versions`]); the Picture Controls whose
+    /// name equals their base, and those whose name does not, as a name
+    /// its owner typed: never the names themselves; and the files by the
+    /// maker's word and how many of the style's values it gives.
+    picture_style: usize,
+    picture_styles: BTreeMap<&'static str, usize>,
+    picture_control_versions: BTreeMap<String, usize>,
+    picture_control_named_as_base: usize,
+    picture_control_named_otherwise: usize,
+    picture_style_values: BTreeMap<(&'static str, usize), usize>,
 }
 
 impl SettingsTally {
+    /// Counts the version of the Picture Control record that `file`'s
+    /// MakerNote holds, when the file gives a Picture Control: the first
+    /// four bytes of 0x0023, else of 0x00BD, as the raw view reads them.
+    /// The getters do not give the version.
+    fn record_versions<R: Read + Seek>(&mut self, file: &CameraFile<R>) {
+        /// Nikon's PictureControlData, and the Coolpix bodies' copy.
+        const PICTURE_CONTROL: [u16; 2] = [0x0023, 0x00BD];
+        let settings = file.metadata().camera_settings();
+        if !matches!(
+            settings.picture_style(),
+            Some(PictureStyle::PictureControl(_))
+        ) {
+            return;
+        }
+        let entries = file.entries();
+        let version = PICTURE_CONTROL
+            .iter()
+            .find_map(|&tag| entries.entry(Directory::MakerNote, tag))
+            .and_then(|entry| file.read_value(&entry).ok())
+            .and_then(|value| {
+                let bytes = value.bytes()?;
+                Some(String::from_utf8_lossy(bytes.get(..4)?).into_owned())
+            })
+            .unwrap_or_else(|| "unread".into());
+        *self.picture_control_versions.entry(version).or_default() += 1;
+    }
+
     /// Counts whether `file`'s image area and raw size came from raw-files'
     /// table of bodies rather than from a tag the file records. The getters
     /// cannot tell, so the raw view does: an image area given where Nikon's
@@ -774,6 +814,54 @@ impl SettingsTally {
         }
         if let Some(gain) = settings.gain_control() {
             count(&mut self.gain_control, &mut self.gain_controls, gain.name());
+        }
+        if let Some(style) = settings.picture_style() {
+            count(
+                &mut self.picture_style,
+                &mut self.picture_styles,
+                style.setting_name(),
+            );
+            let values = match style {
+                PictureStyle::PictureControl(control) => {
+                    if control.name().is_some() && control.name() == control.base() {
+                        self.picture_control_named_as_base += 1;
+                    } else {
+                        self.picture_control_named_otherwise += 1;
+                    }
+                    [
+                        control.quick_adjust(),
+                        control.quick_sharp(),
+                        control.sharpening(),
+                        control.mid_range_sharpening(),
+                        control.clarity(),
+                        control.contrast(),
+                        control.brightness(),
+                        control.saturation(),
+                        control.hue(),
+                        control.toning_saturation(),
+                    ]
+                    .iter()
+                    .flatten()
+                    .count()
+                }
+                PictureStyle::CreativeStyle(style) => {
+                    [style.contrast(), style.saturation(), style.sharpness()]
+                        .iter()
+                        .flatten()
+                        .count()
+                }
+                PictureStyle::CreativeLook(look) => {
+                    [look.contrast(), look.saturation(), look.sharpness()]
+                        .iter()
+                        .flatten()
+                        .count()
+                }
+                _ => 0,
+            };
+            *self
+                .picture_style_values
+                .entry((style.setting_name(), values))
+                .or_default() += 1;
         }
     }
 }
@@ -1512,6 +1600,15 @@ impl Tally {
             "files with custom rendering: {}, of which custom: {}; with a gain control: {}, by adjustment: {:?}",
             s.custom_rendered, s.custom_rendered_on, s.gain_control, s.gain_controls
         );
+        println!(
+            "files with a picture style: {}, by setting: {:?}; Picture Controls by version: {:?}, named as their base: {}, otherwise: {}; by setting and values given: {:?}",
+            s.picture_style,
+            s.picture_styles,
+            s.picture_control_versions,
+            s.picture_control_named_as_base,
+            s.picture_control_named_otherwise,
+            s.picture_style_values
+        );
         let f = &self.focus;
         println!(
             "files with a focus point: {}, without: {}",
@@ -1864,6 +1961,7 @@ fn check(path: &Path, tally: &mut Tally) {
     tally.metadata.record(camera_file.metadata());
     tally.settings.record(camera_file.metadata());
     tally.settings.record_table(&camera_file);
+    tally.settings.record_versions(&camera_file);
     tally.focus.record(camera_file.metadata());
     tally.entries.record(&camera_file);
     let Some(preview) = camera_file.largest_preview() else {
@@ -3116,4 +3214,92 @@ fn the_leftovers_are_measured_from_the_images_own_end_marker() {
             "{count} bytes after the end"
         );
     }
+}
+
+#[test]
+fn the_settings_tally_counts_the_picture_style() {
+    use raw_files::{
+        CameraSettings, CreativeLook, CreativeStyle, PictureControl, PictureControlValue,
+    };
+
+    // A preset, a control with a typed name, an unnamed control, a
+    // Creative Style with two values, a Creative Look with three, and a
+    // file with no style.
+    let auto = PictureControlValue::Auto;
+    let styles = [
+        Some(PictureStyle::from(
+            PictureControl::default()
+                .with_name("STANDARD")
+                .with_base("STANDARD")
+                .with_sharpening(auto)
+                .with_contrast(auto),
+        )),
+        Some(PictureStyle::from(
+            PictureControl::default()
+                .with_name("MINE")
+                .with_base("VIVID")
+                .with_sharpening(auto)
+                .with_contrast(auto),
+        )),
+        Some(PictureStyle::from(PictureControl::default())),
+        Some(PictureStyle::from(
+            CreativeStyle::default()
+                .with_name("Vivid")
+                .with_contrast(0)
+                .with_sharpness(0),
+        )),
+        Some(PictureStyle::from(
+            CreativeLook::default()
+                .with_contrast(0)
+                .with_saturation(0)
+                .with_sharpness(4),
+        )),
+        None,
+    ];
+    let mut tally = SettingsTally::default();
+    for style in styles {
+        let settings = match style {
+            Some(style) => CameraSettings::default().with_picture_style(style),
+            None => CameraSettings::default(),
+        };
+        tally.record(&Metadata::default().with_camera_settings(settings));
+    }
+    assert_eq!(tally.picture_style, 5);
+    assert_eq!(
+        tally.picture_styles,
+        BTreeMap::from([
+            ("Creative Look", 1),
+            ("Creative Style", 1),
+            ("Picture Control", 3)
+        ])
+    );
+    assert_eq!(tally.picture_control_named_as_base, 1);
+    assert_eq!(tally.picture_control_named_otherwise, 2);
+    assert_eq!(
+        tally.picture_style_values,
+        BTreeMap::from([
+            (("Creative Look", 3), 1),
+            (("Creative Style", 2), 1),
+            (("Picture Control", 0), 1),
+            (("Picture Control", 2), 2),
+        ])
+    );
+
+    // The versions, from the raw view: my D600's JPEG holds 0100 and my
+    // Z 9's 0310; the stripped NEF holds no record and gives no style.
+    let fixtures = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures");
+    let mut tally = SettingsTally::default();
+    for name in [
+        "nikon-d600/frame-04.jpg",
+        "nikon-z9-fx.jpg",
+        "nikon-z9-dx.jpg",
+        "nikon-z9-dx.nef",
+    ] {
+        let file = CameraFile::open(fixtures.join(name)).unwrap();
+        tally.record_versions(&file);
+    }
+    assert_eq!(
+        tally.picture_control_versions,
+        BTreeMap::from([("0100".to_string(), 1), ("0310".to_string(), 2)])
+    );
 }

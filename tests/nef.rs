@@ -63,9 +63,9 @@ use support::nef::{
 };
 use support::samples::{
     Folder, Jpeg, LocationPart, Sample, SampleEntries, SampleFineTune, SampleFlash, SampleFocus,
-    SampleLens, SampleMetadata, SamplePlacedLayout, SampleSettings, SerialShape, Text, check,
-    check_enciphered, check_entries, check_every, check_fixture_tables, check_metadata,
-    check_placed_layout, check_tables, sizes,
+    SampleLens, SampleMetadata, SamplePictureStyle, SamplePlacedLayout, SampleSettings,
+    SerialShape, Text, check, check_enciphered, check_entries, check_every, check_fixture_tables,
+    check_metadata, check_placed_layout, check_tables, sizes, steps,
 };
 use support::tiff_builder::{
     Built, EXIF_IFD, ORDERS, Order, RawValue, SHORT, SUB_IFDS, TiffBuilder,
@@ -1229,6 +1229,7 @@ const FIXTURE_METADATA: &[SampleMetadata] = &[
             scene_capture_type: Some(SceneCaptureType::Standard),
             custom_rendered: Some(true),
             gain_control: Some(GainControl::NoAdjustment),
+            picture_style: None,
         },
     },
     // The Z 9's 1:1 shot, alike but for these values. CropHiSpeed `[17,
@@ -1321,6 +1322,7 @@ const FIXTURE_METADATA: &[SampleMetadata] = &[
             scene_capture_type: Some(SceneCaptureType::Standard),
             custom_rendered: Some(true),
             gain_control: Some(GainControl::NoAdjustment),
+            picture_style: None,
         },
     },
     // The Z 9's pinpoint shot, in FX. CropHiSpeed `[11, 8280, 5520, 8280,
@@ -1413,6 +1415,7 @@ const FIXTURE_METADATA: &[SampleMetadata] = &[
             scene_capture_type: Some(SceneCaptureType::Standard),
             custom_rendered: Some(true),
             gain_control: Some(GainControl::LowGainUp),
+            picture_style: None,
         },
     },
     // The D600's frame 4.
@@ -1535,6 +1538,7 @@ const FIXTURE_METADATA: &[SampleMetadata] = &[
             scene_capture_type: Some(SceneCaptureType::Standard),
             custom_rendered: Some(false),
             gain_control: Some(GainControl::HighGainUp),
+            picture_style: None,
         },
     },
 ];
@@ -3431,6 +3435,13 @@ const METADATA: &[SampleMetadata] = &[
             scene_capture_type: Some(SceneCaptureType::Standard),
             custom_rendered: Some(true),
             gain_control: Some(GainControl::NoAdjustment),
+            picture_style: Some(SamplePictureStyle::PictureControl {
+                version: "0301",
+                name: Some("AUTO"),
+                sharpening: None,
+                contrast: None,
+                saturation: None,
+            }),
         },
     },
     // Z 9, High Efficiency* (raw.pixls.us 5147)
@@ -3523,6 +3534,13 @@ const METADATA: &[SampleMetadata] = &[
             scene_capture_type: Some(SceneCaptureType::Standard),
             custom_rendered: Some(true),
             gain_control: Some(GainControl::NoAdjustment),
+            picture_style: Some(SamplePictureStyle::PictureControl {
+                version: "0301",
+                name: Some("AUTO"),
+                sharpening: None,
+                contrast: None,
+                saturation: None,
+            }),
         },
     },
     // Z 9, High Efficiency (raw.pixls.us 5148)
@@ -3615,6 +3633,13 @@ const METADATA: &[SampleMetadata] = &[
             scene_capture_type: Some(SceneCaptureType::Standard),
             custom_rendered: Some(true),
             gain_control: Some(GainControl::NoAdjustment),
+            picture_style: Some(SamplePictureStyle::PictureControl {
+                version: "0301",
+                name: Some("AUTO"),
+                sharpening: None,
+                contrast: None,
+                saturation: None,
+            }),
         },
     },
     // D1H, 12-bit uncompressed (raw.pixls.us 5364)
@@ -3684,6 +3709,7 @@ const METADATA: &[SampleMetadata] = &[
             scene_capture_type: None,
             custom_rendered: None,
             gain_control: None,
+            picture_style: None,
         },
     },
     // D1X, 12-bit lossy (raw.pixls.us 1785)
@@ -3753,6 +3779,7 @@ const METADATA: &[SampleMetadata] = &[
             scene_capture_type: None,
             custom_rendered: None,
             gain_control: None,
+            picture_style: None,
         },
     },
     // D1X, 12-bit uncompressed (raw.pixls.us 1786)
@@ -3822,6 +3849,7 @@ const METADATA: &[SampleMetadata] = &[
             scene_capture_type: None,
             custom_rendered: None,
             gain_control: None,
+            picture_style: None,
         },
     },
     // D100, 12-bit uncompressed (raw.pixls.us 2996)
@@ -3900,6 +3928,7 @@ const METADATA: &[SampleMetadata] = &[
             scene_capture_type: Some(SceneCaptureType::Standard),
             custom_rendered: Some(false),
             gain_control: Some(GainControl::NoAdjustment),
+            picture_style: None,
         },
     },
     // D70, 12-bit lossy (raw.pixls.us 2060)
@@ -3978,6 +4007,7 @@ const METADATA: &[SampleMetadata] = &[
             scene_capture_type: Some(SceneCaptureType::Standard),
             custom_rendered: Some(false),
             gain_control: Some(GainControl::NoAdjustment),
+            picture_style: None,
         },
     },
     // D200, 12-bit lossy (raw.pixls.us 8079)
@@ -4056,6 +4086,7 @@ const METADATA: &[SampleMetadata] = &[
             scene_capture_type: Some(SceneCaptureType::Standard),
             custom_rendered: Some(false),
             gain_control: Some(GainControl::NoAdjustment),
+            picture_style: None,
         },
     },
     // D300, 12-bit lossy (raw.pixls.us 928)
@@ -4140,6 +4171,13 @@ const METADATA: &[SampleMetadata] = &[
             scene_capture_type: Some(SceneCaptureType::Standard),
             custom_rendered: Some(false),
             gain_control: Some(GainControl::NoAdjustment),
+            picture_style: Some(SamplePictureStyle::PictureControl {
+                version: "0100",
+                name: Some("STANDARD"),
+                sharpening: steps(3, 1),
+                contrast: steps(0, 1),
+                saturation: steps(0, 1),
+            }),
         },
     },
     // D700, 12-bit lossy (raw.pixls.us 2255)
@@ -4224,6 +4262,13 @@ const METADATA: &[SampleMetadata] = &[
             scene_capture_type: Some(SceneCaptureType::Standard),
             custom_rendered: Some(false),
             gain_control: Some(GainControl::NoAdjustment),
+            picture_style: Some(SamplePictureStyle::PictureControl {
+                version: "0100",
+                name: Some("STANDARD"),
+                sharpening: steps(3, 1),
+                contrast: steps(0, 1),
+                saturation: steps(0, 1),
+            }),
         },
     },
     // D7000, 12-bit lossy (raw.pixls.us 961)
@@ -4316,6 +4361,13 @@ const METADATA: &[SampleMetadata] = &[
             scene_capture_type: Some(SceneCaptureType::Standard),
             custom_rendered: Some(false),
             gain_control: Some(GainControl::NoAdjustment),
+            picture_style: Some(SamplePictureStyle::PictureControl {
+                version: "0100",
+                name: Some("STANDARD"),
+                sharpening: steps(3, 1),
+                contrast: steps(0, 1),
+                saturation: steps(0, 1),
+            }),
         },
     },
     // D750, 12-bit lossy (raw.pixls.us 895)
@@ -4400,6 +4452,13 @@ const METADATA: &[SampleMetadata] = &[
             scene_capture_type: Some(SceneCaptureType::Standard),
             custom_rendered: Some(false),
             gain_control: Some(GainControl::NoAdjustment),
+            picture_style: Some(SamplePictureStyle::PictureControl {
+                version: "0200",
+                name: Some("STANDARD"),
+                sharpening: steps(12, 4),
+                contrast: steps(0, 4),
+                saturation: steps(0, 4),
+            }),
         },
     },
     // D810, 12-bit small raw (raw.pixls.us 2036)
@@ -4484,6 +4543,13 @@ const METADATA: &[SampleMetadata] = &[
             scene_capture_type: Some(SceneCaptureType::Standard),
             custom_rendered: Some(false),
             gain_control: Some(GainControl::NoAdjustment),
+            picture_style: Some(SamplePictureStyle::PictureControl {
+                version: "0200",
+                name: Some("STANDARD"),
+                sharpening: steps(12, 4),
+                contrast: steps(0, 4),
+                saturation: steps(0, 4),
+            }),
         },
     },
     // D850, 12-bit lossless small raw (raw.pixls.us 1835)
@@ -4568,6 +4634,13 @@ const METADATA: &[SampleMetadata] = &[
             scene_capture_type: Some(SceneCaptureType::Standard),
             custom_rendered: Some(false),
             gain_control: Some(GainControl::NoAdjustment),
+            picture_style: Some(SamplePictureStyle::PictureControl {
+                version: "0200",
+                name: Some("STANDARD"),
+                sharpening: steps(12, 4),
+                contrast: steps(0, 4),
+                saturation: steps(0, 4),
+            }),
         },
     },
     // D780, 12-bit lossy (raw.pixls.us 3827)
@@ -4652,6 +4725,13 @@ const METADATA: &[SampleMetadata] = &[
             scene_capture_type: Some(SceneCaptureType::Standard),
             custom_rendered: Some(true),
             gain_control: Some(GainControl::NoAdjustment),
+            picture_style: Some(SamplePictureStyle::PictureControl {
+                version: "0300",
+                name: Some("STANDARD"),
+                sharpening: steps(12, 4),
+                contrast: steps(0, 4),
+                saturation: steps(0, 4),
+            }),
         },
     },
     // Z 6, 12-bit small raw (raw.pixls.us 3587)
@@ -4744,6 +4824,13 @@ const METADATA: &[SampleMetadata] = &[
             scene_capture_type: Some(SceneCaptureType::Standard),
             custom_rendered: Some(true),
             gain_control: Some(GainControl::NoAdjustment),
+            picture_style: Some(SamplePictureStyle::PictureControl {
+                version: "0300",
+                name: Some("AUTO"),
+                sharpening: None,
+                contrast: None,
+                saturation: None,
+            }),
         },
     },
     // Z f, 14-bit (raw.pixls.us 6887)
@@ -4836,6 +4923,13 @@ const METADATA: &[SampleMetadata] = &[
             scene_capture_type: Some(SceneCaptureType::Standard),
             custom_rendered: Some(true),
             gain_control: Some(GainControl::NoAdjustment),
+            picture_style: Some(SamplePictureStyle::PictureControl {
+                version: "0310",
+                name: Some("STANDARD"),
+                sharpening: steps(12, 4),
+                contrast: steps(0, 4),
+                saturation: steps(0, 4),
+            }),
         },
     },
     // Z6III, 14-bit, 3:2 (raw.pixls.us 7810)
@@ -4928,6 +5022,13 @@ const METADATA: &[SampleMetadata] = &[
             scene_capture_type: Some(SceneCaptureType::Standard),
             custom_rendered: Some(true),
             gain_control: Some(GainControl::NoAdjustment),
+            picture_style: Some(SamplePictureStyle::PictureControl {
+                version: "0310",
+                name: Some("AUTO"),
+                sharpening: None,
+                contrast: None,
+                saturation: None,
+            }),
         },
     },
     // Z6III, 14-bit, 16:9 (raw.pixls.us 7809)
@@ -5020,6 +5121,13 @@ const METADATA: &[SampleMetadata] = &[
             scene_capture_type: Some(SceneCaptureType::Standard),
             custom_rendered: Some(true),
             gain_control: Some(GainControl::NoAdjustment),
+            picture_style: Some(SamplePictureStyle::PictureControl {
+                version: "0310",
+                name: Some("AUTO"),
+                sharpening: None,
+                contrast: None,
+                saturation: None,
+            }),
         },
     },
     // Z6III, 14-bit, 1:1 (raw.pixls.us 7808)
@@ -5112,6 +5220,13 @@ const METADATA: &[SampleMetadata] = &[
             scene_capture_type: Some(SceneCaptureType::Standard),
             custom_rendered: Some(true),
             gain_control: Some(GainControl::NoAdjustment),
+            picture_style: Some(SamplePictureStyle::PictureControl {
+                version: "0310",
+                name: Some("AUTO"),
+                sharpening: None,
+                contrast: None,
+                saturation: None,
+            }),
         },
     },
     // Coolpix A, 14-bit lossy (raw.pixls.us 2238)
@@ -5196,6 +5311,13 @@ const METADATA: &[SampleMetadata] = &[
             scene_capture_type: Some(SceneCaptureType::Standard),
             custom_rendered: Some(false),
             gain_control: Some(GainControl::NoAdjustment),
+            picture_style: Some(SamplePictureStyle::PictureControl {
+                version: "0100",
+                name: Some("STANDARD"),
+                sharpening: steps(3, 1),
+                contrast: steps(0, 1),
+                saturation: steps(0, 1),
+            }),
         },
     },
     // Coolpix P7800, 12-bit, an NRW file (raw.pixls.us 1425)
@@ -5269,6 +5391,13 @@ const METADATA: &[SampleMetadata] = &[
             scene_capture_type: Some(SceneCaptureType::Standard),
             custom_rendered: Some(false),
             gain_control: Some(GainControl::NoAdjustment),
+            picture_style: Some(SamplePictureStyle::PictureControl {
+                version: "0100",
+                name: Some("STANDARD"),
+                sharpening: steps(3, 1),
+                contrast: steps(0, 1),
+                saturation: steps(0, 1),
+            }),
         },
     },
     // E5700, 12-bit uncompressed (raw.pixls.us 4456)
@@ -5339,6 +5468,7 @@ const METADATA: &[SampleMetadata] = &[
             scene_capture_type: None,
             custom_rendered: None,
             gain_control: None,
+            picture_style: None,
         },
     },
     // Nikon 1 J1, 12-bit lossy (raw.pixls.us 2956)
@@ -5423,6 +5553,13 @@ const METADATA: &[SampleMetadata] = &[
             scene_capture_type: Some(SceneCaptureType::Standard),
             custom_rendered: Some(false),
             gain_control: Some(GainControl::NoAdjustment),
+            picture_style: Some(SamplePictureStyle::PictureControl {
+                version: "0100",
+                name: Some("VIVID"),
+                sharpening: steps(4, 1),
+                contrast: steps(0, 1),
+                saturation: steps(0, 1),
+            }),
         },
     },
     // D5600, 12-bit lossy, live view (raw.pixls.us 1415)
@@ -5515,6 +5652,13 @@ const METADATA: &[SampleMetadata] = &[
             scene_capture_type: Some(SceneCaptureType::Standard),
             custom_rendered: Some(false),
             gain_control: Some(GainControl::NoAdjustment),
+            picture_style: Some(SamplePictureStyle::PictureControl {
+                version: "0200",
+                name: Some("STANDARD"),
+                sharpening: steps(12, 4),
+                contrast: steps(0, 4),
+                saturation: steps(0, 4),
+            }),
         },
     },
     // Z5II, 14-bit, 1:1 (raw.pixls.us 7735)
@@ -5599,6 +5743,13 @@ const METADATA: &[SampleMetadata] = &[
             scene_capture_type: Some(SceneCaptureType::Standard),
             custom_rendered: Some(true),
             gain_control: Some(GainControl::NoAdjustment),
+            picture_style: Some(SamplePictureStyle::PictureControl {
+                version: "0310",
+                name: Some("AUTO"),
+                sharpening: None,
+                contrast: None,
+                saturation: None,
+            }),
         },
     },
     // Z5II, 14-bit, 16:9 (raw.pixls.us 7736)
@@ -5683,6 +5834,13 @@ const METADATA: &[SampleMetadata] = &[
             scene_capture_type: Some(SceneCaptureType::Standard),
             custom_rendered: Some(true),
             gain_control: Some(GainControl::NoAdjustment),
+            picture_style: Some(SamplePictureStyle::PictureControl {
+                version: "0310",
+                name: Some("AUTO"),
+                sharpening: None,
+                contrast: None,
+                saturation: None,
+            }),
         },
     },
     // Z50II, 14-bit, 1:1 (raw.pixls.us 7767)
@@ -5775,6 +5933,13 @@ const METADATA: &[SampleMetadata] = &[
             scene_capture_type: Some(SceneCaptureType::Standard),
             custom_rendered: Some(true),
             gain_control: Some(GainControl::NoAdjustment),
+            picture_style: Some(SamplePictureStyle::PictureControl {
+                version: "0310",
+                name: Some("AUTO"),
+                sharpening: None,
+                contrast: None,
+                saturation: None,
+            }),
         },
     },
     // Z50II, 14-bit, 16:9 (raw.pixls.us 7770)
@@ -5867,6 +6032,13 @@ const METADATA: &[SampleMetadata] = &[
             scene_capture_type: Some(SceneCaptureType::Standard),
             custom_rendered: Some(true),
             gain_control: Some(GainControl::NoAdjustment),
+            picture_style: Some(SamplePictureStyle::PictureControl {
+                version: "0310",
+                name: Some("AUTO"),
+                sharpening: None,
+                contrast: None,
+                saturation: None,
+            }),
         },
     },
     // Z6III, 14-bit High Efficiency*, 1:1 (raw.pixls.us 7812)
@@ -5959,6 +6131,13 @@ const METADATA: &[SampleMetadata] = &[
             scene_capture_type: Some(SceneCaptureType::Standard),
             custom_rendered: Some(true),
             gain_control: Some(GainControl::NoAdjustment),
+            picture_style: Some(SamplePictureStyle::PictureControl {
+                version: "0310",
+                name: Some("AUTO"),
+                sharpening: None,
+                contrast: None,
+                saturation: None,
+            }),
         },
     },
     // Z6III, 14-bit High Efficiency*, 16:9 (raw.pixls.us 7813)
@@ -6051,6 +6230,13 @@ const METADATA: &[SampleMetadata] = &[
             scene_capture_type: Some(SceneCaptureType::Standard),
             custom_rendered: Some(true),
             gain_control: Some(GainControl::NoAdjustment),
+            picture_style: Some(SamplePictureStyle::PictureControl {
+                version: "0310",
+                name: Some("AUTO"),
+                sharpening: None,
+                contrast: None,
+                saturation: None,
+            }),
         },
     },
     // D5, 14-bit lossy, live view (raw.pixls.us 2218)
@@ -6143,6 +6329,13 @@ const METADATA: &[SampleMetadata] = &[
             scene_capture_type: Some(SceneCaptureType::Standard),
             custom_rendered: Some(false),
             gain_control: Some(GainControl::NoAdjustment),
+            picture_style: Some(SamplePictureStyle::PictureControl {
+                version: "0200",
+                name: Some("STANDARD"),
+                sharpening: steps(12, 4),
+                contrast: steps(0, 4),
+                saturation: steps(0, 4),
+            }),
         },
     },
     // Z 30, 12-bit lossless, rotated (raw.pixls.us 5812)
@@ -6235,6 +6428,13 @@ const METADATA: &[SampleMetadata] = &[
             scene_capture_type: Some(SceneCaptureType::Standard),
             custom_rendered: Some(true),
             gain_control: Some(GainControl::LowGainUp),
+            picture_style: Some(SamplePictureStyle::PictureControl {
+                version: "0300",
+                name: Some("FLAT"),
+                sharpening: steps(4, 4),
+                contrast: steps(0, 4),
+                saturation: steps(0, 4),
+            }),
         },
     },
     // Z fc, 12-bit lossless, manual focus (raw.pixls.us 8559)
@@ -6319,6 +6519,13 @@ const METADATA: &[SampleMetadata] = &[
             scene_capture_type: Some(SceneCaptureType::Standard),
             custom_rendered: Some(true),
             gain_control: Some(GainControl::NoAdjustment),
+            picture_style: Some(SamplePictureStyle::PictureControl {
+                version: "0300",
+                name: Some("AUTO"),
+                sharpening: None,
+                contrast: None,
+                saturation: None,
+            }),
         },
     },
 ];

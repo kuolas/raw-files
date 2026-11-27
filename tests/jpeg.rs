@@ -88,10 +88,10 @@ use support::nef::{
     SERIAL_NUMBER, WORLD_TIME, nikon_makernote_with, z9_af_info2,
 };
 use support::samples::{
-    Folder, Jpeg, Sample, SampleEntries, SampleFineTune, SampleFlash, SampleFocus, SampleLens,
-    SampleMetadata, SamplePlacedLayout, SampleSettings, SerialShape, Text, check, check_entries,
-    check_every, check_fixture_tables, check_metadata, check_placed_layout,
-    check_placeholder_description, check_tables,
+    AUTO, Folder, Jpeg, Sample, SampleEntries, SampleFineTune, SampleFlash, SampleFocus,
+    SampleLens, SampleMetadata, SamplePictureStyle, SamplePlacedLayout, SampleSettings,
+    SerialShape, Text, check, check_entries, check_every, check_fixture_tables, check_metadata,
+    check_placed_layout, check_placeholder_description, check_tables, steps,
 };
 use support::tiff_builder::{EXIF_IFD, IfdId, ORDERS, Order, TiffBuilder};
 use support::{fraction, size_of};
@@ -2612,6 +2612,13 @@ const FIXTURE_METADATA: &[SampleMetadata] = &[
             scene_capture_type: Some(SceneCaptureType::Standard),
             custom_rendered: Some(true),
             gain_control: Some(GainControl::NoAdjustment),
+            picture_style: Some(SamplePictureStyle::PictureControl {
+                version: "0310",
+                name: Some("VIVID"),
+                sharpening: steps(20, 4),
+                contrast: steps(0, 4),
+                saturation: steps(0, 4),
+            }),
         },
     },
     // The Z 9's DX shot, at full size: CropHiSpeed `[2, 8280, 5520, 5408,
@@ -2706,6 +2713,13 @@ const FIXTURE_METADATA: &[SampleMetadata] = &[
             scene_capture_type: Some(SceneCaptureType::Standard),
             custom_rendered: Some(true),
             gain_control: Some(GainControl::NoAdjustment),
+            picture_style: Some(SamplePictureStyle::PictureControl {
+                version: "0310",
+                name: Some("VIVID"),
+                sharpening: steps(20, 4),
+                contrast: steps(0, 4),
+                saturation: steps(0, 4),
+            }),
         },
     },
     // The Z 9's 16:9 shot, at the middle size, 6192 by 3480, taken in
@@ -2802,6 +2816,13 @@ const FIXTURE_METADATA: &[SampleMetadata] = &[
             scene_capture_type: Some(SceneCaptureType::Standard),
             custom_rendered: Some(true),
             gain_control: Some(GainControl::LowGainUp),
+            picture_style: Some(SamplePictureStyle::PictureControl {
+                version: "0310",
+                name: Some("VIVID"),
+                sharpening: steps(20, 4),
+                contrast: steps(0, 4),
+                saturation: steps(0, 4),
+            }),
         },
     },
     // The JPEG of the Z 9's pinpoint shot, whose NEF `tests/nef.rs`
@@ -2897,6 +2918,13 @@ const FIXTURE_METADATA: &[SampleMetadata] = &[
             scene_capture_type: Some(SceneCaptureType::Standard),
             custom_rendered: Some(true),
             gain_control: Some(GainControl::LowGainUp),
+            picture_style: Some(SamplePictureStyle::PictureControl {
+                version: "0310",
+                name: Some("VIVID"),
+                sharpening: steps(20, 4),
+                contrast: steps(0, 4),
+                saturation: steps(0, 4),
+            }),
         },
     },
     // The JPEG of frame 4 of the D600 session, the shot whose NEF
@@ -3020,6 +3048,13 @@ const FIXTURE_METADATA: &[SampleMetadata] = &[
             scene_capture_type: Some(SceneCaptureType::Standard),
             custom_rendered: Some(false),
             gain_control: Some(GainControl::HighGainUp),
+            picture_style: Some(SamplePictureStyle::PictureControl {
+                version: "0100",
+                name: Some("STANDARD"),
+                sharpening: steps(7, 1),
+                contrast: steps(0, 1),
+                saturation: steps(0, 1),
+            }),
         },
     },
 ];
@@ -3627,6 +3662,12 @@ const METADATA: &[SampleMetadata] = &[
             scene_capture_type: Some(SceneCaptureType::Standard),
             custom_rendered: Some(false),
             gain_control: None,
+            picture_style: Some(SamplePictureStyle::CreativeStyle {
+                name: Some("Standard"),
+                contrast: Some(0),
+                saturation: Some(0),
+                sharpness: Some(0),
+            }),
         },
     },
     // ILCE-7RM2 (Wikimedia Commons Ulpu_Pajari_puhumassa_vastaanotettuaan_tiedonjulkistamisen_valtionpalkinnon_2.jpg)
@@ -3716,6 +3757,12 @@ const METADATA: &[SampleMetadata] = &[
             scene_capture_type: Some(SceneCaptureType::Standard),
             custom_rendered: Some(false),
             gain_control: None,
+            picture_style: Some(SamplePictureStyle::CreativeStyle {
+                name: Some("Standard"),
+                contrast: Some(0),
+                saturation: Some(0),
+                sharpness: Some(0),
+            }),
         },
     },
     // DSC-RX100M4 (Wikimedia Commons 여의도한강공원샛강생태공원문화다리_09.jpg)
@@ -3797,6 +3844,12 @@ const METADATA: &[SampleMetadata] = &[
             scene_capture_type: Some(SceneCaptureType::Standard),
             custom_rendered: Some(false),
             gain_control: None,
+            picture_style: Some(SamplePictureStyle::CreativeStyle {
+                name: Some("Standard"),
+                contrast: Some(0),
+                saturation: Some(0),
+                sharpness: Some(0),
+            }),
         },
     },
     // ILCE-6000 (Wikimedia Commons 140319_MS_Queen_Elizabeth_Kobe_Japan01o.JPG)
@@ -3878,6 +3931,12 @@ const METADATA: &[SampleMetadata] = &[
             scene_capture_type: Some(SceneCaptureType::Standard),
             custom_rendered: Some(false),
             gain_control: None,
+            picture_style: Some(SamplePictureStyle::CreativeStyle {
+                name: Some("Landscape"),
+                contrast: Some(0),
+                saturation: Some(0),
+                sharpness: Some(0),
+            }),
         },
     },
     // DSLR-A100 (Wikimedia Commons "Krone"_flag_on_line_5_tram_(2564030031).jpg)
@@ -3948,6 +4007,12 @@ const METADATA: &[SampleMetadata] = &[
             scene_capture_type: Some(SceneCaptureType::Standard),
             custom_rendered: Some(false),
             gain_control: Some(GainControl::NoAdjustment),
+            picture_style: Some(SamplePictureStyle::CreativeStyle {
+                name: Some("None"),
+                contrast: None,
+                saturation: None,
+                sharpness: None,
+            }),
         },
     },
     // NIKON D5300 (Wikimedia Commons "Tours"_French_restaurant_in_Omotesando.JPG)
@@ -4032,6 +4097,13 @@ const METADATA: &[SampleMetadata] = &[
             scene_capture_type: Some(SceneCaptureType::Standard),
             custom_rendered: Some(false),
             gain_control: Some(GainControl::LowGainUp),
+            picture_style: Some(SamplePictureStyle::PictureControl {
+                version: "0100",
+                name: Some("STANDARD"),
+                sharpening: AUTO,
+                contrast: AUTO,
+                saturation: AUTO,
+            }),
         },
     },
     // NIKON D70 (Wikimedia Commons "Stadswandeling".JPG)
@@ -4110,6 +4182,7 @@ const METADATA: &[SampleMetadata] = &[
             scene_capture_type: Some(SceneCaptureType::Standard),
             custom_rendered: Some(false),
             gain_control: Some(GainControl::NoAdjustment),
+            picture_style: None,
         },
     },
     // NIKON E800 (Wikimedia Commons MIKI-eki.jpg)
@@ -4180,6 +4253,7 @@ const METADATA: &[SampleMetadata] = &[
             scene_capture_type: None,
             custom_rendered: None,
             gain_control: None,
+            picture_style: None,
         },
     },
     // NIKON E900 (Wikimedia Commons Petro_Star_refinery.jpg)
@@ -4250,6 +4324,7 @@ const METADATA: &[SampleMetadata] = &[
             scene_capture_type: None,
             custom_rendered: None,
             gain_control: None,
+            picture_style: None,
         },
     },
     // NIKON E950 (Wikimedia Commons Starr_020628-0045_Prosopis_pallida.jpg)
@@ -4320,6 +4395,7 @@ const METADATA: &[SampleMetadata] = &[
             scene_capture_type: None,
             custom_rendered: None,
             gain_control: None,
+            picture_style: None,
         },
     },
     // Canon PowerShot G7 X (Wikimedia Commons DC-3_OH-LCH_at_EFJM_20160717.jpg)
@@ -4390,6 +4466,7 @@ const METADATA: &[SampleMetadata] = &[
             scene_capture_type: Some(SceneCaptureType::Standard),
             custom_rendered: Some(false),
             gain_control: None,
+            picture_style: None,
         },
     },
 ];

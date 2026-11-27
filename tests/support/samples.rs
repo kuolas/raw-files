@@ -26,9 +26,10 @@ use raw_files::{
     Bracketing, Camera, CameraFile, ColorSpace, Contrast, Directory, ErrorKind, ExposureProgram,
     FieldType, FlashControl, FlashMode, FlashSource, FlashSync, FluorescentLamp, FocusAreaMode,
     FocusLayoutPoint, FocusMode, FocusOrigin, Format, GainControl, ImageArea, JpegCompression,
-    JpegQuality, Make, Metadata, MeteringMode, Orientation, Point, Preview, PreviewFormat,
-    Rational, RawCompression, RawImageSize, ReleaseMode, Saturation, SceneCaptureType, Sharpness,
-    Shutter, SignedRational, Size, StabilizationMode, WhiteBalanceMode,
+    JpegQuality, Make, Metadata, MeteringMode, Orientation, PictureControlValue, PictureStyle,
+    Point, Preview, PreviewFormat, Rational, RawCompression, RawImageSize, ReleaseMode, Saturation,
+    SceneCaptureType, Sharpness, Shutter, SignedRational, Size, StabilizationMode,
+    WhiteBalanceMode,
 };
 
 /// The path of the sample file `name`, or `None`, with a note on stderr,
@@ -451,10 +452,11 @@ pub struct SamplePlacedLayout {
 /// records none; whether auto ISO was on; the exposure fine-tuning, its
 /// numerator and denominator as stored; the release mode; the bracketing;
 /// whether daylight saving time was on; the raw bit depth and compression;
-/// the JPEG quality and compression; and Exif's six values of how the
-/// camera processed the picture: the directions of contrast, saturation
-/// and sharpness, the scene capture type, whether the process was custom,
-/// and the gain control.
+/// the JPEG quality and compression; Exif's six values of how the camera
+/// processed the picture: the directions of contrast, saturation and
+/// sharpness, the scene capture type, whether the process was custom, and
+/// the gain control; and the maker's picture style
+/// ([`SamplePictureStyle`]).
 ///
 /// Every row writes every field, `None` included, one to a line, so that
 /// a value read later changes one line of a row.
@@ -491,7 +493,50 @@ pub struct SampleSettings {
     pub scene_capture_type: Option<SceneCaptureType>,
     pub custom_rendered: Option<bool>,
     pub gain_control: Option<GainControl>,
+    pub picture_style: Option<SamplePictureStyle>,
 }
+
+/// The picture style of a sample file, as the reader must give it
+/// ([`PictureStyle`]): which maker's setting it is, and of it the name and
+/// three values. A Picture Control also carries the version of its record,
+/// which the raw view gives, since the getters do not: its sharpening,
+/// contrast and saturation, the three values its menu offers "auto" for.
+/// A Creative Style and a Creative Look carry their contrast, saturation
+/// and sharpness.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SamplePictureStyle {
+    PictureControl {
+        version: &'static str,
+        name: Option<&'static str>,
+        sharpening: Option<PictureControlValue>,
+        contrast: Option<PictureControlValue>,
+        saturation: Option<PictureControlValue>,
+    },
+    CreativeStyle {
+        name: Option<&'static str>,
+        contrast: Option<i32>,
+        saturation: Option<i32>,
+        sharpness: Option<i32>,
+    },
+    CreativeLook {
+        name: Option<&'static str>,
+        contrast: Option<i32>,
+        saturation: Option<i32>,
+        sharpness: Option<i32>,
+    },
+}
+
+/// A Picture Control value of `numerator` over `denominator` steps, as
+/// recorded, for a row.
+pub const fn steps(numerator: i32, denominator: i32) -> Option<PictureControlValue> {
+    Some(PictureControlValue::Steps(SignedRational {
+        numerator,
+        denominator,
+    }))
+}
+
+/// A Picture Control value the camera chose, for a row.
+pub const AUTO: Option<PictureControlValue> = Some(PictureControlValue::Auto);
 
 /// The flash of a sample file, as the reader must give it
 /// ([`Flash`](raw_files::Flash)): whether it fired; its mode, `None` when
@@ -1142,6 +1187,96 @@ pub fn check_metadata(expected: &SampleMetadata, format: Format, folder: Folder)
         expected.gain_control,
         "{label}: gain control"
     );
+    // The getters do not give the record's version; the raw view does.
+    let version = [0x0023, 0x00BD]
+        .iter()
+        .find_map(|&tag| file.entries().entry(Directory::MakerNote, tag))
+        .and_then(|entry| file.read_value(&entry).ok())
+        .and_then(|value| Some(String::from_utf8_lossy(value.bytes()?.get(..4)?).into_owned()));
+    check_picture_style(
+        settings.picture_style(),
+        expected.picture_style,
+        version.as_deref(),
+        label,
+    );
+}
+
+/// Checks the picture style a sample file gives, `style`, against its
+/// row's, `expected`; `version` is the Picture Control record's version,
+/// as the raw view reads it.
+fn check_picture_style(
+    style: Option<&PictureStyle>,
+    expected: Option<SamplePictureStyle>,
+    version: Option<&str>,
+    label: &str,
+) {
+    use SamplePictureStyle as Row;
+    match (style, expected) {
+        (None, None) => {}
+        (
+            Some(PictureStyle::PictureControl(control)),
+            Some(Row::PictureControl {
+                version: recorded,
+                name,
+                sharpening,
+                contrast,
+                saturation,
+            }),
+        ) => {
+            assert_eq!(
+                version,
+                Some(recorded),
+                "{label}: Picture Control's version"
+            );
+            assert_eq!(
+                (
+                    control.name(),
+                    control.sharpening(),
+                    control.contrast(),
+                    control.saturation()
+                ),
+                (name, sharpening, contrast, saturation),
+                "{label}: Picture Control"
+            );
+        }
+        (
+            Some(PictureStyle::CreativeStyle(style)),
+            Some(Row::CreativeStyle {
+                name,
+                contrast,
+                saturation,
+                sharpness,
+            }),
+        ) => assert_eq!(
+            (
+                style.name(),
+                style.contrast(),
+                style.saturation(),
+                style.sharpness()
+            ),
+            (name, contrast, saturation, sharpness),
+            "{label}: Creative Style"
+        ),
+        (
+            Some(PictureStyle::CreativeLook(look)),
+            Some(Row::CreativeLook {
+                name,
+                contrast,
+                saturation,
+                sharpness,
+            }),
+        ) => assert_eq!(
+            (
+                look.name(),
+                look.contrast(),
+                look.saturation(),
+                look.sharpness()
+            ),
+            (name, contrast, saturation, sharpness),
+            "{label}: Creative Look"
+        ),
+        (style, expected) => panic!("{label}: picture style {style:?}, expected {expected:?}"),
+    }
 }
 
 /// What a sample file of `tests/samples.tsv` must give as its entries:

@@ -29,8 +29,9 @@ use support::arw::{
 use support::jpeg_stub::{stub, stub_len};
 use support::samples::{
     Folder, Jpeg, LocationPart, Sample, SampleEntries, SampleFineTune, SampleFlash, SampleFocus,
-    SampleLens, SampleMetadata, SampleSettings, SerialShape, Text, check, check_enciphered,
-    check_entries, check_every, check_metadata, check_placeholder_description, check_tables, sizes,
+    SampleLens, SampleMetadata, SamplePictureStyle, SampleSettings, SerialShape, Text, check,
+    check_enciphered, check_entries, check_every, check_metadata, check_placeholder_description,
+    check_tables, sizes,
 };
 use support::tiff_builder::{BlobId, Built, ORDERS, Order};
 use support::{fraction, size_of};
@@ -1665,6 +1666,12 @@ const METADATA: &[SampleMetadata] = &[
             scene_capture_type: Some(SceneCaptureType::Standard),
             custom_rendered: Some(false),
             gain_control: None,
+            picture_style: Some(SamplePictureStyle::CreativeStyle {
+                name: Some("Vivid"),
+                contrast: Some(0),
+                saturation: Some(0),
+                sharpness: Some(0),
+            }),
         },
     },
     // ILCE-7RM2 (raw.pixls.us 1310)
@@ -1746,6 +1753,12 @@ const METADATA: &[SampleMetadata] = &[
             scene_capture_type: Some(SceneCaptureType::Standard),
             custom_rendered: Some(false),
             gain_control: None,
+            picture_style: Some(SamplePictureStyle::CreativeStyle {
+                name: Some("Standard"),
+                contrast: Some(0),
+                saturation: Some(0),
+                sharpness: Some(-1),
+            }),
         },
     },
     // ILCE-7RM2 (raw.pixls.us 1311)
@@ -1827,6 +1840,12 @@ const METADATA: &[SampleMetadata] = &[
             scene_capture_type: Some(SceneCaptureType::Standard),
             custom_rendered: Some(false),
             gain_control: None,
+            picture_style: Some(SamplePictureStyle::CreativeStyle {
+                name: Some("Standard"),
+                contrast: Some(0),
+                saturation: Some(0),
+                sharpness: Some(-1),
+            }),
         },
     },
     // DSC-F828 (raw.pixls.us 1351)
@@ -1897,6 +1916,7 @@ const METADATA: &[SampleMetadata] = &[
             scene_capture_type: Some(SceneCaptureType::Standard),
             custom_rendered: Some(false),
             gain_control: None,
+            picture_style: None,
         },
     },
     // NEX-5 (raw.pixls.us 1457)
@@ -1975,6 +1995,12 @@ const METADATA: &[SampleMetadata] = &[
             scene_capture_type: Some(SceneCaptureType::Standard),
             custom_rendered: Some(false),
             gain_control: None,
+            picture_style: Some(SamplePictureStyle::CreativeStyle {
+                name: Some("Standard"),
+                contrast: Some(0),
+                saturation: Some(0),
+                sharpness: Some(0),
+            }),
         },
     },
     // ILCE-9 (raw.pixls.us 1541)
@@ -2064,6 +2090,12 @@ const METADATA: &[SampleMetadata] = &[
             scene_capture_type: Some(SceneCaptureType::Standard),
             custom_rendered: Some(false),
             gain_control: None,
+            picture_style: Some(SamplePictureStyle::CreativeStyle {
+                name: Some("Standard"),
+                contrast: Some(1),
+                saturation: Some(1),
+                sharpness: Some(2),
+            }),
         },
     },
     // ILCE-9 (raw.pixls.us 1542)
@@ -2153,6 +2185,12 @@ const METADATA: &[SampleMetadata] = &[
             scene_capture_type: Some(SceneCaptureType::Standard),
             custom_rendered: Some(false),
             gain_control: None,
+            picture_style: Some(SamplePictureStyle::CreativeStyle {
+                name: Some("Standard"),
+                contrast: Some(1),
+                saturation: Some(1),
+                sharpness: Some(2),
+            }),
         },
     },
     // ILCE-7S (raw.pixls.us 1582)
@@ -2226,6 +2264,12 @@ const METADATA: &[SampleMetadata] = &[
             scene_capture_type: Some(SceneCaptureType::Standard),
             custom_rendered: Some(false),
             gain_control: None,
+            picture_style: Some(SamplePictureStyle::CreativeStyle {
+                name: Some("Standard"),
+                contrast: Some(0),
+                saturation: Some(0),
+                sharpness: Some(0),
+            }),
         },
     },
     // DSLR-A200 (raw.pixls.us 2271)
@@ -2296,6 +2340,7 @@ const METADATA: &[SampleMetadata] = &[
             scene_capture_type: Some(SceneCaptureType::Standard),
             custom_rendered: Some(false),
             gain_control: None,
+            picture_style: None,
         },
     },
     // DSLR-A100 (raw.pixls.us 2346)
@@ -2366,6 +2411,12 @@ const METADATA: &[SampleMetadata] = &[
             scene_capture_type: Some(SceneCaptureType::Standard),
             custom_rendered: Some(false),
             gain_control: Some(GainControl::NoAdjustment),
+            picture_style: Some(SamplePictureStyle::CreativeStyle {
+                name: Some("None"),
+                contrast: None,
+                saturation: None,
+                sharpness: None,
+            }),
         },
     },
     // DSLR-A700 (raw.pixls.us 2521)
@@ -2436,6 +2487,7 @@ const METADATA: &[SampleMetadata] = &[
             scene_capture_type: Some(SceneCaptureType::Standard),
             custom_rendered: Some(false),
             gain_control: None,
+            picture_style: None,
         },
     },
     // DSC-RX100M6 (raw.pixls.us 3012)
@@ -2525,6 +2577,12 @@ const METADATA: &[SampleMetadata] = &[
             scene_capture_type: Some(SceneCaptureType::Standard),
             custom_rendered: Some(false),
             gain_control: None,
+            picture_style: Some(SamplePictureStyle::CreativeStyle {
+                name: Some("Neutral"),
+                contrast: Some(0),
+                saturation: Some(0),
+                sharpness: Some(0),
+            }),
         },
     },
     // DSC-RX100M6 (raw.pixls.us 3015)
@@ -2614,6 +2672,12 @@ const METADATA: &[SampleMetadata] = &[
             scene_capture_type: Some(SceneCaptureType::Standard),
             custom_rendered: Some(false),
             gain_control: None,
+            picture_style: Some(SamplePictureStyle::CreativeStyle {
+                name: Some("Neutral"),
+                contrast: Some(0),
+                saturation: Some(0),
+                sharpness: Some(0),
+            }),
         },
     },
     // DSC-R1 (raw.pixls.us 3221)
@@ -2684,6 +2748,12 @@ const METADATA: &[SampleMetadata] = &[
             scene_capture_type: Some(SceneCaptureType::Standard),
             custom_rendered: Some(false),
             gain_control: None,
+            picture_style: Some(SamplePictureStyle::CreativeStyle {
+                name: Some("Real"),
+                contrast: None,
+                saturation: None,
+                sharpness: None,
+            }),
         },
     },
     // ILCE-7RM3 (raw.pixls.us 3251)
@@ -2773,6 +2843,12 @@ const METADATA: &[SampleMetadata] = &[
             scene_capture_type: Some(SceneCaptureType::Standard),
             custom_rendered: Some(false),
             gain_control: None,
+            picture_style: Some(SamplePictureStyle::CreativeStyle {
+                name: Some("Standard"),
+                contrast: Some(0),
+                saturation: Some(0),
+                sharpness: Some(0),
+            }),
         },
     },
     // SLT-A99 (raw.pixls.us 3751)
@@ -2854,6 +2930,12 @@ const METADATA: &[SampleMetadata] = &[
             scene_capture_type: Some(SceneCaptureType::Standard),
             custom_rendered: Some(false),
             gain_control: None,
+            picture_style: Some(SamplePictureStyle::CreativeStyle {
+                name: Some("Neutral"),
+                contrast: Some(0),
+                saturation: Some(0),
+                sharpness: Some(2),
+            }),
         },
     },
     // Hasselblad Lunar (raw.pixls.us 4051)
@@ -2935,6 +3017,12 @@ const METADATA: &[SampleMetadata] = &[
             scene_capture_type: Some(SceneCaptureType::Standard),
             custom_rendered: Some(false),
             gain_control: None,
+            picture_style: Some(SamplePictureStyle::CreativeStyle {
+                name: Some("Standard"),
+                contrast: Some(0),
+                saturation: Some(0),
+                sharpness: Some(0),
+            }),
         },
     },
     // ILCE-1 (raw.pixls.us 4466)
@@ -3027,6 +3115,12 @@ const METADATA: &[SampleMetadata] = &[
             scene_capture_type: Some(SceneCaptureType::Standard),
             custom_rendered: Some(false),
             gain_control: None,
+            picture_style: Some(SamplePictureStyle::CreativeLook {
+                name: Some("Standard"),
+                contrast: Some(0),
+                saturation: Some(0),
+                sharpness: Some(4),
+            }),
         },
     },
     // ILCE-7SM3 (raw.pixls.us 5418)
@@ -3116,6 +3210,12 @@ const METADATA: &[SampleMetadata] = &[
             scene_capture_type: Some(SceneCaptureType::Standard),
             custom_rendered: Some(false),
             gain_control: None,
+            picture_style: Some(SamplePictureStyle::CreativeLook {
+                name: Some("Vivid"),
+                contrast: Some(0),
+                saturation: Some(0),
+                sharpness: Some(4),
+            }),
         },
     },
     // DSC-RX100 (raw.pixls.us 5811)
@@ -3197,6 +3297,12 @@ const METADATA: &[SampleMetadata] = &[
             scene_capture_type: Some(SceneCaptureType::Standard),
             custom_rendered: Some(false),
             gain_control: None,
+            picture_style: Some(SamplePictureStyle::CreativeStyle {
+                name: Some("Standard"),
+                contrast: Some(0),
+                saturation: Some(0),
+                sharpness: Some(0),
+            }),
         },
     },
     // DSLR-A900 (raw.pixls.us 5858)
@@ -3267,6 +3373,12 @@ const METADATA: &[SampleMetadata] = &[
             scene_capture_type: Some(SceneCaptureType::Standard),
             custom_rendered: Some(false),
             gain_control: None,
+            picture_style: Some(SamplePictureStyle::CreativeStyle {
+                name: None,
+                contrast: Some(0),
+                saturation: Some(0),
+                sharpness: Some(0),
+            }),
         },
     },
     // ILCE-6700 (raw.pixls.us 6736)
@@ -3356,6 +3468,12 @@ const METADATA: &[SampleMetadata] = &[
             scene_capture_type: Some(SceneCaptureType::Standard),
             custom_rendered: Some(false),
             gain_control: None,
+            picture_style: Some(SamplePictureStyle::CreativeLook {
+                name: Some("Standard"),
+                contrast: Some(0),
+                saturation: Some(0),
+                sharpness: Some(4),
+            }),
         },
     },
     // ILCE-7M4 (raw.pixls.us 6929)
@@ -3445,6 +3563,12 @@ const METADATA: &[SampleMetadata] = &[
             scene_capture_type: Some(SceneCaptureType::Standard),
             custom_rendered: Some(false),
             gain_control: None,
+            picture_style: Some(SamplePictureStyle::CreativeLook {
+                name: Some("Vivid"),
+                contrast: Some(0),
+                saturation: Some(-3),
+                sharpness: Some(4),
+            }),
         },
     },
     // ILCE-7M4 (raw.pixls.us 6930)
@@ -3534,6 +3658,12 @@ const METADATA: &[SampleMetadata] = &[
             scene_capture_type: Some(SceneCaptureType::Standard),
             custom_rendered: Some(false),
             gain_control: None,
+            picture_style: Some(SamplePictureStyle::CreativeLook {
+                name: Some("Vivid"),
+                contrast: Some(0),
+                saturation: Some(-3),
+                sharpness: Some(4),
+            }),
         },
     },
     // ILCE-7M4 (raw.pixls.us 6931)
@@ -3623,6 +3753,12 @@ const METADATA: &[SampleMetadata] = &[
             scene_capture_type: Some(SceneCaptureType::Standard),
             custom_rendered: Some(false),
             gain_control: None,
+            picture_style: Some(SamplePictureStyle::CreativeLook {
+                name: Some("Vivid"),
+                contrast: Some(0),
+                saturation: Some(-3),
+                sharpness: Some(4),
+            }),
         },
     },
     // ILCE-7M4 (raw.pixls.us 6933)
@@ -3712,6 +3848,12 @@ const METADATA: &[SampleMetadata] = &[
             scene_capture_type: Some(SceneCaptureType::Standard),
             custom_rendered: Some(false),
             gain_control: None,
+            picture_style: Some(SamplePictureStyle::CreativeLook {
+                name: Some("Vivid"),
+                contrast: Some(0),
+                saturation: Some(-3),
+                sharpness: Some(4),
+            }),
         },
     },
     // ILCE-7M4 (raw.pixls.us 6936)
@@ -3801,6 +3943,12 @@ const METADATA: &[SampleMetadata] = &[
             scene_capture_type: Some(SceneCaptureType::Standard),
             custom_rendered: Some(false),
             gain_control: None,
+            picture_style: Some(SamplePictureStyle::CreativeLook {
+                name: Some("Vivid"),
+                contrast: Some(0),
+                saturation: Some(-3),
+                sharpness: Some(4),
+            }),
         },
     },
     // ILCE-9M3 (raw.pixls.us 7361)
@@ -3882,6 +4030,12 @@ const METADATA: &[SampleMetadata] = &[
             scene_capture_type: Some(SceneCaptureType::Standard),
             custom_rendered: Some(false),
             gain_control: None,
+            picture_style: Some(SamplePictureStyle::CreativeLook {
+                name: Some("Neutral"),
+                contrast: Some(0),
+                saturation: Some(0),
+                sharpness: Some(4),
+            }),
         },
     },
     // ILCE-9M3 (raw.pixls.us 7364)
@@ -3963,6 +4117,12 @@ const METADATA: &[SampleMetadata] = &[
             scene_capture_type: Some(SceneCaptureType::Standard),
             custom_rendered: Some(false),
             gain_control: None,
+            picture_style: Some(SamplePictureStyle::CreativeLook {
+                name: Some("Neutral"),
+                contrast: Some(0),
+                saturation: Some(0),
+                sharpness: Some(4),
+            }),
         },
     },
     // ILCE-1M2 (raw.pixls.us 7835)
@@ -4052,6 +4212,12 @@ const METADATA: &[SampleMetadata] = &[
             scene_capture_type: Some(SceneCaptureType::Standard),
             custom_rendered: Some(false),
             gain_control: None,
+            picture_style: Some(SamplePictureStyle::CreativeLook {
+                name: Some("Standard"),
+                contrast: Some(0),
+                saturation: Some(0),
+                sharpness: Some(4),
+            }),
         },
     },
     // ILCE-7M5 (raw.pixls.us 8846)
@@ -4144,6 +4310,12 @@ const METADATA: &[SampleMetadata] = &[
             scene_capture_type: Some(SceneCaptureType::Standard),
             custom_rendered: Some(false),
             gain_control: None,
+            picture_style: Some(SamplePictureStyle::CreativeLook {
+                name: Some("Standard"),
+                contrast: Some(0),
+                saturation: Some(0),
+                sharpness: Some(4),
+            }),
         },
     },
     // ILCE-7M5 (raw.pixls.us 8847)
@@ -4236,6 +4408,12 @@ const METADATA: &[SampleMetadata] = &[
             scene_capture_type: Some(SceneCaptureType::Standard),
             custom_rendered: Some(false),
             gain_control: None,
+            picture_style: Some(SamplePictureStyle::CreativeLook {
+                name: Some("Standard"),
+                contrast: Some(0),
+                saturation: Some(0),
+                sharpness: Some(4),
+            }),
         },
     },
     // ILCE-7M5 (raw.pixls.us 8848)
@@ -4328,6 +4506,12 @@ const METADATA: &[SampleMetadata] = &[
             scene_capture_type: Some(SceneCaptureType::Standard),
             custom_rendered: Some(false),
             gain_control: None,
+            picture_style: Some(SamplePictureStyle::CreativeLook {
+                name: Some("Standard"),
+                contrast: Some(0),
+                saturation: Some(0),
+                sharpness: Some(4),
+            }),
         },
     },
     // ILCE-7M5 (raw.pixls.us 8849)
@@ -4420,6 +4604,12 @@ const METADATA: &[SampleMetadata] = &[
             scene_capture_type: Some(SceneCaptureType::Standard),
             custom_rendered: Some(false),
             gain_control: None,
+            picture_style: Some(SamplePictureStyle::CreativeLook {
+                name: Some("Standard"),
+                contrast: Some(0),
+                saturation: Some(0),
+                sharpness: Some(4),
+            }),
         },
     },
     // ILCE-7M5 (raw.pixls.us 8850)
@@ -4512,6 +4702,12 @@ const METADATA: &[SampleMetadata] = &[
             scene_capture_type: Some(SceneCaptureType::Standard),
             custom_rendered: Some(false),
             gain_control: None,
+            picture_style: Some(SamplePictureStyle::CreativeLook {
+                name: Some("Standard"),
+                contrast: Some(0),
+                saturation: Some(0),
+                sharpness: Some(4),
+            }),
         },
     },
 ];
@@ -4606,6 +4802,12 @@ const LARGE_METADATA: &[SampleMetadata] = &[
             scene_capture_type: Some(SceneCaptureType::Standard),
             custom_rendered: Some(false),
             gain_control: None,
+            picture_style: Some(SamplePictureStyle::CreativeStyle {
+                name: Some("Standard"),
+                contrast: Some(0),
+                saturation: Some(0),
+                sharpness: Some(0),
+            }),
         },
     },
 ];
