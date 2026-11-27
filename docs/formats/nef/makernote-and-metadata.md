@@ -2187,11 +2187,12 @@ settings
 - the picture style, Nikon's Picture Control, with its values;
 - Exif's six processing values;
 - Active D-Lighting and HDR;
-- the high ISO and long exposure noise reductions.
+- the high ISO and long exposure noise reductions;
+- vignette control.
 
 It will read:
 
-- vignette control and auto distortion control;
+- auto distortion control;
 - the scene mode.
 
 Each setting keeps Nikon's own name and kinds. Where Sony has a
@@ -2523,7 +2524,7 @@ public one is a COOLPIX P7000's, at 4.81 s.
 **Vignette control.** It reduces the drop in brightness at a picture's
 edges [P][25] (p. 218). 0x002A VignetteControl is one SHORT [S][1], on
 199 public files of 38 bodies and on 32,584 of mine, of the D600, D7200
-and Z 9. raw-files will read it as the `VignetteControl` of a
+and Z 9. raw-files reads it as the `VignetteControl` of a
 `VignettingCorrection`:
 
 | Code | The documentation's name [S][1] | Mark | Files, public / mine |
@@ -2534,7 +2535,7 @@ and Z 9. raw-files will read it as the `VignetteControl` of a
 | 5 | High | documented only | 0 / 0 |
 
 **[F]** The four steps are the D600's menu [P][25] (p. 218). My D300S,
-D3200, D3300 and D7100 write no 0x002A, and will give none.
+D3200, D3300 and D7100 write no 0x002A, and give none.
 
 **Auto distortion control.** It reduces barrel and pin-cushion
 distortion [P][25] (p. 217). 0x002B DistortInfo is a record of 16
@@ -2799,11 +2800,11 @@ plain MakerNote tags where Exif has no value, and decrypt nothing [I]:
 - the high ISO noise reduction from 0x00B1;
 - the long exposure noise reduction from 0x0095, where `FPNR` gives on
   and `OFF` none;
+- vignette control from 0x002A;
 - the other processing settings of
   [section 8.11](#811-picture-style-and-processing), which raw-files
   will read:
-  - vignette control from 0x002A, and auto distortion control from
-    byte 4 of 0x002B;
+  - auto distortion control from byte 4 of 0x002B;
   - the scene mode from 0x00AB, else 0x008F, where a blank text will
     give none.
 

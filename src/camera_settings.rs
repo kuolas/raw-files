@@ -12,8 +12,9 @@
 //! and how the camera processed the picture: the directions of contrast,
 //! saturation and sharpness, the scene capture type, custom rendering,
 //! gain control, the maker's picture style, its dynamic range
-//! optimization and its high dynamic range setting, and the high ISO, long
-//! exposure and multi-frame noise reductions.
+//! optimization and its high dynamic range setting, the high ISO, long
+//! exposure and multi-frame noise reductions, and its vignetting
+//! correction.
 //! [`CameraSettings`] holds them all, and
 //! [`Metadata::camera_settings`](crate::Metadata::camera_settings) gives
 //! them for a file. [`WhiteBalance`], [`WhiteBalanceFineTune`], [`Flash`],
@@ -24,8 +25,9 @@
 //! maker's own words instead: [`PictureStyle`] holds Nikon's
 //! [`PictureControl`], Sony's [`CreativeStyle`] or its [`CreativeLook`],
 //! each under its own name, [`DynamicRangeOptimization`] holds Nikon's
-//! [`ActiveDLighting`] or Sony's [`DRangeOptimizer`], and
-//! [`HighDynamicRange`] Nikon's [`Hdr`] or Sony's [`AutoHdr`].
+//! [`ActiveDLighting`] or Sony's [`DRangeOptimizer`],
+//! [`HighDynamicRange`] Nikon's [`Hdr`] or Sony's [`AutoHdr`], and
+//! [`VignettingCorrection`] Nikon's [`VignetteControl`].
 //!
 //! Every value is optional. A file may not record it, or may record it in
 //! a way that cannot be read, such as a code no variant names; either way
@@ -52,8 +54,9 @@
 //!   file, the raw image size and how a compressed raw is compressed; and
 //!   in a JPEG, its quality and the choice between size priority and
 //!   optimal quality; the Picture Control, Nikon's picture style; Active
-//!   D-Lighting; HDR; the high ISO noise reduction; and whether the long
-//!   exposure noise reduction ran, which says it was on.
+//!   D-Lighting; HDR; the high ISO noise reduction; whether the long
+//!   exposure noise reduction ran, which says it was on; and vignette
+//!   control.
 //! - Sony's MakerNote, in ARW files and their family and in the JPEGs of
 //!   Sony cameras, gives the white balance setting in place of Exif's,
 //!   with its fine-tuning and the color temperature of a chosen color
@@ -105,8 +108,8 @@ use crate::rational::{Rational, SignedRational};
 /// directions of contrast, saturation and sharpness it processed the
 /// picture in, the scene capture type, custom rendering, gain control, the
 /// maker's picture style, dynamic range optimization and high dynamic
-/// range setting, and the noise reductions, for a viewer's information
-/// panel beside the exposure.
+/// range setting, the noise reductions, and the vignetting correction, for
+/// a viewer's information panel beside the exposure.
 ///
 /// Every value is `None` when the file does not record it or records it in
 /// a way that cannot be read, such as a code that no variant names. A
@@ -227,6 +230,7 @@ pub struct CameraSettings {
     pub(crate) high_iso_noise_reduction: Option<HighIsoNoiseReduction>,
     pub(crate) long_exposure_noise_reduction: Option<bool>,
     pub(crate) multi_frame_noise_reduction: Option<bool>,
+    pub(crate) vignetting_correction: Option<VignettingCorrection>,
 }
 
 impl CameraSettings {
@@ -1538,6 +1542,48 @@ impl CameraSettings {
         self.multi_frame_noise_reduction
     }
 
+    /// How the camera corrected the drop in brightness toward the
+    /// picture's edges, its vignetting, under its maker's own name:
+    /// Nikon's [`VignetteControl`] ([`VignettingCorrection`]).
+    ///
+    /// Read from Nikon's MakerNote, in a raw file and a JPEG alike, from
+    /// VignetteControl (0x002A), one SHORT, by the list ExifTool's
+    /// documentation gives, read whole, since files hold part of it: 0
+    /// off, 1 low, 3 normal and 5 high.
+    ///
+    /// `None` when:
+    ///
+    /// - the file records none, as every file of another maker does, and
+    ///   every file of the D300S, D3200, D3300 and D7100 measured;
+    /// - the code is one its list lacks, such as 2;
+    /// - the tag is not one SHORT.
+    ///
+    /// What files record is in the NEF notes on
+    /// [vignette control](https://github.com/kuolas/raw-files/blob/master/docs/formats/nef/makernote-and-metadata.md#811-picture-style-and-processing).
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use raw_files::{CameraFile, VignetteControl, VignettingCorrection};
+    ///
+    /// # fn main() -> raw_files::Result<()> {
+    /// let file = CameraFile::open("photo.nef")?;
+    /// if let Some(correction) = file.metadata().camera_settings().vignetting_correction() {
+    ///     println!("{}: {}", correction.setting_name(), correction.name());
+    ///     match correction {
+    ///         VignettingCorrection::VignetteControl(VignetteControl::Off) => {
+    ///             println!("the edges left as the lens drew them");
+    ///         }
+    ///         _ => {}
+    ///     }
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn vignetting_correction(&self) -> Option<VignettingCorrection> {
+        self.vignetting_correction
+    }
+
     /// Sets the white balance, in place of the one it had;
     /// [`white_balance`](Self::white_balance) reads it.
     #[must_use]
@@ -1823,6 +1869,14 @@ impl CameraSettings {
     #[must_use]
     pub fn with_multi_frame_noise_reduction(mut self, on: bool) -> Self {
         self.multi_frame_noise_reduction = Some(on);
+        self
+    }
+
+    /// Sets the vignetting correction, in place of any set before;
+    /// [`vignetting_correction`](Self::vignetting_correction) reads it.
+    #[must_use]
+    pub fn with_vignetting_correction(mut self, correction: VignettingCorrection) -> Self {
+        self.vignetting_correction = Some(correction);
         self
     }
 }
@@ -5870,6 +5924,134 @@ impl fmt::Display for HighIsoNoiseReduction {
     }
 }
 
+/// How the camera corrected the drop in brightness toward the picture's
+/// edges, its vignetting, under its maker's own name: the variant says
+/// which maker's setting it is, and holds that setting's own type.
+///
+/// Each maker names the setting and its steps in its own way, so each
+/// keeps its own type:
+///
+/// - [`VignetteControl`](Self::VignetteControl), Nikon's vignette
+///   control.
+///
+/// [`setting_name`](Self::setting_name) gives the maker's word for the
+/// setting, for a viewer's label, and [`name`](Self::name) the step's
+/// name, whichever maker's it is.
+///
+/// `VignettingCorrection` is `#[non_exhaustive]`, so match on it with a
+/// wildcard arm: another maker's setting is added as a variant. It is
+/// `Copy`, and has no `Default`: a setting is always one maker's. It has
+/// no `Display` either, as [`DynamicRangeOptimization`] has none: a
+/// viewer writes the setting's name and the step's together. Each maker's
+/// type converts into it with `From`.
+///
+/// # Examples
+///
+/// A maker's setting, labeled for a viewer and read by its variant:
+///
+/// ```
+/// use raw_files::{VignetteControl, VignettingCorrection};
+///
+/// let nikon = VignettingCorrection::from(VignetteControl::Normal);
+/// println!("{}: {}", nikon.setting_name(), nikon.name());
+/// let corrected = match nikon {
+///     VignettingCorrection::VignetteControl(step) => step != VignetteControl::Off,
+///     _ => false,
+/// };
+/// assert!(corrected);
+/// assert_eq!(nikon.setting_name(), "Vignette control");
+/// assert_eq!(nikon.name(), "Normal");
+/// ```
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum VignettingCorrection {
+    /// Nikon's vignette control.
+    VignetteControl(VignetteControl),
+}
+
+impl VignettingCorrection {
+    /// The maker's word for the setting, for a viewer's label: "Vignette
+    /// control".
+    pub fn setting_name(&self) -> &'static str {
+        match self {
+            VignettingCorrection::VignetteControl(_) => "Vignette control",
+        }
+    }
+
+    /// The step's name, whichever maker's setting it is, such as
+    /// "Normal": the `name` of the variant's own type,
+    /// [`VignetteControl::name`].
+    pub fn name(&self) -> &'static str {
+        match self {
+            VignettingCorrection::VignetteControl(step) => step.name(),
+        }
+    }
+}
+
+impl From<VignetteControl> for VignettingCorrection {
+    /// The vignette control's step as a vignetting correction, its
+    /// [`VignetteControl`](VignettingCorrection::VignetteControl) variant.
+    fn from(step: VignetteControl) -> Self {
+        VignettingCorrection::VignetteControl(step)
+    }
+}
+
+/// Nikon's vignette control: how strongly the camera brightened the
+/// picture's edges, where the lens darkens them, or that it was off.
+///
+/// The steps are those of the D600's menu: high, normal, low and off. A
+/// file holds the camera's choice for the lens mounted.
+///
+/// `VignetteControl` is `#[non_exhaustive]`, so match on it with a
+/// wildcard arm. The steps are listed from the weakest to the strongest,
+/// and `VignetteControl` orders as they are listed. A new step is added
+/// where the ladder puts it, between the existing ones if need be, so two
+/// steps keep the order once observed between them. Its
+/// [`name`](Self::name)s, which `Display` writes too, are "Off", "Low",
+/// "Normal" and "High".
+///
+/// # Examples
+///
+/// ```
+/// use raw_files::VignetteControl;
+///
+/// assert_eq!(VignetteControl::Normal.name(), "Normal");
+/// assert_eq!(VignetteControl::High.to_string(), "High");
+/// assert!(VignetteControl::Low < VignetteControl::High);
+/// ```
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[non_exhaustive]
+pub enum VignetteControl {
+    /// Vignette control off.
+    Off,
+    /// The low step.
+    Low,
+    /// The normal step.
+    Normal,
+    /// The high step.
+    High,
+}
+
+impl VignetteControl {
+    /// The step's name, for an information panel, such as "Normal"; the
+    /// type's docs list them all.
+    pub fn name(self) -> &'static str {
+        match self {
+            VignetteControl::Off => "Off",
+            VignetteControl::Low => "Low",
+            VignetteControl::Normal => "Normal",
+            VignetteControl::High => "High",
+        }
+    }
+}
+
+impl fmt::Display for VignetteControl {
+    /// Writes [`name`](VignetteControl::name).
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.name())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -5950,6 +6132,9 @@ mod tests {
             high_iso_noise_reduction: Some(HighIsoNoiseReduction::MediumHigh),
             long_exposure_noise_reduction: Some(true),
             multi_frame_noise_reduction: Some(false),
+            vignetting_correction: Some(VignettingCorrection::VignetteControl(
+                VignetteControl::Low,
+            )),
         }
     }
 
@@ -6034,6 +6219,7 @@ mod tests {
         assert_eq!(settings.high_iso_noise_reduction(), None);
         assert_eq!(settings.long_exposure_noise_reduction(), None);
         assert_eq!(settings.multi_frame_noise_reduction(), None);
+        assert_eq!(settings.vignetting_correction(), None);
 
         let control = PictureControl::default();
         assert_eq!(control.name(), None);
@@ -6165,6 +6351,10 @@ mod tests {
         );
         assert_eq!(settings.long_exposure_noise_reduction(), Some(true));
         assert_eq!(settings.multi_frame_noise_reduction(), Some(false));
+        assert_eq!(
+            settings.vignetting_correction(),
+            Some(VignettingCorrection::VignetteControl(VignetteControl::Low))
+        );
 
         let control = full_control();
         assert_eq!(control.name(), Some("VIVID-KR"));
@@ -6486,6 +6676,17 @@ mod tests {
                         ..start.clone()
                     },
                 ),
+                (
+                    start
+                        .clone()
+                        .with_vignetting_correction(VignetteControl::High.into()),
+                    CameraSettings {
+                        vignetting_correction: Some(VignettingCorrection::VignetteControl(
+                            VignetteControl::High,
+                        )),
+                        ..start.clone()
+                    },
+                ),
             ];
             for (place, (built, expected)) in cases.into_iter().enumerate() {
                 assert_eq!(built, expected, "builder {place} from {start:?}");
@@ -6741,6 +6942,16 @@ mod tests {
             );
             assert_eq!(optimization.setting_name(), "D-Range Optimizer");
             assert_eq!(optimization.name(), step.name());
+        }
+    }
+
+    #[test]
+    fn a_vignetting_correction_gives_its_makers_word_and_its_step() {
+        for step in all_vignette_controls() {
+            let correction = VignettingCorrection::from(step);
+            assert_eq!(correction, VignettingCorrection::VignetteControl(step));
+            assert_eq!(correction.setting_name(), "Vignette control");
+            assert_eq!(correction.name(), step.name());
         }
     }
 
@@ -7004,7 +7215,8 @@ mod tests {
             ))
             .with_high_iso_noise_reduction(HighIsoNoiseReduction::MediumHigh)
             .with_long_exposure_noise_reduction(true)
-            .with_multi_frame_noise_reduction(false);
+            .with_multi_frame_noise_reduction(false)
+            .with_vignetting_correction(VignettingCorrection::from(VignetteControl::Low));
         assert_eq!(settings, full_settings());
     }
 
@@ -7044,7 +7256,8 @@ mod tests {
             .with_high_dynamic_range(Hdr::off().into())
             .with_high_iso_noise_reduction(HighIsoNoiseReduction::Off)
             .with_long_exposure_noise_reduction(false)
-            .with_multi_frame_noise_reduction(true);
+            .with_multi_frame_noise_reduction(true)
+            .with_vignetting_correction(VignetteControl::Normal.into());
         // Every value of `earlier` differs from the full record's, so each
         // builder below has one to replace.
         let full = full_settings();
@@ -7082,7 +7295,8 @@ mod tests {
             .with_high_dynamic_range(full_hdr().into())
             .with_high_iso_noise_reduction(HighIsoNoiseReduction::MediumHigh)
             .with_long_exposure_noise_reduction(true)
-            .with_multi_frame_noise_reduction(false);
+            .with_multi_frame_noise_reduction(false)
+            .with_vignetting_correction(VignetteControl::Low.into());
         assert_eq!(settings, full);
 
         let hdr = Hdr::on()
@@ -7788,6 +8002,17 @@ mod tests {
         all
     }
 
+    fn all_vignette_controls() -> [VignetteControl; 4] {
+        use VignetteControl::*;
+        let all = [Off, Low, Normal, High];
+        for step in all {
+            match step {
+                Off | Low | Normal | High => {}
+            }
+        }
+        all
+    }
+
     #[test]
     fn every_name_is_the_one_documented_and_display_writes_it() {
         // The names are stable once released: a program may show or store
@@ -8090,6 +8315,11 @@ mod tests {
                 "Auto",
             ],
         );
+        assert_names(
+            &all_vignette_controls(),
+            VignetteControl::name,
+            &["Off", "Low", "Normal", "High"],
+        );
     }
 
     #[test]
@@ -8129,6 +8359,7 @@ mod tests {
         assert_ordered(&all_hdr_strengths());
         assert_ordered(&all_hdr_smoothings());
         assert_ordered(&all_high_iso_noise_reductions());
+        assert_ordered(&all_vignette_controls());
     }
 
     #[test]
