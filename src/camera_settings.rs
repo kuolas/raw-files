@@ -1204,8 +1204,8 @@ impl CameraSettings {
     /// Read from Nikon's MakerNote, in a raw file and a JPEG alike: the
     /// record PictureControlData (0x0023), or the same record under
     /// 0x00BD, which the Coolpix bodies write, where a file holds no
-    /// 0x0023. The record is read at version 0100, of 58 bytes, the
-    /// version and length that measured files hold.
+    /// 0x0023. The record is read at the versions and lengths that
+    /// measured files hold: 0100, of 58 bytes, and 0200, of 68.
     ///
     /// `None` when:
     ///
@@ -3873,14 +3873,17 @@ impl From<PictureControl> for PictureStyle {
 /// Read from Nikon's MakerNote, from the record PictureControlData
 /// (0x0023), or from the same record under 0x00BD, which the Coolpix
 /// bodies write, where a file holds no 0x0023. The record is read at the
-/// version and length that measured files hold: version 0100, of 58
-/// bytes. A record of another version, or of another length than its
+/// versions and lengths that measured files hold: 0100, of 58 bytes, whose
+/// values count whole steps, and 0200, of 68, whose values count quarter
+/// steps. A record of another version, or of another length than its
 /// version's, gives no Picture Control.
 ///
 /// Every part is `None` when the record marks it not available, as Nikon
 /// does for quick adjust under `NEUTRAL` and for the filter effect
 /// outside a monochrome control, or holds a byte its field cannot hold;
-/// each getter lists its own cases. A damaged part costs only itself.
+/// each getter lists its own cases. In the records that keep a divisor
+/// beside each value, every value is also `None` where its divisor is 0.
+/// A damaged part costs only itself.
 /// What files record is in the
 /// [NEF notes](https://github.com/kuolas/raw-files/blob/master/docs/formats/nef/makernote-and-metadata.md#811-picture-style-and-processing).
 ///
@@ -4007,7 +4010,7 @@ impl PictureControl {
     /// Clarity, in steps, or [`Auto`](PictureControlValue::Auto).
     ///
     /// `None` when the record marks it not available, or is of a version
-    /// that records none, as every version read so far is.
+    /// that records none, as 0100 is.
     pub fn clarity(&self) -> Option<PictureControlValue> {
         self.clarity
     }

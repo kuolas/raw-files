@@ -92,12 +92,35 @@ const FIRST: Layout = Layout {
     divided: false,
 };
 
+/// The second layout, of 68 bytes, at version 0200: each value is
+/// followed by its divisor, 4 for a value counted in quarter steps and 1
+/// for quick adjust, and clarity joins the values.
+const SECOND: Layout = Layout {
+    len: 68,
+    name: 4,
+    adjustment: 48,
+    quick_adjust: Some(49),
+    quick_sharp: None,
+    sharpening: 51,
+    mid_range_sharpening: None,
+    clarity: Some(53),
+    contrast: 55,
+    brightness: 57,
+    saturation: 59,
+    hue: 61,
+    filter_effect: 63,
+    toning: 64,
+    toning_saturation: 65,
+    divided: true,
+};
+
 /// The layout of a record whose first four bytes are `version`, among the
-/// versions measured files hold: 0100, the first layout ([`FIRST`]).
-/// `None` for every other version.
+/// versions measured files hold: 0100, the first layout ([`FIRST`]), and
+/// 0200, the second ([`SECOND`]). `None` for every other version.
 fn layout(version: &[u8]) -> Option<&'static Layout> {
     match version {
         b"0100" => Some(&FIRST),
+        b"0200" => Some(&SECOND),
         _ => None,
     }
 }
@@ -133,7 +156,9 @@ const ZERO: u8 = 0x80;
 /// `None` for a record of another version, or of another length than its
 /// version's: no measured file shows which layout it takes. The four
 /// bytes before the adjustment kind, a number for each preset that the
-/// documentation does not name, are not read (NEF notes, section 8.11).
+/// documentation does not name, are not read, and neither is the second
+/// layout's last byte, which it does not name either (NEF notes, section
+/// 8.11).
 pub(super) fn picture_control(record: &[u8]) -> Option<PictureControl> {
     let layout = layout(record.get(..4)?)?;
     if record.len() != layout.len {
@@ -302,6 +327,22 @@ mod tests {
         first(b"STANDARD", b"STANDARD", tail)
     }
 
+    /// A record of version 0200, the second layout, named `name` on base
+    /// `base`. `values` are the adjustment kind and then each value with
+    /// the byte after it: quick adjust, sharpening, clarity, contrast,
+    /// brightness, saturation and hue; then the filter effect, the
+    /// toning, the toning's saturation with its divisor, and the last
+    /// byte.
+    fn second(name: &[u8], base: &[u8], values: [u8; 20]) -> Vec<u8> {
+        let mut record = b"0200".to_vec();
+        record.extend(field(name));
+        record.extend(field(base));
+        record.extend(NUMBER);
+        record.extend(values);
+        assert_eq!(record.len(), 68);
+        record
+    }
+
     /// `numerator` over `denominator` steps.
     fn steps(numerator: i32, denominator: i32) -> Option<PictureControlValue> {
         Some(PictureControlValue::Steps(signed_fraction(
@@ -342,6 +383,103 @@ mod tests {
         assert_eq!(control.quick_sharp(), None);
         assert_eq!(control.mid_range_sharpening(), None);
         assert_eq!(control.clarity(), None);
+    }
+
+    #[test]
+    fn each_field_of_the_second_layout_is_read_at_its_place_over_its_divisor() {
+        // Every byte different, so a field read from its neighbor's place,
+        // or over its neighbor's divisor, is caught; the last byte is not
+        // read.
+        #[rustfmt::skip]
+        let values = [
+            1,          // adjustment kind
+            0x81, 1,    // quick adjust
+            0x8C, 4,    // sharpening
+            0x84, 4,    // clarity
+            0x7C, 4,    // contrast
+            0x82, 2,    // brightness
+            0x86, 4,    // saturation
+            0x7E, 4,    // hue
+            0x84,       // filter effect
+            0x89,       // toning
+            0x85, 4,    // toning saturation
+            0x7B,       // not documented
+        ];
+        let control = picture_control(&second(b"STANDARD-02", b"STANDARD", values)).unwrap();
+        assert_eq!(control.name(), Some("STANDARD-02"));
+        assert_eq!(control.base(), Some("STANDARD"));
+        assert_eq!(
+            control.adjustment(),
+            Some(PictureControlAdjustment::QuickAdjust)
+        );
+        assert_eq!(control.quick_adjust(), steps(1, 1));
+        assert_eq!(control.sharpening(), steps(12, 4));
+        assert_eq!(control.clarity(), steps(4, 4));
+        assert_eq!(control.contrast(), steps(-4, 4));
+        assert_eq!(control.brightness(), steps(2, 2));
+        assert_eq!(control.saturation(), steps(6, 4));
+        assert_eq!(control.hue(), steps(-2, 4));
+        assert_eq!(
+            control.filter_effect(),
+            Some(PictureControlFilterEffect::Green)
+        );
+        assert_eq!(control.toning(), Some(PictureControlToning::RedPurple));
+        assert_eq!(control.toning_saturation(), steps(5, 4));
+        assert_eq!(control.quick_sharp(), None);
+        assert_eq!(control.mid_range_sharpening(), None);
+    }
+
+    #[test]
+    fn the_second_layouts_values_are_auto_not_available_or_none_by_their_bytes() {
+        // 0x00 is auto in sharpening, clarity, contrast and saturation,
+        // whatever the divisor; 0xFF is not available; a divisor of zero
+        // gives no value.
+        #[rustfmt::skip]
+        let values = [
+            0,
+            0x00, 1,    // quick adjust: 0 takes no auto
+            0x00, 4,    // sharpening
+            0x00, 0,    // clarity
+            0x00, 4,    // contrast
+            0x80, 0,    // brightness: a divisor of zero
+            0x00, 4,    // saturation
+            0xFF, 4,    // hue: not available
+            0xFF,
+            0xFF,
+            0xFF, 4,
+            0x00,
+        ];
+        let control = picture_control(&second(b"AUTO", b"AUTO", values)).unwrap();
+        let auto = Some(PictureControlValue::Auto);
+        assert_eq!(control.quick_adjust(), None);
+        assert_eq!(control.sharpening(), auto);
+        assert_eq!(control.clarity(), auto);
+        assert_eq!(control.contrast(), auto);
+        assert_eq!(control.brightness(), None);
+        assert_eq!(control.saturation(), auto);
+        assert_eq!(control.hue(), None);
+        assert_eq!(control.filter_effect(), None);
+        assert_eq!(control.toning(), None);
+        assert_eq!(control.toning_saturation(), None);
+        // A zero count over 4 is kept over 4.
+        let mut zero = values;
+        zero[3] = 0x80;
+        let control = picture_control(&second(b"AUTO", b"AUTO", zero)).unwrap();
+        assert_eq!(control.sharpening(), steps(0, 4));
+    }
+
+    #[test]
+    fn a_version_at_another_versions_length_gives_none() {
+        let first = standard([0, 0x80, 0x83, 0x80, 0x80, 0x80, 0x80, 0xFF, 0xFF, 0xFF]);
+        let second = second(b"STANDARD", b"STANDARD", [0x80; 20]);
+        assert!(picture_control(&first).is_some());
+        assert!(picture_control(&second).is_some());
+        for (record, version) in [(&first, b"0200"), (&second, b"0100")] {
+            let mut other = record.clone();
+            other[..4].copy_from_slice(version);
+            assert_eq!(picture_control(&other), None, "{version:?}");
+        }
+        assert_eq!(picture_control(&second[..67]), None);
     }
 
     #[test]
