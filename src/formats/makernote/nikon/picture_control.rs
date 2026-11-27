@@ -69,6 +69,21 @@ struct Layout {
     /// Whether the byte after each value is its divisor. Without one, a
     /// value counts whole steps.
     divided: bool,
+    /// Which values take "auto" at 0x00, beside contrast and saturation,
+    /// which take it in every layout.
+    auto: Auto,
+}
+
+/// The values beside contrast and saturation that a layout reads as
+/// "auto" at 0x00: those the manuals of the bodies that write it offer
+/// "A" for. The D600's and the D7200's offer it for sharpening, and files
+/// of the second layout hold it in clarity; the Z 9's offers it for
+/// Quick sharp, and not for sharpening or clarity (NEF notes, section
+/// 8.11).
+struct Auto {
+    quick_sharp: bool,
+    sharpening: bool,
+    clarity: bool,
 }
 
 /// The first layout, of 58 bytes, at version 0100: one byte per value and
@@ -90,6 +105,11 @@ const FIRST: Layout = Layout {
     toning: 56,
     toning_saturation: 57,
     divided: false,
+    auto: Auto {
+        quick_sharp: false,
+        sharpening: true,
+        clarity: false,
+    },
 };
 
 /// The second layout, of 68 bytes, at version 0200: each value is
@@ -112,15 +132,59 @@ const SECOND: Layout = Layout {
     toning: 64,
     toning_saturation: 65,
     divided: true,
+    auto: Auto {
+        quick_sharp: false,
+        sharpening: true,
+        clarity: true,
+    },
+};
+
+/// The third layout, of 108 bytes, at versions 0300, 0301, 0302 and
+/// 0310: the version again at byte 4, so the name and the base four bytes
+/// later; Quick sharp in quick adjust's place; mid-range sharpening among
+/// the values, each followed by its divisor.
+///
+/// The adjustment kind and Quick sharp are at bytes 52 and 53, two bytes
+/// before the places the documentation gives them. The files hold `01 FF`
+/// at bytes 54 and 55 on every record, whatever the control, while bytes
+/// 52 and 53 hold the documented codes and move the three sharpening
+/// values with them; Nikon's NX Studio, run on a frame of mine as a reader
+/// to compare with, shows Quick sharp at byte 53 (NEF notes, section
+/// 8.11).
+const THIRD: Layout = Layout {
+    len: 108,
+    name: 8,
+    adjustment: 52,
+    quick_adjust: None,
+    quick_sharp: Some(53),
+    sharpening: 57,
+    mid_range_sharpening: Some(59),
+    clarity: Some(61),
+    contrast: 63,
+    brightness: 65,
+    saturation: 67,
+    hue: 69,
+    filter_effect: 71,
+    toning: 72,
+    toning_saturation: 73,
+    divided: true,
+    auto: Auto {
+        quick_sharp: true,
+        sharpening: false,
+        clarity: false,
+    },
 };
 
 /// The layout of a record whose first four bytes are `version`, among the
-/// versions measured files hold: 0100, the first layout ([`FIRST`]), and
-/// 0200, the second ([`SECOND`]). `None` for every other version.
+/// versions measured files hold: 0100, the first layout ([`FIRST`]); 0200,
+/// the second ([`SECOND`]); 0300, 0301, 0302 and 0310, the third
+/// ([`THIRD`]). `None` for every other version, such as 0320, whose
+/// layout no file shows.
 fn layout(version: &[u8]) -> Option<&'static Layout> {
     match version {
         b"0100" => Some(&FIRST),
         b"0200" => Some(&SECOND),
+        b"0300" | b"0301" | b"0302" | b"0310" => Some(&THIRD),
         _ => None,
     }
 }
@@ -148,17 +212,18 @@ const ZERO: u8 = 0x80;
 /// - the name and the base by [`name`];
 /// - the adjustment kind by [`adjustment`];
 /// - each value by [`value`], over the divisor that follows it where the
-///   layout records one, and over 1 where it does not. Sharpening,
-///   clarity, contrast and saturation take auto; the others do not;
+///   layout records one, and over 1 where it does not. Contrast and
+///   saturation take auto in every layout, and the values of the
+///   layout's [`Auto`] in it; the others do not;
 /// - the filter effect by [`filter_effect`] and the toning by
 ///   [`toning`].
 ///
 /// `None` for a record of another version, or of another length than its
 /// version's: no measured file shows which layout it takes. The four
 /// bytes before the adjustment kind, a number for each preset that the
-/// documentation does not name, are not read, and neither is the second
-/// layout's last byte, which it does not name either (NEF notes, section
-/// 8.11).
+/// documentation does not name, are not read; neither are the second
+/// layout's last byte and the third layout's bytes 55 and 56 and 75 on,
+/// which it does not name either (NEF notes, section 8.11).
 pub(super) fn picture_control(record: &[u8]) -> Option<PictureControl> {
     let layout = layout(record.get(..4)?)?;
     if record.len() != layout.len {
@@ -171,15 +236,16 @@ pub(super) fn picture_control(record: &[u8]) -> Option<PictureControl> {
     };
     let steps = |at: usize| read(at, false);
     let steps_or_auto = |at: usize| read(at, true);
+    let auto = &layout.auto;
     Some(PictureControl {
         name: name(record, layout.name),
         base: name(record, layout.name + NAME_LEN),
         adjustment: byte(layout.adjustment).and_then(adjustment),
         quick_adjust: layout.quick_adjust.and_then(steps),
-        quick_sharp: layout.quick_sharp.and_then(steps),
-        sharpening: steps_or_auto(layout.sharpening),
+        quick_sharp: layout.quick_sharp.and_then(|at| read(at, auto.quick_sharp)),
+        sharpening: read(layout.sharpening, auto.sharpening),
         mid_range_sharpening: layout.mid_range_sharpening.and_then(steps),
-        clarity: layout.clarity.and_then(steps_or_auto),
+        clarity: layout.clarity.and_then(|at| read(at, auto.clarity)),
         contrast: steps_or_auto(layout.contrast),
         brightness: steps(layout.brightness),
         saturation: steps_or_auto(layout.saturation),
@@ -343,6 +409,34 @@ mod tests {
         record
     }
 
+    /// A record of `version`, of the third layout, named `name` on base
+    /// `base`. `values` are its 56 bytes from the adjustment kind on:
+    /// the adjustment kind, Quick sharp and its divisor, two bytes the
+    /// documentation does not name, then each value with the byte after
+    /// it, sharpening, mid-range sharpening, clarity, contrast,
+    /// brightness, saturation and hue; then the filter effect, the toning,
+    /// the toning's saturation with its divisor, and 34 bytes no field
+    /// takes.
+    fn third(version: &[u8; 4], name: &[u8], base: &[u8], values: [u8; 56]) -> Vec<u8> {
+        let mut record = version.to_vec();
+        record.extend(version);
+        record.extend(field(name));
+        record.extend(field(base));
+        record.extend(NUMBER);
+        record.extend(values);
+        assert_eq!(record.len(), 108);
+        record
+    }
+
+    /// The 56 bytes of the third layout from the adjustment kind on that
+    /// begin with `head` and are 0xFF after it, as the bytes past the
+    /// documented fields are on the files.
+    fn third_values(head: &[u8]) -> [u8; 56] {
+        let mut values = [0xFF; 56];
+        values[..head.len()].copy_from_slice(head);
+        values
+    }
+
     /// `numerator` over `denominator` steps.
     fn steps(numerator: i32, denominator: i32) -> Option<PictureControlValue> {
         Some(PictureControlValue::Steps(signed_fraction(
@@ -480,6 +574,133 @@ mod tests {
             assert_eq!(picture_control(&other), None, "{version:?}");
         }
         assert_eq!(picture_control(&second[..67]), None);
+    }
+
+    #[test]
+    fn each_field_of_the_third_layout_is_read_at_its_place_over_its_divisor() {
+        #[rustfmt::skip]
+        let head = [
+            2,          // adjustment kind
+            0x7F, 1,    // Quick sharp
+            0x81, 0x01, // not documented: neither quick adjust nor a value
+            0x8C, 4,    // sharpening
+            0x87, 2,    // mid-range sharpening
+            0x83, 4,    // clarity
+            0x7D, 4,    // contrast
+            0x85, 4,    // brightness
+            0x7A, 4,    // saturation
+            0x86, 4,    // hue
+            0x83,       // filter effect
+            0x87,       // toning
+            0x89, 4,    // toning saturation
+            0x82, 4,    // not documented
+        ];
+        for version in [b"0300", b"0301", b"0302", b"0310"] {
+            let record = third(version, b"VIVID-KR", b"VIVID", third_values(&head));
+            let control = picture_control(&record).unwrap();
+            assert_eq!(control.name(), Some("VIVID-KR"), "{version:?}");
+            assert_eq!(control.base(), Some("VIVID"), "{version:?}");
+            assert_eq!(
+                control.adjustment(),
+                Some(PictureControlAdjustment::FullControl),
+                "{version:?}"
+            );
+            assert_eq!(control.quick_sharp(), steps(-1, 1), "{version:?}");
+            assert_eq!(control.sharpening(), steps(12, 4), "{version:?}");
+            assert_eq!(control.mid_range_sharpening(), steps(7, 2), "{version:?}");
+            assert_eq!(control.clarity(), steps(3, 4), "{version:?}");
+            assert_eq!(control.contrast(), steps(-3, 4), "{version:?}");
+            assert_eq!(control.brightness(), steps(5, 4), "{version:?}");
+            assert_eq!(control.saturation(), steps(-6, 4), "{version:?}");
+            assert_eq!(control.hue(), steps(6, 4), "{version:?}");
+            assert_eq!(
+                control.filter_effect(),
+                Some(PictureControlFilterEffect::Red),
+                "{version:?}"
+            );
+            assert_eq!(
+                control.toning(),
+                Some(PictureControlToning::Blue),
+                "{version:?}"
+            );
+            assert_eq!(control.toning_saturation(), steps(9, 4), "{version:?}");
+            // The third layout has Quick sharp in quick adjust's place.
+            assert_eq!(control.quick_adjust(), None, "{version:?}");
+        }
+    }
+
+    #[test]
+    fn the_z_9_fixtures_bytes_read_as_nx_studio_shows_them() {
+        // Bytes 52 to 54 of `nikon-z9-fx.jpg`'s record are `02 81 01` and
+        // bytes 57, 59 and 61 `94 8E 88`, each over 4: NX Studio shows
+        // VIVID with Quick sharp +1, sharpening +5, mid-range sharpening
+        // +3.5 and clarity +2, and 0 for the four values after them.
+        #[rustfmt::skip]
+        let head = [
+            0x02, 0x81, 0x01, 0xFF, 0x0A,
+            0x94, 4, 0x8E, 4, 0x88, 4,
+            0x80, 4, 0x80, 4, 0x80, 4, 0x80, 4,
+            0xFF, 0xFF, 0xFF, 4,
+        ];
+        let record = third(b"0310", b"VIVID", b"VIVID", third_values(&head));
+        let control = picture_control(&record).unwrap();
+        assert_eq!(control.name(), Some("VIVID"));
+        assert_eq!(
+            control.adjustment(),
+            Some(PictureControlAdjustment::FullControl)
+        );
+        assert_eq!(control.quick_sharp(), steps(1, 1));
+        assert_eq!(control.sharpening(), steps(20, 4));
+        assert_eq!(control.mid_range_sharpening(), steps(14, 4));
+        assert_eq!(control.clarity(), steps(8, 4));
+        for value in [
+            control.contrast(),
+            control.brightness(),
+            control.saturation(),
+            control.hue(),
+        ] {
+            assert_eq!(value, steps(0, 4));
+        }
+        assert_eq!(control.filter_effect(), None);
+        assert_eq!(control.toning(), None);
+        assert_eq!(control.toning_saturation(), None);
+    }
+
+    #[test]
+    fn the_third_layout_reads_auto_where_the_menu_offers_it() {
+        // No 108-byte record holds 0x00. The Z 9's guide offers "A" for
+        // Quick sharp, contrast and saturation, and not for sharpening or
+        // clarity, where 0x00 would be 128 steps down.
+        #[rustfmt::skip]
+        let head = [
+            0, 0x00, 1, 0xFF, 0x0A,
+            0x00, 4, 0x00, 4, 0x00, 4, 0x00, 4, 0x00, 4, 0x00, 4, 0x00, 4,
+        ];
+        let record = third(b"0310", b"AUTO", b"AUTO", third_values(&head));
+        let control = picture_control(&record).unwrap();
+        let auto = Some(PictureControlValue::Auto);
+        assert_eq!(control.quick_sharp(), auto);
+        assert_eq!(control.sharpening(), None);
+        assert_eq!(control.mid_range_sharpening(), None);
+        assert_eq!(control.clarity(), None);
+        assert_eq!(control.contrast(), auto);
+        assert_eq!(control.brightness(), None);
+        assert_eq!(control.saturation(), auto);
+        assert_eq!(control.hue(), None);
+    }
+
+    #[test]
+    fn a_third_layout_version_no_file_holds_or_of_another_length_gives_none() {
+        let record = third(b"0310", b"STANDARD", b"STANDARD", third_values(&[0]));
+        assert!(picture_control(&record).is_some());
+        for version in [b"0320", b"0303", b"0311", b"0400"] {
+            let mut other = record.clone();
+            other[..4].copy_from_slice(version);
+            assert_eq!(picture_control(&other), None, "{version:?}");
+        }
+        assert_eq!(picture_control(&record[..107]), None);
+        assert_eq!(picture_control(&record[..68]), None);
+        assert_eq!(picture_control(&record[..58]), None);
     }
 
     #[test]

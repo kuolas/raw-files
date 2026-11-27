@@ -362,6 +362,11 @@ does. An entry that can break a caller opens with **Breaking:**.
   - The 68-byte record of version 0200 is read too, with its clarity.
     Its values count quarter steps, as `Steps` keeps them: five steps
     are `20/4`.
+  - So is the 108-byte record of versions 0300, 0301, 0302 and 0310,
+    with mid-range sharpening. `PictureControl::quick_sharp` gives the
+    Z bodies' Quick sharp, in quick adjust's place. Its adjustment kind
+    and Quick sharp are read two bytes before the places documented for
+    them, where the files hold them.
   - `PictureStyle::setting_name` gives the maker's word for the setting,
     and `PictureStyle::name` the style's name. Each maker's type
     converts into a `PictureStyle` with `From`.
