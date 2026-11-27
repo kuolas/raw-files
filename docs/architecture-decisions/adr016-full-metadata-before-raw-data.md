@@ -120,14 +120,18 @@ Rejected:
   - how the camera processed its JPEG sits among the camera settings,
     with no record of its own.
 
-  Whether opening a file also reads an XMP sidecar beside it, or the
-  caller hands it in, is open.
+  Three more are settled in the record on XMP and IPTC
+  ([ADR024](adr024-xmp-and-iptc.md)):
+  - XMP is parsed by an XML reader of raw-files' own, with no
+    dependency;
+  - a caller hands an XMP sidecar in, and opening a file reads that
+    file alone;
+  - the packet a file embeds is read when the file is opened, wherever
+    in the file it lies.
 - How an enciphered or encrypted block is read: that is the decision the
   second point above calls for.
-- How XMP and IPTC are parsed, whether by a reader of raw-files' own or
-  through a dependency ([ADR002](adr002-license-mit-or-apache-2.md),
-  [ADR007](adr007-pure-rust-cross-platform.md)), and where a table of
-  lenses comes from ([ADR013](adr013-clean-room-and-third-party-code.md)).
+- Where a table of lenses comes from
+  ([ADR013](adr013-clean-room-and-third-party-code.md)).
 - The order of the groups within full metadata, and the order of the
   formats after NEF and ARW, which the roadmap keeps.
 - Anything about raw sensor data and the developed image, which
@@ -148,5 +152,6 @@ Rejected:
   local corpus test prints counts only, never such a value.
 - Each group's reads are measured against what opening a file costs
   ([ADR011](adr011-metadata-from-standard-tags.md) reads the metadata
-  when the file is opened, near its start); a block that lies far into
-  the file, as an XMP packet may, is a question for that group's issue.
+  when the file is opened, near its start). An XMP packet that lies
+  past what opening reads costs one more read
+  ([ADR024](adr024-xmp-and-iptc.md)); no measured file has one.

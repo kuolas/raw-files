@@ -174,8 +174,10 @@ what the file records about its own picture.
   [ADR009](adr009-public-api-shape.md)'s.
 - **The first Exif segment holds the metadata.** It is the first APP1
   segment before the scan whose payload starts with `Exif` and two zero
-  bytes, wherever it lies; a later one is skipped, as XMP, color
-  profiles and every other application segment are.
+  bytes, wherever it lies. A later one is skipped, as color profiles
+  and the other application segments are. The XMP and IPTC segments
+  are read as the record on XMP and IPTC decides
+  ([ADR024](adr024-xmp-and-iptc.md)).
 - **The Exif segment is a bounded block.** Its TIFF structure is read
   with the position of its header as the base of every offset, and every
   IFD, value, thumbnail and MakerNote must lie inside the segment. One
@@ -333,7 +335,9 @@ that a file holds after its first without an MPF list; the MakerNotes
 of other makers; telling an exported JPEG from a camera's by
 anything but the shape of its picture; decoding a JPEG's pixels; writing
 or editing files; and pairing a JPEG with the raw file of the same shot.
-Each is a decision of its own, which builds on this one.
+Each is a decision of its own, which builds on this one. One is taken:
+the record on XMP and IPTC ([ADR024](adr024-xmp-and-iptc.md)) decides
+the XMP and IPTC segments.
 
 ## Consequences
 
