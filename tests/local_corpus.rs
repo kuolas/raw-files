@@ -190,9 +190,10 @@ use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
 use raw_files::{
-    Altitude, Authorship, Camera, CameraFile, DateTime, Direction, Directory, FocusLayout,
-    FocusOrigin, FocusPoints, Format, Latitude, Lens, Location, Longitude, Metadata, North,
-    PictureStyle, PlacedFocusLayout, Point, Rational, Size, Value,
+    Altitude, Authorship, AutoHdrExposureDifference, Camera, CameraFile, DateTime, Direction,
+    Directory, FocusLayout, FocusOrigin, FocusPoints, Format, HdrExposureDifferential,
+    HighDynamicRange, Latitude, Lens, Location, Longitude, Metadata, North, PictureStyle,
+    PlacedFocusLayout, Point, Rational, Size, Value,
 };
 
 /// A file that counts the bytes its reads return, into a counter the caller
@@ -534,6 +535,26 @@ struct SettingsTally {
     picture_control_named_as_base: usize,
     picture_control_named_otherwise: usize,
     picture_style_values: BTreeMap<(&'static str, usize), usize>,
+    /// Files with a dynamic range optimization, by the maker's word for
+    /// the setting and the step's name, such as ("Active D-Lighting",
+    /// "Auto").
+    dynamic_range_optimization: usize,
+    dynamic_range_optimizations: BTreeMap<(&'static str, &'static str), usize>,
+    /// Files with a high dynamic range setting, by the maker's word for it
+    /// and whether it was on; and the parts the settings give, by part and
+    /// value, such as "strength Auto".
+    high_dynamic_range: usize,
+    high_dynamic_ranges: BTreeMap<(&'static str, bool), usize>,
+    high_dynamic_range_parts: BTreeMap<String, usize>,
+    /// Files with a high ISO noise reduction, by step; with a long
+    /// exposure and a multi-frame noise reduction, and how many of each
+    /// say on.
+    high_iso_noise_reduction: usize,
+    high_iso_noise_reductions: BTreeMap<&'static str, usize>,
+    long_exposure_noise_reduction: usize,
+    long_exposure_noise_reduction_on: usize,
+    multi_frame_noise_reduction: usize,
+    multi_frame_noise_reduction_on: usize,
 }
 
 impl SettingsTally {
@@ -862,6 +883,67 @@ impl SettingsTally {
                 .picture_style_values
                 .entry((style.setting_name(), values))
                 .or_default() += 1;
+        }
+        if let Some(optimization) = settings.dynamic_range_optimization() {
+            self.dynamic_range_optimization += 1;
+            *self
+                .dynamic_range_optimizations
+                .entry((optimization.setting_name(), optimization.name()))
+                .or_default() += 1;
+        }
+        if let Some(setting) = settings.high_dynamic_range() {
+            self.high_dynamic_range += 1;
+            *self
+                .high_dynamic_ranges
+                .entry((setting.setting_name(), setting.is_on()))
+                .or_default() += 1;
+            let ev = |ev: raw_files::Rational| format!("{ev} EV");
+            let parts = match setting {
+                HighDynamicRange::Hdr(hdr) => [
+                    hdr.strength()
+                        .map(|strength| format!("strength {strength}")),
+                    hdr.exposure_differential()
+                        .map(|differential| match differential {
+                            HdrExposureDifferential::Ev(value) => {
+                                format!("exposure differential {}", ev(value))
+                            }
+                            _ => "exposure differential auto".to_string(),
+                        }),
+                    hdr.smoothing()
+                        .map(|smoothing| format!("smoothing {smoothing}")),
+                ],
+                HighDynamicRange::AutoHdr(auto_hdr) => [
+                    auto_hdr
+                        .exposure_difference()
+                        .map(|difference| match difference {
+                            AutoHdrExposureDifference::Ev(value) => {
+                                format!("exposure difference {}", ev(value))
+                            }
+                            _ => "exposure difference auto".to_string(),
+                        }),
+                    None,
+                    None,
+                ],
+                _ => [None, None, None],
+            };
+            for part in parts.into_iter().flatten() {
+                *self.high_dynamic_range_parts.entry(part).or_default() += 1;
+            }
+        }
+        if let Some(step) = settings.high_iso_noise_reduction() {
+            count(
+                &mut self.high_iso_noise_reduction,
+                &mut self.high_iso_noise_reductions,
+                step.name(),
+            );
+        }
+        if let Some(on) = settings.long_exposure_noise_reduction() {
+            self.long_exposure_noise_reduction += 1;
+            self.long_exposure_noise_reduction_on += usize::from(on);
+        }
+        if let Some(on) = settings.multi_frame_noise_reduction() {
+            self.multi_frame_noise_reduction += 1;
+            self.multi_frame_noise_reduction_on += usize::from(on);
         }
     }
 }
@@ -1608,6 +1690,23 @@ impl Tally {
             s.picture_control_named_as_base,
             s.picture_control_named_otherwise,
             s.picture_style_values
+        );
+        println!(
+            "files with a dynamic range optimization: {}, by setting and step: {:?}",
+            s.dynamic_range_optimization, s.dynamic_range_optimizations
+        );
+        println!(
+            "files with a high dynamic range setting: {}, by setting and whether on: {:?}; parts given: {:?}",
+            s.high_dynamic_range, s.high_dynamic_ranges, s.high_dynamic_range_parts
+        );
+        println!(
+            "files with a high ISO noise reduction: {}, by step: {:?}; with a long exposure noise reduction: {}, of which on: {}; with a multi-frame noise reduction: {}, of which on: {}",
+            s.high_iso_noise_reduction,
+            s.high_iso_noise_reductions,
+            s.long_exposure_noise_reduction,
+            s.long_exposure_noise_reduction_on,
+            s.multi_frame_noise_reduction,
+            s.multi_frame_noise_reduction_on
         );
         let f = &self.focus;
         println!(
@@ -3302,4 +3401,72 @@ fn the_settings_tally_counts_the_picture_style() {
         tally.picture_control_versions,
         BTreeMap::from([("0100".to_string(), 1), ("0310".to_string(), 2)])
     );
+}
+
+#[test]
+fn the_settings_tally_counts_the_dynamic_range_and_noise_settings() {
+    use raw_files::{
+        ActiveDLighting, AutoHdr, CameraSettings, DRangeOptimizer, Hdr, HdrStrength,
+        HighIsoNoiseReduction, Rational,
+    };
+
+    // Each maker's settings as a file of each might give them, one file
+    // with Auto HDR on at 2.5 EV, and a file with none.
+    let nikon = CameraSettings::default()
+        .with_dynamic_range_optimization(ActiveDLighting::Auto.into())
+        .with_high_dynamic_range(Hdr::on().with_strength(HdrStrength::Auto).into())
+        .with_high_iso_noise_reduction(HighIsoNoiseReduction::Normal)
+        .with_long_exposure_noise_reduction(true);
+    let sony = CameraSettings::default()
+        .with_dynamic_range_optimization(DRangeOptimizer::Auto.into())
+        .with_high_dynamic_range(AutoHdr::off().into())
+        .with_high_iso_noise_reduction(HighIsoNoiseReduction::Normal)
+        .with_long_exposure_noise_reduction(false)
+        .with_multi_frame_noise_reduction(false);
+    let halves = Rational {
+        numerator: 5,
+        denominator: 2,
+    };
+    let sony_hdr = CameraSettings::default().with_high_dynamic_range(
+        AutoHdr::on()
+            .with_exposure_difference(AutoHdrExposureDifference::Ev(halves))
+            .into(),
+    );
+    let mut tally = SettingsTally::default();
+    for settings in [nikon, sony, sony_hdr, CameraSettings::default()] {
+        tally.record(&Metadata::default().with_camera_settings(settings));
+    }
+    assert_eq!(tally.dynamic_range_optimization, 2);
+    assert_eq!(
+        tally.dynamic_range_optimizations,
+        BTreeMap::from([
+            (("Active D-Lighting", "Auto"), 1),
+            (("D-Range Optimizer", "Auto"), 1)
+        ])
+    );
+    assert_eq!(tally.high_dynamic_range, 3);
+    assert_eq!(
+        tally.high_dynamic_ranges,
+        BTreeMap::from([
+            (("Auto HDR", false), 1),
+            (("Auto HDR", true), 1),
+            (("HDR", true), 1)
+        ])
+    );
+    assert_eq!(
+        tally.high_dynamic_range_parts,
+        BTreeMap::from([
+            ("exposure difference 5/2 EV".to_string(), 1),
+            ("strength Auto".to_string(), 1)
+        ])
+    );
+    assert_eq!(tally.high_iso_noise_reduction, 2);
+    assert_eq!(
+        tally.high_iso_noise_reductions,
+        BTreeMap::from([("Normal", 2)])
+    );
+    assert_eq!(tally.long_exposure_noise_reduction, 2);
+    assert_eq!(tally.long_exposure_noise_reduction_on, 1);
+    assert_eq!(tally.multi_frame_noise_reduction, 1);
+    assert_eq!(tally.multi_frame_noise_reduction_on, 0);
 }

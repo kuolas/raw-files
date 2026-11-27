@@ -23,9 +23,11 @@ use std::panic::{self, AssertUnwindSafe};
 use std::path::{Path, PathBuf};
 
 use raw_files::{
-    Bracketing, Camera, CameraFile, ColorSpace, Contrast, Directory, ErrorKind, ExposureProgram,
+    ActiveDLighting, AutoHdrExposureDifference, Bracketing, Camera, CameraFile, ColorSpace,
+    Contrast, DRangeOptimizer, Directory, DynamicRangeOptimization, ErrorKind, ExposureProgram,
     FieldType, FlashControl, FlashMode, FlashSource, FlashSync, FluorescentLamp, FocusAreaMode,
-    FocusLayoutPoint, FocusMode, FocusOrigin, Format, GainControl, ImageArea, JpegCompression,
+    FocusLayoutPoint, FocusMode, FocusOrigin, Format, GainControl, HdrExposureDifferential,
+    HdrSmoothing, HdrStrength, HighDynamicRange, HighIsoNoiseReduction, ImageArea, JpegCompression,
     JpegQuality, Make, Metadata, MeteringMode, Orientation, PictureControlValue, PictureStyle,
     Point, Preview, PreviewFormat, Rational, RawCompression, RawImageSize, ReleaseMode, Saturation,
     SceneCaptureType, Sharpness, Shutter, SignedRational, Size, StabilizationMode,
@@ -455,8 +457,10 @@ pub struct SamplePlacedLayout {
 /// the JPEG quality and compression; Exif's six values of how the camera
 /// processed the picture: the directions of contrast, saturation and
 /// sharpness, the scene capture type, whether the process was custom, and
-/// the gain control; and the maker's picture style
-/// ([`SamplePictureStyle`]).
+/// the gain control; the maker's picture style
+/// ([`SamplePictureStyle`]); the dynamic range optimization; the high
+/// dynamic range setting ([`SampleHighDynamicRange`]); and the high ISO,
+/// long exposure and multi-frame noise reductions.
 ///
 /// Every row writes every field, `None` included, one to a line, so that
 /// a value read later changes one line of a row.
@@ -494,6 +498,57 @@ pub struct SampleSettings {
     pub custom_rendered: Option<bool>,
     pub gain_control: Option<GainControl>,
     pub picture_style: Option<SamplePictureStyle>,
+    pub dynamic_range_optimization: Option<DynamicRangeOptimization>,
+    pub high_dynamic_range: Option<SampleHighDynamicRange>,
+    pub high_iso_noise_reduction: Option<HighIsoNoiseReduction>,
+    pub long_exposure_noise_reduction: Option<bool>,
+    pub multi_frame_noise_reduction: Option<bool>,
+}
+
+/// The high dynamic range setting of a sample file, as the reader must
+/// give it ([`HighDynamicRange`]): which maker's setting it is, whether it
+/// was on, and each part its getters give. A row cannot build the
+/// library's own values, whose constructors are not `const`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SampleHighDynamicRange {
+    Hdr {
+        on: bool,
+        strength: Option<HdrStrength>,
+        exposure_differential: Option<HdrExposureDifferential>,
+        smoothing: Option<HdrSmoothing>,
+    },
+    AutoHdr {
+        on: bool,
+        exposure_difference: Option<AutoHdrExposureDifference>,
+    },
+}
+
+/// Nikon's HDR off, with no parts, as every sample file and fixture that
+/// records it holds it, for a row.
+pub const HDR_OFF: Option<SampleHighDynamicRange> = Some(SampleHighDynamicRange::Hdr {
+    on: false,
+    strength: None,
+    exposure_differential: None,
+    smoothing: None,
+});
+
+/// Sony's Auto HDR off, with no exposure difference, as every sample file
+/// that records it holds it, for a row.
+pub const AUTO_HDR_OFF: Option<SampleHighDynamicRange> = Some(SampleHighDynamicRange::AutoHdr {
+    on: false,
+    exposure_difference: None,
+});
+
+/// Nikon's Active D-Lighting step `step` as the dynamic range
+/// optimization, for a row.
+pub const fn active_d_lighting(step: ActiveDLighting) -> Option<DynamicRangeOptimization> {
+    Some(DynamicRangeOptimization::ActiveDLighting(step))
+}
+
+/// Sony's D-Range Optimizer step `step` as the dynamic range
+/// optimization, for a row.
+pub const fn d_range_optimizer(step: DRangeOptimizer) -> Option<DynamicRangeOptimization> {
+    Some(DynamicRangeOptimization::DRangeOptimizer(step))
 }
 
 /// The picture style of a sample file, as the reader must give it
@@ -1199,6 +1254,77 @@ pub fn check_metadata(expected: &SampleMetadata, format: Format, folder: Folder)
         version.as_deref(),
         label,
     );
+    assert_eq!(
+        settings.dynamic_range_optimization(),
+        expected.dynamic_range_optimization,
+        "{label}: dynamic range optimization"
+    );
+    check_high_dynamic_range(
+        settings.high_dynamic_range(),
+        expected.high_dynamic_range,
+        label,
+    );
+    assert_eq!(
+        settings.high_iso_noise_reduction(),
+        expected.high_iso_noise_reduction,
+        "{label}: high ISO noise reduction"
+    );
+    assert_eq!(
+        settings.long_exposure_noise_reduction(),
+        expected.long_exposure_noise_reduction,
+        "{label}: long exposure noise reduction"
+    );
+    assert_eq!(
+        settings.multi_frame_noise_reduction(),
+        expected.multi_frame_noise_reduction,
+        "{label}: multi-frame noise reduction"
+    );
+}
+
+/// Checks the high dynamic range setting a sample file gives, `setting`,
+/// against its row's, `expected`, through each getter of the maker's own
+/// type.
+fn check_high_dynamic_range(
+    setting: Option<HighDynamicRange>,
+    expected: Option<SampleHighDynamicRange>,
+    label: &str,
+) {
+    use SampleHighDynamicRange as Row;
+    match (setting, expected) {
+        (None, None) => {}
+        (
+            Some(HighDynamicRange::Hdr(hdr)),
+            Some(Row::Hdr {
+                on,
+                strength,
+                exposure_differential,
+                smoothing,
+            }),
+        ) => assert_eq!(
+            (
+                hdr.is_on(),
+                hdr.strength(),
+                hdr.exposure_differential(),
+                hdr.smoothing()
+            ),
+            (on, strength, exposure_differential, smoothing),
+            "{label}: HDR"
+        ),
+        (
+            Some(HighDynamicRange::AutoHdr(auto_hdr)),
+            Some(Row::AutoHdr {
+                on,
+                exposure_difference,
+            }),
+        ) => assert_eq!(
+            (auto_hdr.is_on(), auto_hdr.exposure_difference()),
+            (on, exposure_difference),
+            "{label}: Auto HDR"
+        ),
+        (setting, expected) => {
+            panic!("{label}: high dynamic range {setting:?}, expected {expected:?}")
+        }
+    }
 }
 
 /// Checks the picture style a sample file gives, `style`, against its
