@@ -1945,7 +1945,8 @@ hold `00 01 06` and four D750 files `fd 01 06`, -3/6 EV. All of mine
 hold `00 01 06`. **[F]** The reading rests on the D600's manual, whose
 steps of 1/6 EV the bytes 1 and 6 match, and on every file agreeing
 with it, -3 lying inside the menu's ±6 steps; no frame shows it. A
-divisor of zero gives none. 36 of my JPEGs store the tag with four
+divisor of zero gives none, and so does a second byte of zero, which
+would read any count as zero; no file holds either. 36 of my JPEGs store the tag with four
 bytes, 35 of them made by a program from a raw file. They give none, by
 the rule on a value's count. **[F]**
 
