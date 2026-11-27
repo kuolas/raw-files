@@ -5,7 +5,8 @@
 //! compression, the JPEG quality and compression, the color space, the
 //! focus mode, the AF-area mode, AF fine-tune, the stabilization, auto ISO,
 //! the exposure fine-tuning, the release mode and bracketing, daylight
-//! saving time, and the flash's source, control, sync and compensation.
+//! saving time, the flash's source, control, sync and compensation, and
+//! the Picture Control.
 //!
 //! The MakerNote records how the camera was set for the picture beyond
 //! what the Exif tags record (ADR011). [`camera_settings`] reads each
@@ -44,7 +45,9 @@
 //! - the flash's source and control from FlashType's text
 //!   ([`flash_type_of_text`]), its sync from FlashSetting's
 //!   ([`flash_sync_of_text`]), and its compensation from
-//!   FlashExposureComp ([`flash_compensation`]).
+//!   FlashExposureComp ([`flash_compensation`]);
+//! - the picture style from PictureControlData, else from the Coolpix
+//!   bodies' copy of it ([`picture_control_record`], [`picture_control`]).
 //!
 //! A code or a text gives a value only where its meaning is known, as the
 //! next paragraph says. Anything else costs that value alone.
@@ -65,13 +68,14 @@ use std::io::{Read, Seek};
 use super::af_info2::area_mode_of;
 use super::block::MakerNote;
 use super::crop::CropHiSpeed;
+use super::picture_control::picture_control;
 use super::rules;
 use crate::camera::BodyFacts;
 use crate::camera_settings::{
     AfFineTune, Bracketing, CameraSettings, ColorSpace, Flash, FlashControl, FlashSource,
-    FlashSync, FocusAreaMode, FocusMode, ImageArea, JpegCompression, JpegQuality, RawCompression,
-    RawImageSize, ReleaseMode, Shutter, Stabilization, StabilizationMode, WhiteBalanceFineTune,
-    WhiteBalanceMode,
+    FlashSync, FocusAreaMode, FocusMode, ImageArea, JpegCompression, JpegQuality, PictureStyle,
+    RawCompression, RawImageSize, ReleaseMode, Shutter, Stabilization, StabilizationMode,
+    WhiteBalanceFineTune, WhiteBalanceMode,
 };
 use crate::container::tiff::Ifd;
 use crate::error::Result;
@@ -190,6 +194,10 @@ const NIKON_COMPRESSED: u32 = 34713;
 /// - **The flash** the Exif tags gave gains the parts the MakerNote
 ///   records ([`flash`]). A file whose Exif tags give no flash gets none
 ///   from the MakerNote either: its parts have nothing to belong to.
+/// - **The picture style** is the Picture Control that PictureControlData
+///   records, or, on a body without it, the Coolpix bodies' copy
+///   ([`picture_control_record`]), read at its version's layout
+///   ([`picture_control`]), in a raw file and a JPEG alike.
 ///
 /// Nikon records no electronic front curtain setting, so it stays as
 /// `settings` has it, `None`. The exposure program and the metering mode
@@ -308,7 +316,34 @@ pub(super) fn camera_settings<R: Read + Seek>(
     if let Some(exif_flash) = settings.flash {
         settings.flash = Some(flash(src, ifd, exif_flash)?);
     }
+    settings.picture_style = picture_control_record(src, ifd)?
+        .as_deref()
+        .and_then(picture_control)
+        .map(PictureStyle::PictureControl);
     Ok(settings)
+}
+
+/// The bytes of the Picture Control record that the MakerNote's IFD `ifd`
+/// holds: PictureControlData (0x0023), else the copy the Coolpix bodies
+/// write under 0x00BD, read only when the IFD keeps no 0x0023. No
+/// measured file holds both. A PictureControlData that breaks its rule, a
+/// type other than UNDEFINED, gives none, and does not give way to the
+/// copy. An entry the IFD skipped as damaged does not stop the copy from
+/// being read, unlike the tags [`holds_no`] guards: the two hold the same
+/// record, so the copy can stand for a 0x0023 that was skipped.
+///
+/// # Errors
+///
+/// `Io` when the reader fails.
+fn picture_control_record<R: Read + Seek>(
+    src: &mut Source<R>,
+    ifd: &Ifd,
+) -> Result<Option<Vec<u8>>> {
+    if ifd.entry(super::PICTURE_CONTROL).is_none() {
+        ifd.get(src, rules::COOLPIX_PICTURE_CONTROL)
+    } else {
+        ifd.get(src, rules::PICTURE_CONTROL)
+    }
 }
 
 /// `exif_flash`, the flash the Exif tags gave, with the parts the
@@ -1085,13 +1120,15 @@ mod tests {
     };
     use super::super::{
         AF_INFO, AF_INFO2, AF_TUNE, COLOR_SPACE, COLOR_TEMPERATURE, COMPRESSION_RECORD,
-        CROP_HI_SPEED, EXPOSURE_TUNING, FINE_TUNE, FINE_TUNE_STEPS, FLASH_EXPOSURE_COMP,
-        FLASH_SETTING, FLASH_TYPE, FOCUS_MODE, IMAGE_SIZE_RAW, ISO_SELECTION, JPG_COMPRESSION,
-        NEF_COMPRESSION, QUALITY, SHOOTING_MODE, SHUTTER_MODE, VR_INFO, WHITE_BALANCE, WORLD_TIME,
-        metadata,
+        COOLPIX_PICTURE_CONTROL, CROP_HI_SPEED, EXPOSURE_TUNING, FINE_TUNE, FINE_TUNE_STEPS,
+        FLASH_EXPOSURE_COMP, FLASH_SETTING, FLASH_TYPE, FOCUS_MODE, IMAGE_SIZE_RAW, ISO_SELECTION,
+        JPG_COMPRESSION, NEF_COMPRESSION, PICTURE_CONTROL, QUALITY, SHOOTING_MODE, SHUTTER_MODE,
+        VR_INFO, WHITE_BALANCE, WORLD_TIME, metadata,
     };
     use super::*;
-    use crate::camera_settings::{ExposureProgram, FlashMode, FluorescentLamp, WhiteBalance};
+    use crate::camera_settings::{
+        ExposureProgram, FlashMode, FluorescentLamp, PictureControlValue, WhiteBalance,
+    };
     use crate::container::tiff::tags::{
         COLOR_SPACE as EXIF_COLOR_SPACE, COMPRESSION, EXPOSURE_MODE, EXPOSURE_PROGRAM,
         FLASH as EXIF_FLASH, IMAGE_LENGTH, IMAGE_WIDTH, INTEROP_INDEX, LIGHT_SOURCE, MAKE,
@@ -3857,6 +3894,133 @@ mod tests {
             let err =
                 metadata(&mut src, &makernote, standard, Picture::Raw).expect_err("the read fails");
             assert_eq!(err.kind(), ErrorKind::Io, "{len}: {err:?}");
+        }
+    }
+
+    // The picture style. The record's own fields are tested on its
+    // reader's built records (`picture_control`); these tests check where
+    // the settings take it from.
+
+    /// A Picture Control record of version 0100 named `name`, with
+    /// sharpening `sharpening` and every other value 0, as the D600 writes
+    /// one.
+    fn record_0100(name: &[u8], sharpening: u8) -> Vec<u8> {
+        let mut record = b"0100".to_vec();
+        for _ in 0..2 {
+            let mut field = name.to_vec();
+            field.resize(20, 0);
+            record.extend(field);
+        }
+        record.extend([1, 0, 0, 0]);
+        record.extend([
+            0, 0x80, sharpening, 0x80, 0x80, 0x80, 0x80, 0xFF, 0xFF, 0xFF,
+        ]);
+        record
+    }
+
+    /// The picture style's name and sharpening, if a Picture Control.
+    fn style_of(settings: &CameraSettings) -> Option<(Option<&str>, Option<PictureControlValue>)> {
+        match settings.picture_style()? {
+            PictureStyle::PictureControl(control) => Some((control.name(), control.sharpening())),
+        }
+    }
+
+    fn whole_steps(count: i32) -> Option<PictureControlValue> {
+        Some(PictureControlValue::Steps(signed_fraction(count, 1)))
+    }
+
+    #[test]
+    fn the_picture_control_is_read_in_a_raw_file_and_a_jpeg_in_both_byte_orders() {
+        for order in ORDERS {
+            let tags = |inner: &mut TiffBuilder, ifd: IfdId| {
+                inner.undefined(ifd, PICTURE_CONTROL, &record_0100(b"STANDARD", 0x83));
+            };
+            let expected = Some((Some("STANDARD"), whole_steps(3)));
+            assert_eq!(style_of(&settings_of(order, tags)), expected, "{order:?}");
+            let jpeg = jpeg_settings(order, tags, |_, _| {});
+            assert_eq!(style_of(&jpeg), expected, "{order:?}");
+        }
+    }
+
+    #[test]
+    fn the_coolpix_tag_is_read_only_without_picture_control_data() {
+        for order in ORDERS {
+            let coolpix = settings_of(order, |inner, ifd| {
+                inner.undefined(
+                    ifd,
+                    COOLPIX_PICTURE_CONTROL,
+                    &record_0100(b"STANDARD", 0x83),
+                );
+            });
+            assert_eq!(
+                style_of(&coolpix),
+                Some((Some("STANDARD"), whole_steps(3))),
+                "{order:?}"
+            );
+            // Beside PictureControlData, the copy is not read.
+            let both = settings_of(order, |inner, ifd| {
+                inner
+                    .undefined(ifd, PICTURE_CONTROL, &record_0100(b"VIVID", 0x84))
+                    .undefined(
+                        ifd,
+                        COOLPIX_PICTURE_CONTROL,
+                        &record_0100(b"STANDARD", 0x83),
+                    );
+            });
+            assert_eq!(
+                style_of(&both),
+                Some((Some("VIVID"), whole_steps(4))),
+                "{order:?}"
+            );
+            // A PictureControlData of another type gives none, and does not
+            // give way to the copy.
+            let retyped = settings_of(order, |inner, ifd| {
+                inner
+                    .byte(ifd, PICTURE_CONTROL, &record_0100(b"VIVID", 0x84))
+                    .undefined(
+                        ifd,
+                        COOLPIX_PICTURE_CONTROL,
+                        &record_0100(b"STANDARD", 0x83),
+                    );
+            });
+            assert_eq!(retyped.picture_style(), None, "{order:?}");
+            // An unrelated entry the IFD skips as damaged, of a type no
+            // reader knows, does not stop the copy from being read.
+            let damaged = settings_of(order, |inner, ifd| {
+                inner
+                    .raw(ifd, 0x0099, 99, 1, RawValue::Inline([0; 4]))
+                    .undefined(
+                        ifd,
+                        COOLPIX_PICTURE_CONTROL,
+                        &record_0100(b"STANDARD", 0x83),
+                    );
+            });
+            assert_eq!(
+                style_of(&damaged),
+                Some((Some("STANDARD"), whole_steps(3))),
+                "{order:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_picture_control_record_that_cannot_be_read_gives_no_style_and_costs_nothing_else() {
+        for order in ORDERS {
+            let mut short = record_0100(b"STANDARD", 0x83);
+            short.pop();
+            let settings = settings_of(order, |inner, ifd| {
+                inner.undefined(ifd, PICTURE_CONTROL, &short).ascii(
+                    ifd,
+                    WHITE_BALANCE,
+                    &padded("SUNNY"),
+                );
+            });
+            assert_eq!(settings.picture_style(), None, "{order:?}");
+            assert_eq!(
+                settings.white_balance.mode,
+                Some(WhiteBalanceMode::Daylight),
+                "{order:?}"
+            );
         }
     }
 }

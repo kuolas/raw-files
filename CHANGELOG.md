@@ -345,6 +345,23 @@ does. An entry that can break a caller opens with **Breaking:**.
   - Bodies mark a custom process for different things. Every Nikon Z 9
     file measured is marked. The D3200 and D7200 mark only the files
     whose long exposure noise reduction ran.
+- `CameraSettings::picture_style` gives the picture style the camera
+  processed the picture in, a `PictureStyle` under its maker's own name.
+  `with_picture_style` sets it
+  ([#230](https://github.com/kuolas/raw-files/issues/230)).
+  - Its first variant is Nikon's `PictureControl`. It gives the name and
+    the base as the file records them, with no list of names. It also
+    gives the adjustment kind, quick adjust, sharpening, contrast,
+    brightness, saturation, hue, the filter effect, the toning and the
+    toning's saturation.
+  - Each value is a `PictureControlValue`: `Auto`, or `Steps` as
+    recorded. A value the camera marks not available gives `None`.
+  - It is read from Nikon's PictureControlData, or from the Coolpix
+    bodies' copy under 0x00BD, at version 0100 with its 58 bytes. A
+    record of another version or length gives no style.
+  - `PictureStyle::setting_name` gives the maker's word for the setting,
+    and `PictureStyle::name` the style's name. Each maker's type
+    converts into a `PictureStyle` with `From`.
 
 ### Changed
 
