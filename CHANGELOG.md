@@ -359,6 +359,9 @@ does. An entry that can break a caller opens with **Breaking:**.
   - It is read from Nikon's PictureControlData, or from the Coolpix
     bodies' copy under 0x00BD, at version 0100 with its 58 bytes. A
     record of another version or length gives no style.
+  - The 68-byte record of version 0200 is read too, with its clarity.
+    Its values count quarter steps, as `Steps` keeps them: five steps
+    are `20/4`.
   - `PictureStyle::setting_name` gives the maker's word for the setting,
     and `PictureStyle::name` the style's name. Each maker's type
     converts into a `PictureStyle` with `From`.
