@@ -125,7 +125,7 @@ a frame, observed on files, or documented only.
 ([ADR011](architecture-decisions/adr011-metadata-from-standard-tags.md),
 [#230](https://github.com/kuolas/raw-files/issues/230)):
 
-- the scene mode.
+- Sony's scene selection.
 
 Exif's contrast, saturation, sharpness, scene capture type, custom
 rendering and gain control are read already, for any maker, from Exif
@@ -140,7 +140,8 @@ one list of both makers' steps, the long exposure one, and Sony's
 multi-frame one. A `VignettingCorrection` holds Nikon's vignette
 control or Sony's shading compensation, and a `DistortionCorrection`
 Nikon's auto distortion control or Sony's distortion compensation;
-Sony's chromatic aberration compensation is read too.
+Sony's chromatic aberration compensation is read too. A `Scene` holds
+Nikon's scene mode, as the camera writes it.
 
 Each setting of the list will keep its maker's own name and kinds, as
 the picture style does. Where two makers each have a setting for one

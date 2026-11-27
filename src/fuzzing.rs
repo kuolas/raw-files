@@ -18,7 +18,7 @@ use std::io::{Cursor, Read, Seek};
 
 use crate::camera_settings::{
     AutoHdrExposureDifference, DistortionCorrection, DynamicRangeOptimization,
-    HdrExposureDifferential, HighDynamicRange, PictureControlValue, PictureStyle,
+    HdrExposureDifferential, HighDynamicRange, PictureControlValue, PictureStyle, Scene,
     VignettingCorrection,
 };
 use crate::container::jpeg::{mpf, probe, segments};
@@ -474,6 +474,9 @@ fn read_metadata(metadata: &Metadata) {
     let _ = settings
         .chromatic_aberration_compensation()
         .map(|compensation| compensation.to_string());
+    if let Some(scene) = settings.scene() {
+        read_scene(scene);
+    }
     let tiny = Size {
         width: 1,
         height: 1,
@@ -644,6 +647,16 @@ fn read_distortion_correction(correction: DistortionCorrection) {
         }
         DistortionCorrection::DistortionCompensation(compensation) => {
             let _ = compensation.to_string();
+        }
+    }
+}
+
+/// Calls every getter of the scene `scene`, whichever maker's it is.
+fn read_scene(scene: &Scene) {
+    let _ = (scene.setting_name(), scene.name());
+    match scene {
+        Scene::SceneMode(text) => {
+            let _ = text.len();
         }
     }
 }

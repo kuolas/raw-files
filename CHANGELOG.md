@@ -468,6 +468,18 @@ does. An entry that can break a caller opens with **Breaking:**.
     `with_chromatic_aberration_compensation` sets it.
   - The fixed-lens bodies' "n/a" gives `None`. The raw SubIFD's own
     correction codes are not read: they are not the menu's settings.
+- `CameraSettings::scene` gives the scene the photographer set the
+  camera for, or its auto mode, a `Scene` under its maker's own name.
+  `with_scene` sets it
+  ([#230](https://github.com/kuolas/raw-files/issues/230)).
+  - Its first variant is Nikon's `SceneMode`, the camera's own text as
+    it writes it, such as `PORTRAIT`, `AUTO` or `AUTO(FLASH OFF)`, read
+    from 0x00AB, else from the Coolpix bodies' 0x008F. A blank text,
+    as under the program, priority and manual modes, gives `None`.
+  - raw-files keeps no list of Nikon's scene texts.
+  - `Scene::setting_name` gives the maker's word for the setting, and
+    `name` the scene's name. `Scene` is `Clone` and not `Copy`.
+  - Exif's scene capture type stays a value of its own.
 
 ### Changed
 

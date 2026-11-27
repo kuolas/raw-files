@@ -2188,9 +2188,8 @@ settings
 - Exif's six processing values;
 - Active D-Lighting and HDR;
 - the high ISO and long exposure noise reductions;
-- vignette control and auto distortion control.
-
-It will read the scene mode.
+- vignette control and auto distortion control;
+- the scene mode.
 
 Each setting keeps Nikon's own name and kinds. Where Sony has a
 setting for the same thing, one value of the camera settings holds
@@ -2556,7 +2555,7 @@ of picture, such as a portrait or a sport [P][25] (p. 40). The DSLR and
 Z bodies record the mode as text in 0x00AB, which the documentation
 calls VariProgram. The Coolpix bodies record it in 0x008F SceneMode
 [S][1]. Each is ASCII, 16 bytes with the NUL, padded with spaces. No
-measured file holds both. raw-files will read 0x00AB, else 0x008F, as
+measured file holds both. raw-files reads 0x00AB, else 0x008F, as
 the scene mode of a `Scene`: the text as recorded, cleaned as every
 text.
 
@@ -2576,19 +2575,19 @@ text.
 **[F]** The counts take both tags: 197 public files and 46,748 of
 mine.
 
-- **A blank text will give `None`.** It is blank under the program,
+- **A blank text gives `None`.** It is blank under the program,
   priority and manual modes.
 - **The text is set exactly where Exif names no program.** On my
   files, ExposureProgram is 0 on every file whose text is set, and 1
   to 4 on every file whose text is blank.
-- **The auto modes will be given too.** The D600's mode dial has an
+- **The auto modes are given too.** The D600's mode dial has an
   auto mode and an auto mode with the flash off beside its scene
   position [P][25] (pp. 35 and 40). The files hold them as `AUTO` and
   `AUTO(FLASH OFF)`.
 - **No list of texts enters raw-files.** A camera's effects are
   recorded here too, such as `TOY CAMERA` on my D3300, and a later
   body writes texts no file here holds.
-- My D300S writes neither tag, and will give no scene.
+- My D300S writes neither tag, and gives no scene.
 
 **Exif's six values.** Each is one SHORT in the Exif IFD, with the
 standard's codes [P][23] (4.6.6.7.35, p. 69; 4.6.6.7.40 to 4.6.6.7.44,
@@ -2799,9 +2798,7 @@ plain MakerNote tags where Exif has no value, and decrypt nothing [I]:
   and `OFF` none;
 - vignette control from 0x002A, and auto distortion control from byte
   4 of 0x002B;
-- the scene mode of
-  [section 8.11](#811-picture-style-and-processing), which raw-files
-  will read from 0x00AB, else 0x008F, where a blank text will give
+- the scene mode from 0x00AB, else 0x008F, where a blank text gives
   none.
 
 ShotInfo's firmware version and image area, NikonSettings, and the

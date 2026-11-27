@@ -909,6 +909,9 @@ fn camera_settings<R: Read + Seek>(
         vignetting_correction: None,
         distortion_correction: None,
         chromatic_aberration_compensation: None,
+        // Only a maker's MakerNote records the scene in the maker's own
+        // words; Exif's scene capture type is a value of its own.
+        scene: None,
     })
 }
 

@@ -7,7 +7,8 @@
 //! the exposure fine-tuning, the release mode and bracketing, daylight
 //! saving time, the flash's source, control, sync and compensation, the
 //! Picture Control, Active D-Lighting, HDR, the high ISO and long exposure
-//! noise reductions, vignette control and auto distortion control.
+//! noise reductions, vignette control, auto distortion control and the
+//! scene mode.
 //!
 //! The MakerNote records how the camera was set for the picture beyond
 //! what the Exif tags record (ADR011). [`camera_settings`] reads each
@@ -59,7 +60,9 @@
 //! - the vignetting correction from VignetteControl
 //!   ([`vignette_control`]);
 //! - the distortion correction from DistortInfo
-//!   ([`auto_distortion_control`]).
+//!   ([`auto_distortion_control`]);
+//! - the scene from VariProgram's text, else from the Coolpix bodies'
+//!   SceneMode ([`scene_mode`]).
 //!
 //! A code or a text gives a value only where its meaning is known, as the
 //! next paragraph says. Anything else costs that value alone.
@@ -88,7 +91,7 @@ use crate::camera_settings::{
     DistortionCorrection, DynamicRangeOptimization, Flash, FlashControl, FlashSource, FlashSync,
     FocusAreaMode, FocusMode, Hdr, HdrExposureDifferential, HdrSmoothing, HdrStrength,
     HighDynamicRange, HighIsoNoiseReduction, ImageArea, JpegCompression, JpegQuality, PictureStyle,
-    RawCompression, RawImageSize, ReleaseMode, Shutter, Stabilization, StabilizationMode,
+    RawCompression, RawImageSize, ReleaseMode, Scene, Shutter, Stabilization, StabilizationMode,
     VignetteControl, VignettingCorrection, WhiteBalanceFineTune, WhiteBalanceMode,
 };
 use crate::container::tiff::Ifd;
@@ -228,6 +231,9 @@ const NIKON_COMPRESSED: u32 = 34713;
 /// - **The distortion correction** is the auto distortion control that
 ///   DistortInfo records ([`auto_distortion_control`]), in a raw file and
 ///   a JPEG alike.
+/// - **The scene** is the scene mode that VariProgram's text, or on a
+///   body without it the Coolpix bodies' SceneMode, records
+///   ([`scene_mode`]), in a raw file and a JPEG alike.
 ///
 /// Nikon records no multi-frame noise reduction, and no chromatic
 /// aberration compensation in a plain tag, so each stays `None`.
@@ -376,6 +382,7 @@ pub(super) fn camera_settings<R: Read + Seek>(
         .as_deref()
         .and_then(auto_distortion_control)
         .map(DistortionCorrection::AutoDistortionControl);
+    settings.scene = scene_mode(src, ifd)?.map(Scene::SceneMode);
     Ok(settings)
 }
 
@@ -399,6 +406,30 @@ fn picture_control_record<R: Read + Seek>(
         ifd.get(src, rules::COOLPIX_PICTURE_CONTROL)
     } else {
         ifd.get(src, rules::PICTURE_CONTROL)
+    }
+}
+
+/// The scene mode's text that the MakerNote's IFD `ifd` records, read by
+/// the text rule ([`tiff_metadata::text`]): VariProgram (0x00AB), else
+/// the Coolpix bodies' SceneMode (0x008F), read only when the IFD keeps
+/// no 0x00AB. No measured file holds both. A VariProgram that gives
+/// none, blank or of another type, does not give way to SceneMode. As
+/// with the Picture Control, an entry the IFD skipped as damaged does not
+/// stop SceneMode from being read.
+///
+/// The text is given as the camera writes it, such as `AUTO` or
+/// `PORTRAIT`: raw-files keeps no list of the texts (NEF notes, section
+/// 8.11). A blank text, which the files hold under the program, priority
+/// and manual modes, gives none.
+///
+/// # Errors
+///
+/// `Io` when the reader fails.
+fn scene_mode<R: Read + Seek>(src: &mut Source<R>, ifd: &Ifd) -> Result<Option<String>> {
+    if ifd.entry(super::VARI_PROGRAM).is_none() {
+        tiff_metadata::text(src, ifd, rules::COOLPIX_SCENE_MODE)
+    } else {
+        tiff_metadata::text(src, ifd, rules::VARI_PROGRAM)
     }
 }
 
@@ -1391,11 +1422,12 @@ mod tests {
     };
     use super::super::{
         ACTIVE_D_LIGHTING, AF_INFO, AF_INFO2, AF_TUNE, COLOR_SPACE, COLOR_TEMPERATURE,
-        COMPRESSION_RECORD, COOLPIX_PICTURE_CONTROL, CROP_HI_SPEED, DISTORT_INFO, EXPOSURE_TUNING,
-        FINE_TUNE, FINE_TUNE_STEPS, FLASH_EXPOSURE_COMP, FLASH_SETTING, FLASH_TYPE, FOCUS_MODE,
-        HDR_INFO, HIGH_ISO_NOISE_REDUCTION, IMAGE_SIZE_RAW, ISO_SELECTION, JPG_COMPRESSION,
-        NEF_COMPRESSION, NOISE_REDUCTION, PICTURE_CONTROL, QUALITY, SHOOTING_MODE, SHUTTER_MODE,
-        VIGNETTE_CONTROL, VR_INFO, WHITE_BALANCE, WORLD_TIME, metadata,
+        COMPRESSION_RECORD, COOLPIX_PICTURE_CONTROL, COOLPIX_SCENE_MODE, CROP_HI_SPEED,
+        DISTORT_INFO, EXPOSURE_TUNING, FINE_TUNE, FINE_TUNE_STEPS, FLASH_EXPOSURE_COMP,
+        FLASH_SETTING, FLASH_TYPE, FOCUS_MODE, HDR_INFO, HIGH_ISO_NOISE_REDUCTION, IMAGE_SIZE_RAW,
+        ISO_SELECTION, JPG_COMPRESSION, NEF_COMPRESSION, NOISE_REDUCTION, PICTURE_CONTROL, QUALITY,
+        SHOOTING_MODE, SHUTTER_MODE, VARI_PROGRAM, VIGNETTE_CONTROL, VR_INFO, WHITE_BALANCE,
+        WORLD_TIME, metadata,
     };
     use super::*;
     use crate::camera_settings::{
@@ -4777,6 +4809,96 @@ mod tests {
                     Some(WhiteBalanceMode::Daylight),
                     "{order:?}, {place}"
                 );
+            }
+        }
+    }
+
+    // The scene mode.
+
+    /// The scene of a raw file and a JPEG in byte order `order` whose
+    /// MakerNote holds what `tags` adds, checked to be the same in both.
+    fn scene_of(order: Order, tags: impl Fn(&mut TiffBuilder, IfdId)) -> Option<Scene> {
+        let raw = settings_of(order, &tags).scene;
+        let jpeg = jpeg_settings(order, &tags, |_, _| {}).scene;
+        assert_eq!(raw, jpeg, "{order:?}");
+        raw
+    }
+
+    /// `text` padded with spaces to 15 characters, as Nikon writes its
+    /// scene texts; the builder adds the NUL.
+    fn scene_text(text: &str) -> String {
+        format!("{text:<15}")
+    }
+
+    #[test]
+    fn a_scene_text_is_given_as_the_camera_writes_it_trimmed() {
+        for order in ORDERS {
+            for text in ["AUTO", "AUTO(FLASH OFF)", "CLOSE UP", "TOY CAMERA"] {
+                let scene = |tag| {
+                    scene_of(order, move |inner, ifd| {
+                        inner.ascii(ifd, tag, &scene_text(text));
+                    })
+                };
+                let expected = Some(Scene::SceneMode(text.to_owned()));
+                assert_eq!(scene(VARI_PROGRAM), expected, "{order:?}, {text:?}");
+                assert_eq!(scene(COOLPIX_SCENE_MODE), expected, "{order:?}, {text:?}");
+            }
+        }
+    }
+
+    #[test]
+    fn vari_program_is_read_and_scene_mode_only_without_it() {
+        for order in ORDERS {
+            let both = scene_of(order, |inner, ifd| {
+                inner
+                    .ascii(ifd, COOLPIX_SCENE_MODE, &scene_text("PORTRAIT"))
+                    .ascii(ifd, VARI_PROGRAM, &scene_text("SPORT"));
+            });
+            assert_eq!(
+                both,
+                Some(Scene::SceneMode("SPORT".to_owned())),
+                "{order:?}"
+            );
+            // A VariProgram that gives none, blank or of another type,
+            // does not give way.
+            let blank = scene_of(order, |inner, ifd| {
+                inner
+                    .ascii(ifd, COOLPIX_SCENE_MODE, &scene_text("PORTRAIT"))
+                    .ascii(ifd, VARI_PROGRAM, &scene_text(""));
+            });
+            assert_eq!(blank, None, "{order:?}");
+            let undefined = scene_of(order, |inner, ifd| {
+                inner
+                    .ascii(ifd, COOLPIX_SCENE_MODE, &scene_text("PORTRAIT"))
+                    .undefined(ifd, VARI_PROGRAM, b"SPORT\0");
+            });
+            assert_eq!(undefined, None, "{order:?}");
+        }
+    }
+
+    #[test]
+    fn a_blank_long_or_other_typed_scene_text_gives_none_and_costs_nothing_else() {
+        for order in ORDERS {
+            for tag in [VARI_PROGRAM, COOLPIX_SCENE_MODE] {
+                // Blank, as under the program, priority and manual modes;
+                // empty; 300 bytes; and UNDEFINED.
+                for place in 0..4 {
+                    let settings = settings_of(order, |inner, ifd| {
+                        match place {
+                            0 => inner.ascii(ifd, tag, &scene_text("")),
+                            1 => inner.ascii(ifd, tag, ""),
+                            2 => inner.ascii(ifd, tag, &"A".repeat(300)),
+                            _ => inner.undefined(ifd, tag, b"AUTO\0"),
+                        };
+                        inner.ascii(ifd, WHITE_BALANCE, &padded("SUNNY"));
+                    });
+                    assert_eq!(settings.scene, None, "{order:?}, {tag:#x}, {place}");
+                    assert_eq!(
+                        settings.white_balance.mode,
+                        Some(WhiteBalanceMode::Daylight),
+                        "{order:?}, {tag:#x}, {place}"
+                    );
+                }
             }
         }
     }
