@@ -658,6 +658,9 @@ fn read_scene(scene: &Scene) {
         Scene::SceneMode(text) => {
             let _ = text.len();
         }
+        Scene::SceneSelection(selection) => {
+            let _ = selection.to_string();
+        }
     }
 }
 

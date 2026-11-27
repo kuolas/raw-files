@@ -60,8 +60,8 @@ use crate::camera_settings::{
     AutoHdr, AutoHdrExposureDifference, Bracketing, CameraSettings, CreativeLook, CreativeStyle,
     DRangeOptimizer, DistortionCorrection, DynamicRangeOptimization, FlashSource, FocusAreaMode,
     FocusMode, HighDynamicRange, HighIsoNoiseReduction, JpegQuality, LensCompensation,
-    PictureStyle, RawCompression, ReleaseMode, Stabilization, VignettingCorrection,
-    WhiteBalanceFineTune, WhiteBalanceMode,
+    PictureStyle, RawCompression, ReleaseMode, Scene, SceneSelection, Stabilization,
+    VignettingCorrection, WhiteBalanceFineTune, WhiteBalanceMode,
 };
 use crate::container::tiff::{Ifd, Rule, Tree};
 use crate::entries::{Directory, Entries, Lookup};
@@ -217,6 +217,12 @@ const CREATIVE_STYLE: u16 = 0xB020;
 /// none was recorded.
 const COLOR_TEMPERATURE: u16 = 0xB021;
 
+/// The Sony MakerNote tag that records the Scene Selection (SceneMode):
+/// one LONG, a code for the scene or the auto mode, such as 1 portrait and
+/// 16 Intelligent Auto; 0, "Standard", which the files hold under the
+/// program, priority and manual modes, records none.
+const SCENE_MODE: u16 = 0xB023;
+
 /// The Sony MakerNote tag that records the D-Range Optimizer
 /// (DynamicRangeOptimizer): one LONG, a code for its step, such as 0 off,
 /// 3 auto and 16 to 23 its levels 1 to 8.
@@ -271,6 +277,7 @@ mod rules {
     pub(super) const COLOR_TEMPERATURE: Held<[u32; 1]> = Held::new(super::COLOR_TEMPERATURE, LONG);
     pub(super) const DYNAMIC_RANGE_OPTIMIZER: Held<[u32; 1]> =
         Held::new(super::DYNAMIC_RANGE_OPTIMIZER, LONG);
+    pub(super) const SCENE_MODE: Held<[u32; 1]> = Held::new(super::SCENE_MODE, LONG);
     pub(super) const AUTO_HDR: Held<[u32; 1]> = Held::new(super::AUTO_HDR, LONG);
     pub(super) const HIGH_ISO_NOISE_REDUCTION: Held<[u32; 1]> =
         Held::new(super::HIGH_ISO_NOISE_REDUCTION, SHORT);
@@ -644,6 +651,8 @@ fn area<R: Read + Seek>(src: &mut Source<R>, makernote: &MakerNote) -> Result<Op
 ///   ([`lens_compensation`]), in a raw file and a JPEG alike. The raw
 ///   SubIFD's own correction codes are not read: they are not the menu's
 ///   settings.
+/// - **The scene** is the Scene Selection that SceneMode's code names
+///   ([`scene_selection`]), in a raw file and a JPEG alike.
 ///
 /// The shutter used, the image area and the raw image size stay as
 /// `settings` has them, `None`. Sony records the first two only in
@@ -731,6 +740,10 @@ fn camera_settings<R: Read + Seek>(
         .held(rules::DISTORTION_COMPENSATION)
         .and_then(|[code]| lens_compensation(code))
         .map(DistortionCorrection::DistortionCompensation);
+    settings.scene = ifd
+        .held(rules::SCENE_MODE)
+        .and_then(|[code]| scene_selection(code))
+        .map(Scene::SceneSelection);
     if let Some(flash) = settings.flash.as_mut() {
         if let Some(source) = ifd
             .held(rules::FLASH_ACTION)
@@ -942,6 +955,57 @@ fn lens_compensation(code: u32) -> Option<LensCompensation> {
         2 => Some(LensCompensation::Auto),
         _ => None,
     }
+}
+
+/// The Scene Selection that a SceneMode `code` names, in the list
+/// ExifTool's published documentation gives, read whole, since files hold
+/// part of it (ARW notes, section 9.11):
+///
+/// - 1 [`Portrait`](SceneSelection::Portrait), 5
+///   [`SportsAction`](SceneSelection::SportsAction), 6
+///   [`Landscape`](SceneSelection::Landscape), 8
+///   [`Macro`](SceneSelection::Macro), 16
+///   [`IntelligentAuto`](SceneSelection::IntelligentAuto) and 22
+///   [`AutoPlus`](SceneSelection::AutoPlus), on public files, and 17
+///   [`NightViewPortrait`](SceneSelection::NightViewPortrait), on mine
+///   alone;
+/// - the rest documented only: 2 text, 3 night scene, 4 sunset, 7 night
+///   portrait, 9 super macro, 18 sweep panorama, 19 Hand-held Twilight,
+///   20 anti motion blur, 21 continuous priority AE, 23 3D sweep
+///   panorama, 24 Superior Auto, 25 high sensitivity, 26 fireworks, 27
+///   food, 28 pet and 33 HDR.
+///
+/// `None` for 0, the documentation's "Standard", which every file holds
+/// under the program, priority and manual modes, for 65535, "n/a", and
+/// for every code the list lacks, such as 10 to 15.
+fn scene_selection(code: u32) -> Option<SceneSelection> {
+    use SceneSelection::*;
+    Some(match code {
+        1 => Portrait,
+        2 => Text,
+        3 => NightScene,
+        4 => Sunset,
+        5 => SportsAction,
+        6 => Landscape,
+        7 => NightPortrait,
+        8 => Macro,
+        9 => SuperMacro,
+        16 => IntelligentAuto,
+        17 => NightViewPortrait,
+        18 => SweepPanorama,
+        19 => HandHeldTwilight,
+        20 => AntiMotionBlur,
+        21 => ContinuousPriorityAe,
+        22 => AutoPlus,
+        23 => SweepPanorama3d,
+        24 => SuperiorAuto,
+        25 => HighSensitivity,
+        26 => Fireworks,
+        27 => Food,
+        28 => Pet,
+        33 => Hdr,
+        _ => return None,
+    })
 }
 
 /// The JPEG quality step that the MakerNote's IFD `ifd` records, from the
@@ -3445,7 +3509,8 @@ mod tests {
     /// plain tag, under a Creative Style with its contrast, saturation and
     /// sharpness at 0, with the shading and chromatic aberration
     /// compensations on auto and the distortion compensation off, as most
-    /// of its files hold them.
+    /// of its files hold them, and with no scene, in one of the program,
+    /// priority and manual modes.
     ///
     /// The ILCE-7M2 records no ExposureStandardAdjustment and no Quality2,
     /// so neither is added: the tests of the exposure fine-tuning and the
@@ -3477,7 +3542,8 @@ mod tests {
             .long(ifd, MULTI_FRAME_NOISE_REDUCTION, &[0])
             .long(ifd, SHADING_COMPENSATION, &[2])
             .long(ifd, CHROMATIC_ABERRATION_COMPENSATION, &[2])
-            .long(ifd, DISTORTION_COMPENSATION, &[0]);
+            .long(ifd, DISTORTION_COMPENSATION, &[0])
+            .long(ifd, SCENE_MODE, &[0]);
     }
 
     /// What [`settings_tags`] gives, from `settings`, for an E-mount body
@@ -3490,7 +3556,8 @@ mod tests {
     /// is on, as the ILCE-7M2's 1 records it, and the multi-frame one
     /// off. The shading and chromatic aberration compensations are auto,
     /// and the distortion compensation off. FlashAction's 0 names no
-    /// source, and Quality's 6 and JPEGQuality's 65535 no JPEG quality.
+    /// source, Quality's 6 and JPEGQuality's 65535 no JPEG quality, and
+    /// SceneMode's 0 no scene.
     fn with_settings_tags(settings: CameraSettings) -> CameraSettings {
         let white_balance = WhiteBalance::default()
             .with_mode(WhiteBalanceMode::ColorTemperature)
@@ -4642,6 +4709,86 @@ mod tests {
                     (None, None, None),
                     "{order:?}, {place}"
                 );
+                assert_eq!(
+                    settings.white_balance.mode,
+                    Some(WhiteBalanceMode::Daylight),
+                    "{order:?}, {place}"
+                );
+            }
+        }
+    }
+
+    // The Scene Selection.
+
+    /// Each code of SceneMode's list with the scene it names, and codes
+    /// that name none.
+    const SCENE_SELECTIONS: [(u32, Option<SceneSelection>); 31] = [
+        (1, Some(SceneSelection::Portrait)),
+        (2, Some(SceneSelection::Text)),
+        (3, Some(SceneSelection::NightScene)),
+        (4, Some(SceneSelection::Sunset)),
+        (5, Some(SceneSelection::SportsAction)),
+        (6, Some(SceneSelection::Landscape)),
+        (7, Some(SceneSelection::NightPortrait)),
+        (8, Some(SceneSelection::Macro)),
+        (9, Some(SceneSelection::SuperMacro)),
+        (16, Some(SceneSelection::IntelligentAuto)),
+        (17, Some(SceneSelection::NightViewPortrait)),
+        (18, Some(SceneSelection::SweepPanorama)),
+        (19, Some(SceneSelection::HandHeldTwilight)),
+        (20, Some(SceneSelection::AntiMotionBlur)),
+        (21, Some(SceneSelection::ContinuousPriorityAe)),
+        (22, Some(SceneSelection::AutoPlus)),
+        (23, Some(SceneSelection::SweepPanorama3d)),
+        (24, Some(SceneSelection::SuperiorAuto)),
+        (25, Some(SceneSelection::HighSensitivity)),
+        (26, Some(SceneSelection::Fireworks)),
+        (27, Some(SceneSelection::Food)),
+        (28, Some(SceneSelection::Pet)),
+        (33, Some(SceneSelection::Hdr)),
+        // "Standard", under the program, priority and manual modes.
+        (0, None),
+        (10, None),
+        (15, None),
+        (29, None),
+        (32, None),
+        (34, None),
+        (65535, None),
+        (4294967295, None),
+    ];
+
+    #[test]
+    fn each_scene_mode_code_gives_its_scene_in_a_raw_file_and_a_jpeg() {
+        for order in ORDERS {
+            for picture in [Picture::Raw, Picture::Jpeg] {
+                for (code, expected) in SCENE_SELECTIONS {
+                    let settings = picture_settings_of(order, picture, |builder, ifd| {
+                        builder.long(ifd, SCENE_MODE, &[code]);
+                    });
+                    assert_eq!(
+                        settings.scene,
+                        expected.map(Scene::SceneSelection),
+                        "{order:?}, {picture:?}, {code}"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn a_scene_mode_of_another_shape_gives_none_and_costs_nothing_else() {
+        for order in ORDERS {
+            // One SHORT, two LONGs, and one SLONG.
+            for place in 0..3 {
+                let settings = settings_of(order, |builder, ifd| {
+                    match place {
+                        0 => builder.short(ifd, SCENE_MODE, &[1]),
+                        1 => builder.long(ifd, SCENE_MODE, &[1, 1]),
+                        _ => builder.slong(ifd, SCENE_MODE, &[1]),
+                    };
+                    builder.long(ifd, WHITE_BALANCE, &[16]);
+                });
+                assert_eq!(settings.scene, None, "{order:?}, {place}");
                 assert_eq!(
                     settings.white_balance.mode,
                     Some(WhiteBalanceMode::Daylight),

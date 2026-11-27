@@ -120,17 +120,14 @@ A list of codes that published documentation gives is read whole once
 the files hold part of it, and the notes mark each code as confirmed by
 a frame, observed on files, or documented only.
 
-**How the camera made its JPEG** comes next, as values of
+**How the camera made its JPEG** is read too, as values of
 `CameraSettings`
 ([ADR011](architecture-decisions/adr011-metadata-from-standard-tags.md),
-[#230](https://github.com/kuolas/raw-files/issues/230)):
-
-- Sony's scene selection.
+[#230](https://github.com/kuolas/raw-files/issues/230)).
 
 Exif's contrast, saturation, sharpness, scene capture type, custom
-rendering and gain control are read already, for any maker, from Exif
-alone. The picture style is read already too, from each maker's
-MakerNote: a `PictureStyle` holds Nikon's Picture Control, or Sony's
+rendering and gain control are read for any maker, from Exif alone.
+The picture style is read from each maker's MakerNote: a `PictureStyle` holds Nikon's Picture Control, or Sony's
 Creative Style or Creative Look, with its values. So are two more
 values, each holding either maker's setting. A
 `DynamicRangeOptimization` holds Nikon's Active D-Lighting or Sony's
@@ -141,12 +138,11 @@ multi-frame one. A `VignettingCorrection` holds Nikon's vignette
 control or Sony's shading compensation, and a `DistortionCorrection`
 Nikon's auto distortion control or Sony's distortion compensation;
 Sony's chromatic aberration compensation is read too. A `Scene` holds
-Nikon's scene mode, as the camera writes it.
+Nikon's scene mode, as the camera writes it, or Sony's Scene Selection.
 
-Each setting of the list will keep its maker's own name and kinds, as
-the picture style does. Where two makers each have a setting for one
-thing, one value will hold either maker's, in the picture style's
-shape. The format notes say what each file records
+Each of these settings keeps its maker's own name and kinds, as the
+picture style does. Where two makers each have a setting for one thing,
+one value holds either maker's, in the picture style's shape. The format notes say what each file records
 ([NEF](formats/nef/makernote-and-metadata.md#811-picture-style-and-processing),
 [ARW](formats/arw/makernote-and-metadata.md#911-picture-style-and-processing),
 [JPEG](formats/jpeg/container-and-metadata.md#4-exif-the-app1-segment)).
