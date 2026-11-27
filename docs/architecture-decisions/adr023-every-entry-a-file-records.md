@@ -255,8 +255,9 @@ Rejected:
   other.
 - **The reach without SR2Private**, or with a JPEG's XMP and IPTC
   segments as bytes. SR2Private holds the plain entries that lead to
-  the SR2SubIFD; the XMP and IPTC segments are not TIFF entries, and
-  full metadata gives them a group of their own.
+  the SR2SubIFD. The XMP and IPTC segments are not TIFF entries, and
+  the record on XMP and IPTC reads them as values of their own
+  ([ADR024](adr024-xmp-and-iptc.md)).
 - **SubIFDs named by their parent and slot**, or a MakerNote variant
   per maker. No measured SubIFD holds another, so a number in walk
   order says as much; the camera already names the maker.
@@ -282,9 +283,12 @@ Rejected:
   that waits for the decision on reading enciphered and encrypted
   blocks, with which [ADR011](adr011-metadata-from-standard-tags.md) is
   revised.
-- Parsing XMP and IPTC, and the JPEG segments that are not TIFF
-  directories (XMP, IPTC, ICC profiles, FlashPix extensions): full
-  metadata's group for XMP and IPTC.
+- Parsing XMP and IPTC. The record on XMP and IPTC reads a file's
+  packet and block as values of their own, not as entries
+  ([ADR024](adr024-xmp-and-iptc.md)).
+- The other JPEG segments that are not TIFF directories, such as ICC
+  profiles and FlashPix extensions: nothing reads them until the format
+  notes describe them.
 - Other makers' MakerNotes, such as Canon's and Fujifilm's: the Exif
   IFD's MakerNote entry gives their bytes, and nothing walks them until
   the format notes describe them.

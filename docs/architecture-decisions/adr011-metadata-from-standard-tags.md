@@ -2,10 +2,10 @@
 
 - Status: Accepted
 - Date: 2026-10-15
-- Revision: 9, 2026-11-24
+- Revision: 10, 2026-11-27
 - Issue: #13; the camera settings #26, revised in #51; authorship and
   location #97; more capture settings #214; picture style and
-  processing #230
+  processing #230; XMP and IPTC #237
 
 ## Context
 
@@ -83,9 +83,17 @@ In short:
 - The authorship texts are plain ASCII on every file counted, and
   cameras fill unset ones with NULs or spaces. A GPS IFD seldom holds a
   position.
+- What a photographer or a program adds, such as a rating, keywords
+  and a title, is in XMP and in IPTC's older IIM block
+  ([ADR024](adr024-xmp-and-iptc.md)). The IPTC Photo Metadata Standard
+  names each value. Wherever Exif and XMP both record
+  the creator, the copyright notice or the description, the two texts
+  are equal. The title is in XMP only.
 - On the Nikon Z and Sony samples measured, the values read here lie
   near the start of the file. Every text and GPS value counted lies
-  inside the blocks that opening a file already reads.
+  inside the blocks that opening a file already reads. So does every
+  XMP packet counted, which follows IFD0 wherever IFD0 lies, at the end
+  of two edited files ([ADR024](adr024-xmp-and-iptc.md)).
 
 ## Decision
 
@@ -488,12 +496,43 @@ nothing standard records a value. Nothing is deciphered or decrypted.
     no default when the reference is missing.
   - The map datum is GPSMapDatum, cleaned as every text.
   - GPSVersionID, GPSStatus and the other GPS tags are not read.
-- **As recorded, nothing redacted.** The authorship texts, the owner
-  and the location name people and places. raw-files gives them as the
-  file records them, with no option to hide them, as `CameraFile::entries`
-  does ([ADR023](adr023-every-entry-a-file-records.md)). Tests on
-  public sample files check them by presence and shape only. Tests on
-  my own files print counts only.
+- **What a photographer adds comes from XMP and IIM**, read as the
+  record on XMP and IPTC decides ([ADR024](adr024-xmp-and-iptc.md)):
+  - the rating and the label, `xmp:Rating` and `xmp:Label`;
+  - the 25 Core properties of the IPTC Photo Metadata Standard 2025.1,
+    such as the title, the keywords and the creators, under IPTC's own
+    names.
+
+  IPTC Core is a published list, and files hold part of it, so it is
+  read whole, as a documented list of codes is.
+- **Each source is given apart.** The values from the XMP packet and
+  those from the IIM block are two values of one type, each with the
+  file's own texts. `Metadata::authorship` keeps Exif's seven texts
+  unchanged. Nothing is merged or converted between Exif, XMP and IIM.
+  The documentation states the Metadata Working Group's rule, for a
+  caller that wants one value.
+- **XMP's and IIM's texts are cleaned as every text**, with no 255-byte
+  limit: XMP gives them none, and the cap on any value bounds them. An
+  empty text, list item or language alternative is left out. An IIM
+  text is UTF-8 where its dataset 1:90 declares it. Otherwise its bytes
+  that are not UTF-8 become U+FFFD.
+- **The rating is rejected, unrated, or a number of stars as
+  recorded.** A rating of -1 is rejected, and 0 is unrated. A value
+  above 0 and at most 5 is the stars, kept as stored: `2.5` is 25/10. Any other value is
+  `None`, not clamped into the range. A missing rating is `None`,
+  though XMP says to assume 0.
+- **The date created needs a time to the second.** It is XMP's
+  `photoshop:DateCreated`, or IIM's dataset 2:55 with 2:60, as a
+  `DateTime` with its fraction of a second and its offset where
+  recorded. A truncated date, such as a year alone or a date with no
+  time, is `None`.
+- **As recorded, nothing redacted.** The authorship texts, the owner,
+  the location and the IPTC values name people and places. raw-files
+  gives them as the file records them, with no option to hide them, as
+  `CameraFile::entries` does
+  ([ADR023](adr023-every-entry-a-file-records.md)). Tests on public
+  sample files check them by presence and shape only. Tests on my own
+  files print counts only.
 
 Rejected:
 
@@ -589,6 +628,15 @@ Rejected:
 - **A redaction option.** raw-files gives what the file records. A
   program that hides a name or a place decides what to hide, as with
   `CameraFile::entries`.
+- **The texts of Exif, XMP and IIM reconciled into one getter each**,
+  by the Metadata Working Group's rule, or given both reconciled and
+  apart. A reconciled value hides where it came from. The rule weighs
+  IIM against XMP by an MD5 digest that raw-files would have to check.
+  And a caller reconciles a sidecar with the file in any case.
+- **The rating clamped into its range**, as the Metadata Working Group
+  advises, **or a missing rating read as 0**, as XMP says. A clamped
+  value is not what the file records, and a 0 nobody wrote would read
+  as a choice.
 - **The surface of the altitude named, or signed meters as a
   floating-point value.** Exif 3.0 changed the meaning of 0 and 1, and
   every measured file records 0 under an older GPS version. So a
@@ -821,5 +869,8 @@ Rejected:
   file records one.
 - A placeholder that another body writes is given as a description
   until a measured file shows it and the list gains it.
+- A caller that wants one creator, copyright notice or description
+  reconciles Exif's text with XMP's and IIM's values itself.
+- A truncated date created is `None` until a file shows one.
 - A program that shows these values shows people's names and the
   places they were. raw-files leaves what to show to it.
