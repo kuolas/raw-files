@@ -496,6 +496,27 @@ does. An entry that can break a caller opens with **Breaking:**.
     does.
   - Its `setting_name` is "Scene Selection", and `SceneSelection`
     converts into `Scene` with `From`.
+- `Xmp` holds every property of an XMP packet in XMP Part 1's data
+  model, with a type for each of its parts
+  ([#237](https://github.com/kuolas/raw-files/issues/237)).
+  - A property is an `XmpProperty`: a namespace URI, a local name and
+    an `XmpValue`. The prefix a packet writes is not kept.
+  - An `XmpValue` is one of four `XmpForm`s, with its qualifiers:
+    simple text, a URI, a structure of fields, or an array of an
+    `XmpArrayKind`.
+  - `XmpForm` and `XmpArrayKind` are not `#[non_exhaustive]`: ISO
+    16684-1 fixes both, so a match needs no wildcard arm.
+  - `Xmp` iterates, counts and looks a property up by namespace and
+    name, as `Entries` does. Every value can be built with `with_…`
+    methods, for a caller's tests.
+- The module `namespaces` gives the URIs of seven XMP namespaces, those
+  of the rating, the label, IPTC Core and two qualifiers, so that a
+  lookup says what it looks for
+  ([#237](https://github.com/kuolas/raw-files/issues/237)):
+
+  ```rust
+  xmp.property(namespaces::DC, "subject")
+  ```
 
 ### Changed
 
