@@ -323,6 +323,9 @@ pub(crate) fn read<R: Read + Seek>(src: &mut Source<R>, tree: &Tree) -> Result<S
             Some(gps) => location(src, gps)?,
             None => None,
         },
+        // The packet is read by the format: a NEF's or ARW's from IFD0,
+        // a JPEG's from its segment, never from the Exif segment's tree.
+        xmp: None,
         capture_time,
         digitized_time,
         orientation: tiff_previews::orientation(tree),

@@ -40,6 +40,7 @@
 //! | The software that wrote the file | [`Metadata::software`] | text |
 //! | Who made the picture, and what they wrote about it | [`Metadata::authorship`] | [`Authorship`] |
 //! | Where the picture was taken | [`Metadata::location`] | [`Location`] |
+//! | The XMP packet the file embeds | [`Metadata::xmp`] | [`Xmp`] |
 //! | When it was taken | [`Metadata::capture_time`] | [`DateTime`] |
 //! | When it was stored as digital data | [`Metadata::digitized_time`] | [`DateTime`] |
 //! | How to turn it upright | [`Metadata::orientation`] | [`Orientation`] |
@@ -56,7 +57,8 @@
 //! # XMP sidecars
 //!
 //! An editor writes ratings, keywords and descriptions to an XMP sidecar,
-//! a file beside the picture. [`Xmp::open`] reads one by its path,
+//! a file beside the picture, or to the packet inside the file, which
+//! [`Metadata::xmp`] gives. [`Xmp::open`] reads a sidecar by its path,
 //! [`Xmp::from_bytes`] from memory and [`Xmp::from_reader`] from any
 //! reader. raw-files never looks for a sidecar: the caller names it, and
 //! [`Xmp::open`] shows the two names tools give one. An [`Xmp`] holds

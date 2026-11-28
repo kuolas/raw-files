@@ -42,20 +42,22 @@ mod tiff_metadata;
 mod tiff_previews;
 
 use std::io::{Read, Seek};
+use std::ops::Range;
 
 use makernote::{Picture, Reader, points};
 
 use crate::container::Structure;
 use crate::container::jpeg::Segments;
-use crate::container::tiff::tags::{DNG_VERSION, MAKE};
-use crate::container::tiff::{Ifd, Tree};
+use crate::container::tiff::tags::{DNG_VERSION, MAKE, XMP};
+use crate::container::tiff::{Entry as TiffEntry, Ifd, Tree};
 use crate::entries::{Directory, Entries, Lookup};
-use crate::error::{Error, Result};
+use crate::error::{Error, Result, skip_damage};
 use crate::format::Format;
 use crate::io::Source;
 use crate::limits::Limits;
 use crate::metadata::Metadata;
 use crate::preview::Preview;
+use crate::xmp::Xmp;
 
 /// What a format's reader found in a file: its previews, in the order it
 /// found them, its metadata and the entries of its directories. The file
@@ -127,7 +129,7 @@ const JPEG_UNCLAIMED: &str = "the file is a JPEG file, but holds no frame header
 /// A DNGVersion entry that the IFD parser skipped as damaged is absent from
 /// the tree ([`Ifd::entry`](crate::container::tiff::Ifd::entry)). The file
 /// is then taken for one without it: damage costs only what it touches
-/// ([`skip_damage`](crate::error::skip_damage)).
+/// ([`skip_damage`]).
 pub(super) fn is_dng(tree: &Tree) -> bool {
     tree.ifd0().entry(DNG_VERSION).is_some()
 }
@@ -184,6 +186,11 @@ type PrivateIfd<R> = fn(&mut Source<R>, &Tree, &Limits) -> Result<Lookup<Ifd>>;
 ///   the standard tags. When there is a MakerNote, its reader adds what it
 ///   records and the standard tags lack, for a raw file's picture
 ///   ([`Reader::metadata`], [`Picture::Raw`]).
+/// - **The XMP packet** is IFD0's tag 0x02BC, when its type is BYTE or
+///   UNDEFINED, as XMP Part 3 gives it (Table 13, p. 19), read and parsed
+///   within `limits` ([`embedded_xmp`]). An entry of another type is
+///   damage, and so is a value of four bytes or fewer, held in the entry
+///   itself, too short for a packet: neither gives a packet.
 /// - **The entries** are those of every directory of the tree, then the
 ///   MakerNote's ([`makernote::add_entries_of`]), then those of the
 ///   private directory. A MakerNote IFD or a private directory that cannot
@@ -208,9 +215,13 @@ fn parse_tiff<M: Reader, R: Read + Seek>(
     let standard = tiff_metadata::read(src, tree)?;
     let mut entries = Entries::of_tree(tree);
     makernote::add_entries_of(&makernote, &mut entries);
-    let metadata = match &makernote {
+    let mut metadata = match &makernote {
         Lookup::Found(makernote) => makernote.metadata(src, standard, Picture::Raw)?,
         Lookup::Skipped(_) | Lookup::Absent => standard.metadata,
+    };
+    metadata.xmp = match tree.ifd0().entry(XMP).and_then(TiffEntry::byte_range) {
+        Some(packet) => embedded_xmp(src, packet, limits)?,
+        None => None,
     };
     match &private {
         Lookup::Found(private) => {
@@ -224,6 +235,38 @@ fn parse_tiff<M: Reader, R: Read + Seek>(
         metadata,
         entries,
     })
+}
+
+/// The XMP packet a file embeds in the bytes at `packet`: IFD0's tag
+/// 0x02BC in a NEF or ARW file, the APP1 XMP segment's packet in a JPEG
+/// file. `None` when the bytes are damage:
+///
+/// - when they are longer than `limits`' cap on one value
+///   ([`Limits::max_value_bytes`]), before anything is read;
+/// - when they do not parse as an XMP packet within `limits`
+///   ([`Xmp::read`]), whose error says why.
+///
+/// The packet is read whenever the file is opened, wherever it lies
+/// (ADR024). The bytes are read once ([`Source::bytes_once`]). A packet
+/// among the directories the reader walked costs no read, as every
+/// measured packet lies there. One anywhere else costs one read.
+///
+/// # Errors
+///
+/// `Io` when the reader fails.
+fn embedded_xmp<R: Read + Seek>(
+    src: &mut Source<R>,
+    packet: Range<u64>,
+    limits: &Limits,
+) -> Result<Option<Xmp>> {
+    let len = packet.end.saturating_sub(packet.start);
+    if len > limits.max_value_bytes() {
+        return Ok(None);
+    }
+    let Some(bytes) = skip_damage(src.bytes_once(packet.start, len))? else {
+        return Ok(None);
+    };
+    skip_damage(Xmp::read(&bytes, limits))
 }
 
 /// Detects the format of the file in `src`, whose container read the
@@ -349,6 +392,7 @@ mod tests {
     use crate::jpeg_stub::jpeg_stub;
     use crate::orientation::Orientation;
     use crate::preview::PreviewFormat;
+    use crate::testing::{FAR, FailsFar};
     use crate::tiff_builder::{ASCII, IfdId, Order, RawValue, TiffBuilder};
     use std::cell::RefCell;
     use std::io::{Cursor, SeekFrom};
@@ -962,5 +1006,46 @@ mod tests {
             Some("ILCE-7M2")
         );
         assert!(parsed.entries.directories().contains(&Directory::MakerNote));
+    }
+
+    /// A packet of one property, a rating of 3.
+    const PACKET: &[u8] = b"<x:xmpmeta xmlns:x=\"adobe:ns:meta/\">\
+        <rdf:RDF xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\">\
+        <rdf:Description xmlns:xmp=\"http://ns.adobe.com/xap/1.0/\" xmp:Rating=\"3\"/>\
+        </rdf:RDF></x:xmpmeta>";
+
+    #[test]
+    fn an_embedded_packet_is_read_within_the_file_and_the_cap() {
+        // Ten bytes, then the packet, then ten more.
+        let mut bytes = vec![b'-'; 10];
+        bytes.extend_from_slice(PACKET);
+        bytes.extend_from_slice(&[b'-'; 10]);
+        let mut src = Source::new(Cursor::new(bytes)).unwrap();
+        let len = u64::try_from(PACKET.len()).unwrap();
+        let packet = 10..10 + len;
+        let rating = Xmp::default().with_property(crate::namespaces::XMP, "Rating", "3");
+        let read = |src: &mut Src, range: Range<u64>, cap: u64| {
+            let limits = Limits::default().with_max_value_bytes(cap);
+            embedded_xmp(src, range, &limits).expect("damage is no error")
+        };
+        assert_eq!(read(&mut src, packet.clone(), len), Some(rating));
+        // One byte over the cap; running past the end of the file, which
+        // no caller passes but which costs only the packet; and bytes that
+        // are not the whole packet.
+        assert_eq!(read(&mut src, packet.clone(), len - 1), None);
+        assert_eq!(read(&mut src, 10..10 + len + 11, u64::MAX), None);
+        assert_eq!(read(&mut src, 10..10 + len - 1, len), None);
+    }
+
+    #[test]
+    fn a_failing_reader_while_reading_an_embedded_packet_is_an_io_error() {
+        // The packet past the first cached block, where the reader fails.
+        let mut bytes = vec![0; usize::try_from(FAR).unwrap()];
+        bytes.extend_from_slice(PACKET);
+        let len = u64::try_from(bytes.len()).unwrap();
+        let mut src = Source::new(FailsFar(Cursor::new(bytes))).unwrap();
+        let packet = FAR..len;
+        let err = embedded_xmp(&mut src, packet, &Limits::default()).expect_err("the reader fails");
+        assert_eq!(err.kind(), ErrorKind::Io, "{err:?}");
     }
 }

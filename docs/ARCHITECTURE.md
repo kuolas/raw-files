@@ -62,7 +62,7 @@ adds a row.
 
 | File | Holds | May depend on |
 |---|---|---|
-| `src/formats/mod.rs` | The format table, one list per container; detection, where the first format that claims a file reads it into a `Parsed`; and `parse_tiff`, the steps every TIFF-based format takes. | `container`, `io`, `format`, `preview`, `metadata`, `entries`, `limits`, `error`, `makernote/mod.rs` (for `Reader`, `Picture` and `add_entries_of`), `makernote/points/`, `tiff_metadata`, `tiff_previews` |
+| `src/formats/mod.rs` | The format table, one list per container; detection, where the first format that claims a file reads it into a `Parsed`; `parse_tiff`, the steps every TIFF-based format takes; and the read of the XMP packet a file embeds. | `container`, `io`, `format`, `preview`, `metadata`, `entries`, `limits`, `error`, `xmp`, `makernote/mod.rs` (for `Reader`, `Picture` and `add_entries_of`), `makernote/points/`, `tiff_metadata`, `tiff_previews` |
 | `src/formats/tiff_previews.rs` | The preview finder the TIFF-based formats and the JPEG format share: which IFDs hold JPEG previews, each checked and measured from its own frame header. | `container`, `io`, `preview`, `orientation`, `error`, `geometry`, `limits` |
 | `src/formats/tiff_metadata.rs` | The metadata reader the TIFF-based formats and the JPEG reader share: it reads what the standard TIFF, Exif and GPS tags record. | `container`, `io`, `metadata`, `authorship`, `location`, `camera`, `camera_settings`, `datetime`, `geometry`, `rational`, `entries` (for `clean_text`), `error`, `tiff_previews` (for `orientation` and `is_raw`) |
 | `src/formats/makernote/mod.rs` | The MakerNote readers, one per maker, shared by every format whose files carry a MakerNote: the trait each implements (`Reader`), `Picture`, and the block and color temperature bound they share. | `container`, `io`, `limits`, `error`, `entries`, `metadata`, `tiff_metadata` (for `Standard`), `tiff_previews` (for `Candidate`) |
@@ -87,7 +87,7 @@ adds a row.
 
 | File | Holds | May depend on |
 |---|---|---|
-| `src/io.rs` | `Source`, the one checked reader, with bounded reads and a block cache, and `within`, the same check on a range of a reader's own. | `error` |
+| `src/io.rs` | `Source`, the one checked reader, with bounded reads, a block cache and a read served from it when it can be, and `within`, the same check on a range of a reader's own. | `error` |
 | `src/container/mod.rs` | The containers, file structures that several formats share, and `Structure`, a file's structure as the container its first bytes name reads it. | `io`, `error`, `limits`, `container/jpeg`, `container/tiff` |
 | `src/container/tiff/mod.rs` | The TIFF container's face to the crate: the re-exports of what the format modules use. | — |
 | `src/container/tiff/block.rs` | `Block`: the base a TIFF structure's offsets count from and the bounds it may use, with the one conversion of an offset to a position. | `io` |
@@ -118,7 +118,7 @@ adds a row.
 | `src/camera.rs` | `Camera` and `Make`: the camera body a picture was taken with, as the file names it, every value optional, built through `with_…` methods; and raw-files' table of bodies, with each one's name and, for some, its sensor format and whether it offers raw sizes. | `camera_settings` (for `ImageArea`) |
 | `src/camera_settings.rs` | `CameraSettings`, `WhiteBalance`, `WhiteBalanceFineTune`, `Flash`, `AfFineTune`, `Stabilization`, `Hdr`, `AutoHdr` and the setting enums: how the camera was set for a picture, every value optional. | `rational` |
 | `src/focus.rs` | `Focus`, `FocusPoints`, `FocusLayout` and `PlacedFocusLayout`, with their parts: where the camera's autofocus aimed, the points it used and the body's layout of points, in the table's frame and placed on the picture. | `geometry`, `value_error` |
-| `src/metadata.rs` | `Metadata`, `Exposure` and `Lens`: what the camera recorded about a picture, every value optional, each built without a file through `with_…` methods. | `authorship`, `camera`, `camera_settings`, `datetime`, `focus`, `geometry`, `location`, `orientation`, `rational` |
+| `src/metadata.rs` | `Metadata`, `Exposure` and `Lens`: what the camera recorded about a picture, every value optional, each built without a file through `with_…` methods. | `authorship`, `camera`, `camera_settings`, `datetime`, `focus`, `geometry`, `location`, `orientation`, `rational`, `xmp` |
 | `src/preview.rs` | `Preview` and `PreviewFormat`: one preview in a file, with its byte range, size, format and orientation, and the choice among previews by size. | `geometry`, `orientation` |
 | `src/entries.rs` | `Directory`, `Entry`, `Value` and `Entries`: the raw view, every entry of every TIFF directory a file holds, as recorded, with its value decoded on request, and each directory left out as a `SkippedDirectory`. | `container`, `io`, `error`, `rational` |
 | `src/entries/display.rs` | `ValueDisplay`: the short form of a `Value` that `Value::display` gives, cut after a few values. | `entries` |
@@ -151,6 +151,7 @@ adds a row.
 | `tests/jpeg_stub.rs` | Tests only: the stub JPEG, checked from outside the crate. | `tests/support` |
 | `tests/jpeg_builder.rs` | Tests only: the JPEG file builder, checked from outside the crate: its layout, the positions it reports and the MPF index it writes. | `tests/support` |
 | `tests/open.rs` | Tests only: opening files through the public API: detection, limits, errors, `Send`, and authorship, camera and location built by hand against what opening reads. | `tests/support` |
+| `tests/embedded_xmp.rs` | Tests only: the XMP packet a NEF or ARW file embeds, through the public API: where each holds it, what gives none, and how many reads it costs. | `tests/support` |
 | `tests/nef.rs` | Tests only: the NEF reader from outside the crate, on files built in code, the committed files of `tests/fixtures/` and the downloaded samples. | `tests/support`, `tests/fixtures`, the downloaded samples |
 | `tests/arw.rs` | Tests only: the ARW reader from outside the crate, on each Sony layout built in code and on the downloaded Sony samples. | `tests/support`, the downloaded samples |
 | `tests/jpeg.rs` | Tests only: the JPEG reader from outside the crate, on files built in code, on the committed JPEGs of `tests/fixtures/` and on the downloaded samples. | `tests/support`, `tests/fixtures`, the downloaded samples |

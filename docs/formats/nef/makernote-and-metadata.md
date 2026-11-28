@@ -3138,8 +3138,9 @@ By the rule of section 4, on these files: **[F]**
   decision allows decrypting them (ADR016).
 - **The XMP packet** (IFD0 0x02BC, on 227 public files, the clone's 204
   and 23 fixtures, and 10,876 of mine) and **the ICC profile** (0x8773, 2 public files): their bytes
-  only. raw-files will read the packet as the
-  [XMP and IPTC notes](../xmp-and-iptc.md) describe it. No NEF has an
+  only. raw-files reads the packet apart from the view, into
+  `Metadata::xmp`, as the [XMP and IPTC notes](../xmp-and-iptc.md)
+  describe it. No NEF has an
   IPTC (0x83BB) or Photoshop (0x8649) entry. **[F]**
 - **Capture NX's edit records** (0x0E01): their bytes only.
 - **Scanner NEFs** of the COOLSCAN, which open as NEF; their directories
