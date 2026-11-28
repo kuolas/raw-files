@@ -267,8 +267,15 @@ pub fn xmp(data: &[u8]) {
     let Ok(xmp) = Xmp::from_bytes(data) else {
         return;
     };
+    read_xmp(&xmp);
+}
+
+/// Asks `xmp` for everything it gives, as [`xmp`] describes: each property
+/// looked up by its own name, every value at every depth through each
+/// getter, then a clone, a comparison and the `Debug` form.
+fn read_xmp(xmp: &Xmp) {
     let _ = (xmp.toolkit(), xmp.about(), xmp.len(), xmp.is_empty());
-    for property in &xmp {
+    for property in xmp {
         // The first of a name is the one a lookup finds, and the reader
         // keeps no repeat.
         let found = xmp.property(property.namespace(), property.name());
@@ -300,7 +307,7 @@ pub fn xmp(data: &[u8]) {
         values.extend(value.qualifiers().iter().map(XmpProperty::value));
     }
     let copy = xmp.clone();
-    assert_eq!(copy, xmp);
+    assert_eq!(&copy, xmp);
     let _ = format!("{xmp:?}");
 }
 
@@ -382,7 +389,8 @@ fn read_time(time: &DateTime) {
 /// too, not only the reading. The focus point and the focus points are
 /// read, then placed on a frame of 1 by 1 pixel and read again, since a
 /// tiny frame is where their rounding and trimming do the most; the layout
-/// of the body's points is read as it is. A `Debug` form of the whole
+/// of the body's points is read as it is. The XMP packet is walked as the
+/// `xmp` target walks one ([`read_xmp`]). A `Debug` form of the whole
 /// covers whatever a later value adds.
 fn read_metadata(metadata: &Metadata) {
     let camera = metadata.camera();
@@ -405,6 +413,9 @@ fn read_metadata(metadata: &Metadata) {
     );
     if let Some(location) = metadata.location() {
         read_location(location);
+    }
+    if let Some(xmp) = metadata.xmp() {
+        read_xmp(xmp);
     }
     for time in [metadata.capture_time(), metadata.digitized_time()]
         .into_iter()

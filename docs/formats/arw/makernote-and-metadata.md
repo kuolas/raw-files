@@ -2749,7 +2749,8 @@ Every one of my 500 files has each of them but 0x9416 and 0x900B.
   MRW block, which no entry holds, nothing.
 - **The XMP packet** (IFD0 0x02BC, on 152 public files, the clone's 130
   and 22 fixtures, and none of mine) and **an IPTC entry** (0x83BB, one public file): their bytes
-  only. raw-files will read both as the
+  only. raw-files reads the packet apart from the view, into
+  `Metadata::xmp`, and will read the IPTC entry, as the
   [XMP and IPTC notes](../xmp-and-iptc.md) describe them. **[F]**
 - **The content of the enciphered records**: their bytes only, until a
   decision allows deciphering them (ADR016).

@@ -115,11 +115,12 @@ Linux and Windows alike.
   read when asked for, and has a short form to print.
   [`CameraFile::entries`](https://docs.rs/raw-files/latest/raw_files/struct.CameraFile.html#method.entries)
   lists the directories.
-- **XMP sidecars.** The XMP file an editor writes beside a picture, read
-  by its path, its bytes or a reader. raw-files gives every property it
-  holds, with its structures, arrays and qualifiers, each named by its
-  namespace and local name. raw-files never looks for a sidecar itself:
-  the caller names it, and
+- **XMP.** The XMP packet a NEF or ARW file embeds, read when the file
+  is opened. And the XMP file an editor writes beside a picture, read by
+  its path, its bytes or a reader. raw-files gives every property a
+  packet holds, with its structures, arrays and qualifiers, each named by
+  its namespace and local name. raw-files never looks for a sidecar
+  itself: the caller names it, and
   [`Xmp::open`](https://docs.rs/raw-files/latest/raw_files/struct.Xmp.html#method.open)
   shows how under either name tools give it.
 - **Not yet.** Decoding the raw sensor data. The

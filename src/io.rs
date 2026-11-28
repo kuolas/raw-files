@@ -168,6 +168,44 @@ impl<R: Read + Seek> Source<R> {
         Ok(buf)
     }
 
+    /// Returns the `len` bytes at `offset`, read at most once: from the
+    /// block cache when every block they span is there already, else
+    /// straight from the reader, as [`read_into`](Self::read_into) does.
+    ///
+    /// This is the read for a value that may be long and may lie among
+    /// the directories the reader walked, such as an XMP packet. When the
+    /// walk already loaded its blocks, it costs no read. Otherwise it costs
+    /// one, and leaves the cache as it was. Capping `len` by `Limits` is
+    /// the caller's job.
+    ///
+    /// # Errors
+    ///
+    /// As for [`read_into`](Self::read_into).
+    pub(crate) fn bytes_once(&mut self, offset: u64, len: u64) -> Result<Vec<u8>> {
+        self.check(offset, len)?;
+        let mut buf = Vec::new();
+        let end = offset.saturating_add(len);
+        let mut start = offset - offset % BLOCK_SIZE;
+        let mut cached = true;
+        while start < end {
+            if !self.cache.holds(start) {
+                cached = false;
+                break;
+            }
+            start = start.saturating_add(BLOCK_SIZE);
+        }
+        if cached {
+            // Every block is cached, so the read loads none. They hold at
+            // most `BLOCKS` times `BLOCK_SIZE` bytes, a bound set here and
+            // not by the file.
+            buf.resize(to_usize(len, offset)?, 0);
+            self.read_cached(offset, &mut buf)?;
+        } else {
+            self.read_into(offset, len, &mut buf)?;
+        }
+        Ok(buf)
+    }
+
     /// Returns the byte at `offset`, through the block cache.
     ///
     /// # Errors
@@ -289,6 +327,12 @@ impl BlockCache {
             blocks: Vec::with_capacity(BLOCKS),
             clock: 0,
         }
+    }
+
+    /// Whether the block that starts at `start` is cached. It does not count
+    /// as a use of the block.
+    fn holds(&self, start: u64) -> bool {
+        self.blocks.iter().any(|block| block.start == start)
     }
 
     /// Returns the data of the block that starts at `start`, loading it with
@@ -830,6 +874,46 @@ mod tests {
         assert_eq!(counters.bytes(), 65_536, "a small read loads its block");
         source.u8_at(10).unwrap();
         assert_eq!(counters.reads(), 1, "and the block is cached");
+    }
+
+    #[test]
+    fn a_read_once_inside_cached_blocks_costs_no_read() {
+        let (mut source, counters) = counting();
+        let data = data();
+        // Blocks 1 and 2 cached, then 40 KiB across their boundary, and
+        // the whole of both.
+        source.u8_at(BLOCK_SIZE).unwrap();
+        source.u8_at(2 * BLOCK_SIZE).unwrap();
+        let reads = counters.reads();
+        let across = 2 * BLOCK_SIZE - 20 * 1024;
+        let bytes = source.bytes_once(across, 40 * 1024).unwrap();
+        assert_eq!(bytes, at(&data, across, 40 * 1024));
+        let whole = source.bytes_once(BLOCK_SIZE, 2 * BLOCK_SIZE).unwrap();
+        assert_eq!(whole, at(&data, BLOCK_SIZE, 128 * 1024));
+        // Nothing, at the end of a cached block and at the end of the file.
+        assert_eq!(source.bytes_once(3 * BLOCK_SIZE, 0).unwrap(), []);
+        assert_eq!(source.bytes_once(FILE_LEN_U64, 0).unwrap(), []);
+        assert_eq!(counters.reads(), reads, "served from the cache");
+    }
+
+    #[test]
+    fn a_read_once_outside_cached_blocks_costs_one_read() {
+        let (mut source, counters) = counting();
+        let data = data();
+        // Block 1 cached, then 40 KiB across into block 2, which is not:
+        // one read of exactly those bytes, which loads no block.
+        source.u8_at(BLOCK_SIZE).unwrap();
+        let (reads, bytes) = (counters.reads(), counters.bytes());
+        let across = 2 * BLOCK_SIZE - 20 * 1024;
+        let read = source.bytes_once(across, 40 * 1024).unwrap();
+        assert_eq!(read, at(&data, across, 40 * 1024));
+        assert_eq!(counters.reads(), reads + 1, "in one read");
+        assert_eq!(counters.bytes() - bytes, 40 * 1024, "of the bytes alone");
+        source.u8_at(2 * BLOCK_SIZE).unwrap();
+        assert_eq!(counters.reads(), reads + 2, "block 2 was not loaded");
+        // Past the end of the file, as any read.
+        assert_malformed_at(source.bytes_once(FILE_LEN_U64 - 10, 11), FILE_LEN_U64 - 10);
+        assert_malformed_at(source.bytes_once(u64::MAX, 2), u64::MAX);
     }
 
     #[test]

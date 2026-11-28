@@ -157,6 +157,13 @@ pub(crate) const JPEG_INTERCHANGE_FORMAT: u16 = crate::tags::tiff::JPEG_INTERCHA
 pub(crate) const JPEG_INTERCHANGE_FORMAT_LENGTH: u16 =
     crate::tags::tiff::JPEG_INTERCHANGE_FORMAT_LENGTH;
 
+/// The XMP packet a TIFF file embeds, read from IFD0: XMP Part 3's "XMP
+/// metadata tag", of type UNDEFINED or BYTE, its value the packet's bytes
+/// in UTF-8 (Table 13, p. 19). [`crate::tags`] has no constant for it, as
+/// none of the documents its names come from names it, so the number is
+/// written here.
+pub(crate) const XMP: u16 = 0x02BC;
+
 /// The copyright notice of whoever holds the rights to the picture, as
 /// text (Copyright), read from IFD0.
 pub(crate) const COPYRIGHT: u16 = crate::tags::tiff::COPYRIGHT;

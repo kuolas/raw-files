@@ -7,11 +7,13 @@ Two standards hold these values. XMP is XML, inside the file or in a
 sidecar file beside it. IIM, the IPTC's Information Interchange Model,
 is an older binary block. This page records where NEF, ARW and camera
 JPEG files hold each, and what they hold. raw-files reads an XMP
-sidecar, and will read the packet and the block inside a file, as
+sidecar and the packet a NEF or ARW file embeds. It will read a JPEG's
+packet and the block inside a file, as
 [ADR024](../architecture-decisions/adr024-xmp-and-iptc.md) decides.
 Its readers are written from this page and from the standards it cites
 ([ADR013](../architecture-decisions/adr013-clean-room-and-third-party-code.md)).
-The XML reader and the XMP data model are, and the others will be.
+The XML reader, the XMP data model and the read of a raw file's packet
+are, and the others will be.
 
 Where this page says *my own* files, it is me, Alvaro Kuolas, who
 maintains raw-files, writing about my own cameras' files. They stay
@@ -484,11 +486,13 @@ unless the digest shows the IIM block changed [P][6] (§4.2.3.1 and
 [ADR024](../architecture-decisions/adr024-xmp-and-iptc.md) decides how;
 in short, on these files:
 
-- **The packet** will be read when the file is opened. It is IFD0's
-  0x02BC in a NEF or ARW file, and the first APP1 XMP segment in a JPEG
-  file. `open`
-  will find it by following IFD0, as it finds the other entries, so a
-  packet lies inside what it reads on every measured file.
+- **The packet** is read when the file is opened, into
+  `Metadata::xmp`. It is IFD0's 0x02BC in a NEF or ARW file, of type
+  BYTE or UNDEFINED; another type gives none. `open` finds it by
+  following IFD0, as it finds the other entries. A packet among what it
+  read costs no further read, and every measured packet lies there. One
+  anywhere else costs one read, up to the cap on one value. In a JPEG
+  file, the packet will be the first APP1 XMP segment.
 - **The IIM block** will be read from IFD0's 0x83BB, else from resource
   1028 of 0x8649. In a JPEG file, it will be the first resource 1028 of
   the `Photoshop 3.0` segments, joined in file order.
@@ -499,8 +503,9 @@ in short, on these files:
   XMP and from IIM each apart.
 - **The first copy stands** for a repeated property, and will stand for
   a segment, a resource and a dataset.
-- **The 110 phone packets** will cost only themselves: the file opens,
-  with no packet.
+- **A packet that does not parse** costs only itself: the file opens,
+  with no packet. The 110 phone packets, all in JPEG files, will be
+  such packets.
 
 ## 13. Named gaps
 

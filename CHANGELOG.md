@@ -561,6 +561,19 @@ does. An entry that can break a caller opens with **Breaking:**.
     `Options::xmp_from_reader` read under other limits.
   - raw-files never looks for a sidecar: the caller names it.
     `Xmp::open`'s docs show both names tools give one.
+- `Metadata::xmp` gives the XMP packet a NEF or ARW file embeds, read
+  and parsed when the file is opened
+  ([#237](https://github.com/kuolas/raw-files/issues/237)).
+  `Metadata::with_xmp` sets it.
+  - The packet is IFD0's tag 0x02BC, of type BYTE or UNDEFINED, as XMP
+    Part 3 gives it. Another type gives none.
+  - It is read wherever it lies. One among the directories `open` walks
+    costs no read, and every measured packet lies there; one elsewhere
+    costs one read.
+  - A packet over `Limits::max_value_bytes`, or one that does not parse,
+    gives none, and the file opens. Its bytes stay readable from IFD0's
+    entry.
+  - It is given apart from the Exif texts of `Metadata::authorship`.
 
 ### Changed
 

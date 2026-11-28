@@ -38,6 +38,7 @@ use crate::geometry::Size;
 use crate::location::Location;
 use crate::orientation::Orientation;
 use crate::rational::{Rational, SignedRational};
+use crate::xmp::Xmp;
 
 /// What the camera recorded about a picture.
 /// [`CameraFile::metadata`](crate::CameraFile::metadata) gives it, read when
@@ -153,6 +154,7 @@ pub struct Metadata {
     pub(crate) software: Option<String>,
     pub(crate) authorship: Authorship,
     pub(crate) location: Option<Location>,
+    pub(crate) xmp: Option<Xmp>,
     pub(crate) capture_time: Option<DateTime>,
     pub(crate) digitized_time: Option<DateTime>,
     pub(crate) orientation: Orientation,
@@ -275,6 +277,54 @@ impl Metadata {
     /// ```
     pub fn location(&self) -> Option<&Location> {
         self.location.as_ref()
+    }
+
+    /// The XMP packet the file embeds (see [`Xmp`]): every property it
+    /// holds, as a sidecar gives them. A camera writes a packet into its
+    /// raw files, and an editor writes the rating, the label and its own
+    /// settings there.
+    ///
+    /// A NEF or ARW file holds its packet in IFD0's tag 0x02BC, of type
+    /// BYTE or UNDEFINED (XMP Part 3, Table 13). It is read and parsed when
+    /// the file is opened, wherever it lies. It is `None`:
+    ///
+    /// - when the file holds no packet;
+    /// - when IFD0's 0x02BC is of another type, or so short that it is held
+    ///   in the entry itself;
+    /// - when the packet is longer than the cap on one value
+    ///   ([`Limits::max_value_bytes`](crate::Limits::max_value_bytes));
+    /// - when it does not parse, as [`Xmp::from_bytes`] would refuse it.
+    ///   Such a packet stays reachable as the bytes of IFD0's 0x02BC, from
+    ///   [`CameraFile::entries`](crate::CameraFile::entries).
+    ///
+    /// The packet is given apart from the texts the Exif tags record, which
+    /// [`authorship`](Self::authorship) gives. Nothing is merged, even where
+    /// both record the same thing, such as the copyright notice. The
+    /// Metadata Working Group's guidelines say which to prefer: the Exif
+    /// text, unless a program changed one and not the other.
+    ///
+    /// Or the packet given to [`with_xmp`](Self::with_xmp).
+    ///
+    /// # Examples
+    ///
+    /// The rating an editor gave a picture, as written in the packet:
+    ///
+    /// ```no_run
+    /// use raw_files::{CameraFile, XmpValue, namespaces};
+    ///
+    /// # fn main() -> raw_files::Result<()> {
+    /// let file = CameraFile::open("photo.nef")?;
+    /// let rating = file
+    ///     .metadata()
+    ///     .xmp()
+    ///     .and_then(|xmp| xmp.property(namespaces::XMP, "Rating"))
+    ///     .and_then(XmpValue::text);
+    /// println!("rating: {}", rating.unwrap_or("none"));
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn xmp(&self) -> Option<&Xmp> {
+        self.xmp.as_ref()
     }
 
     /// When the picture was taken, as the camera's clock showed it: the
@@ -730,6 +780,14 @@ impl Metadata {
     #[must_use]
     pub fn with_location(mut self, location: Location) -> Self {
         self.location = Some(location);
+        self
+    }
+
+    /// Sets the XMP packet the file embeds, in place of any packet set
+    /// before; [`xmp`](Self::xmp) reads it.
+    #[must_use]
+    pub fn with_xmp(mut self, xmp: Xmp) -> Self {
+        self.xmp = Some(xmp);
         self
     }
 
@@ -1631,6 +1689,7 @@ mod tests {
             software: Some("Ver.01.00".to_owned()),
             authorship: z9_authorship(),
             location: Some(z9_location()),
+            xmp: Some(z9_xmp()),
             capture_time: DateTime::from_exif(b"2024:05:01 10:20:30", Some(b"85"), Some(b"+02:00")),
             digitized_time: DateTime::from_exif(
                 b"2024:05:01 10:20:31",
@@ -1653,6 +1712,14 @@ mod tests {
             focus_layout: None,
             placed_focus_layout: None,
         }
+    }
+
+    /// The XMP packet of a Z 9 picture: its creator tool and a rating of
+    /// 0, as the camera writes them.
+    fn z9_xmp() -> Xmp {
+        Xmp::default()
+            .with_property(crate::namespaces::XMP, "CreatorTool", "NIKON Z 9 Ver.01.00")
+            .with_property(crate::namespaces::XMP, "Rating", "0")
     }
 
     /// Two points of the Nikon D600's layout, as the record of my
@@ -1709,6 +1776,7 @@ mod tests {
         assert_eq!(metadata.software(), None);
         assert_eq!(metadata.authorship(), &Authorship::default());
         assert_eq!(metadata.location(), None);
+        assert_eq!(metadata.xmp(), None);
         assert_eq!(metadata.capture_time(), None);
         assert_eq!(metadata.digitized_time(), None);
         assert_eq!(metadata.orientation(), Orientation::NoTransforms);
@@ -1730,6 +1798,7 @@ mod tests {
         assert_eq!(metadata.software(), Some("Ver.01.00"));
         assert_eq!(metadata.authorship(), &z9_authorship());
         assert_eq!(metadata.location(), Some(&z9_location()));
+        assert_eq!(metadata.xmp(), Some(&z9_xmp()));
         let time = metadata.capture_time().unwrap();
         assert_eq!(time.to_string(), "2024-05-01T10:20:30.85+02:00");
         let digitized = metadata.digitized_time().unwrap();
@@ -2013,6 +2082,7 @@ mod tests {
             Latitude::south(fraction(33, 1), fraction(51, 1), fraction(31_000, 1000)).unwrap(),
             Longitude::east(fraction(151, 1), fraction(12, 1), fraction(55_000, 1000)).unwrap(),
         );
+        let xmp = Xmp::default().with_property(crate::namespaces::XMP, "Label", "Red");
         // From the empty metadata, and from a full one whose every value
         // differs from the one set, so that a builder writing another
         // value, or clearing one, is caught: the Z 9's, which has no
@@ -2050,6 +2120,13 @@ mod tests {
                     start.clone().with_location(location.clone()),
                     Metadata {
                         location: Some(location.clone()),
+                        ..start.clone()
+                    },
+                ),
+                (
+                    start.clone().with_xmp(xmp.clone()),
+                    Metadata {
+                        xmp: Some(xmp.clone()),
                         ..start.clone()
                     },
                 ),
@@ -2137,7 +2214,7 @@ mod tests {
         }
     }
 
-    /// [`z9_metadata`] built through thirteen of its fifteen builders, all but
+    /// [`z9_metadata`] built through fourteen of its sixteen builders, all but
     /// [`Metadata::with_focus_points`], whose list `with_focus` makes, and
     /// [`Metadata::with_focus_layout`], since a Z 9 has no layout.
     fn z9_metadata_built() -> Metadata {
@@ -2147,6 +2224,7 @@ mod tests {
             .with_software("Ver.01.00")
             .with_authorship(z9_authorship_built())
             .with_location(z9_location())
+            .with_xmp(z9_xmp())
             .with_capture_time(
                 DateTime::from_exif(b"2024:05:01 10:20:30", Some(b"85"), Some(b"+02:00")).unwrap(),
             )
@@ -2193,7 +2271,7 @@ mod tests {
         assert_eq!(z9_exposure_built(), z9_exposure());
         assert_eq!(z9_authorship_built(), z9_authorship());
         assert_eq!(z9_metadata_built(), z9_metadata());
-        // The fourteenth builder at the end of the chain.
+        // The fifteenth builder at the end of the chain.
         assert_eq!(
             z9_metadata_built().with_focus_layout(d600_layout()),
             Metadata {
@@ -2242,6 +2320,7 @@ mod tests {
                 Latitude::north(fraction(1, 1), fraction(1, 1), fraction(1, 1)).unwrap(),
                 Longitude::west(fraction(1, 1), fraction(1, 1), fraction(1, 1)).unwrap(),
             ))
+            .with_xmp(Xmp::default().with_property(crate::namespaces::XMP, "Rating", "1"))
             .with_capture_time(DateTime::new(2000, 1, 1, 0, 0, 0).unwrap())
             .with_digitized_time(DateTime::new(2000, 1, 1, 0, 0, 1).unwrap())
             .with_orientation(Orientation::Rotate180)
@@ -2266,6 +2345,7 @@ mod tests {
             .with_software("Ver.01.00")
             .with_authorship(z9.authorship.clone())
             .with_location(z9.location.clone().unwrap())
+            .with_xmp(z9.xmp.clone().unwrap())
             .with_capture_time(z9.capture_time.unwrap())
             .with_digitized_time(z9.digitized_time.unwrap())
             .with_orientation(z9.orientation)
