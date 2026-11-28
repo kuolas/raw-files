@@ -50,3 +50,10 @@ path = "fuzz_targets/open.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "xmp"
+path = "fuzz_targets/xmp.rs"
+test = false
+doc = false
+bench = false

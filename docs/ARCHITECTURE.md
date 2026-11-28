@@ -143,6 +143,7 @@ adds a row.
 | `tests/support/nef.rs` | For the integration tests: files laid out like the NEF files of a Z 9, D300, Z6III and D1H, and the Nikon MakerNote builder. | `tests/support/tiff_builder.rs`, `tests/support/jpeg_stub.rs` |
 | `tests/support/arw.rs` | For the integration tests: files laid out like each generation of Sony's RAW family, ARW 4 to the A100's ARW 1.0, with stub JPEGs. | `tests/support/tiff_builder.rs`, `tests/support/jpeg_stub.rs` |
 | `tests/support/samples.rs` | For the integration tests: where the downloaded samples of `tests/samples.tsv` are found, the types of the tables of expected values, the checks against them for a sample or a committed fixture, and the check that a format's tables name the files the list names. | the library, `tests/support/fixtures.rs` |
+| `tests/support/xmp_packets.rs` | XMP packets built in code: one of each form of value, one of the XML features the reader reads, and three in the shapes of a Z 9's packet, a darktable sidecar and a Lightroom packet, for the fuzz seeds and the tests. | — (`std` only) |
 | `tests/support/fixtures.rs` | For the integration tests: where the committed files of `tests/fixtures/` are found and read, a missing one being a failure. | — (`std` only) |
 | `tests/fixtures/` | Real camera files of my own, stripped of their pixels and personal fields, which `tests/fixtures/README.md` lists. | — |
 | `tests/tiff_builder.rs` | Tests only: the TIFF fixture builder, checked from outside the crate; its only tests. | `tests/support` |
@@ -153,7 +154,7 @@ adds a row.
 | `tests/nef.rs` | Tests only: the NEF reader from outside the crate, on files built in code, the committed files of `tests/fixtures/` and the downloaded samples. | `tests/support`, `tests/fixtures`, the downloaded samples |
 | `tests/arw.rs` | Tests only: the ARW reader from outside the crate, on each Sony layout built in code and on the downloaded Sony samples. | `tests/support`, the downloaded samples |
 | `tests/jpeg.rs` | Tests only: the JPEG reader from outside the crate, on files built in code, on the committed JPEGs of `tests/fixtures/` and on the downloaded samples. | `tests/support`, `tests/fixtures`, the downloaded samples |
-| `tests/fuzz_seeds.rs` | Tests only: writes the seeds of the `open` and `jpeg_segments` fuzz targets from the fixtures, and checks the committed seed files against them. | `tests/support`, `tests/fixtures` |
+| `tests/fuzz_seeds.rs` | Tests only: writes the seeds of the `open`, `jpeg_segments` and `xmp` fuzz targets from the fixtures and packets, checks the committed seed files against them, and checks that the packets read. | `tests/support`, `tests/fixtures` |
 | `tests/robustness.rs` | Tests only: opening damaged RAW and JPEG files, cut at every length and overwritten byte by byte: each opens or fails, never panics. | `tests/support`, `tests/fixtures` |
 | `tests/local_corpus.rs` | Tests only: the reader run over a folder of your own camera files, ignored by default, and unit tests of its checks and tallies. | the library |
 | `tests/samples.tsv` | The real sample files the tests read when present, each pinned by its SHA-256, with its source, tier, license and URL. | — |
@@ -166,7 +167,7 @@ adds a row.
 
 | File | Holds | May depend on |
 |---|---|---|
-| `src/fuzzing.rs` | The entry points of the fuzz targets in `fuzz/`: each reads arbitrary bytes through a reader, or through the file handle as a caller would. | `io`, `container`, `entries`, `geometry`, `focus`, `limits`, `location`, `datetime`, `metadata`, `options`, `rational` |
+| `src/fuzzing.rs` | The entry points of the fuzz targets in `fuzz/`: each reads arbitrary bytes through a reader, through the file handle as a caller would, or as an XMP packet. | `io`, `container`, `entries`, `geometry`, `focus`, `limits`, `location`, `datetime`, `metadata`, `options`, `rational`, `xmp` |
 | `fuzz/` | The fuzz targets and their committed seed inputs: a separate crate, never published, each target one call into `src/fuzzing.rs`. | the library, `libfuzzer-sys` |
 
 ## How a file is read

@@ -17,6 +17,7 @@ pub mod jpeg_stub;
 pub mod nef;
 pub mod samples;
 pub mod tiff_builder;
+pub mod xmp_packets;
 
 use raw_files::{Rational, Size};
 

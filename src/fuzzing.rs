@@ -33,6 +33,7 @@ use crate::location::Location;
 use crate::metadata::Metadata;
 use crate::options::Options;
 use crate::rational::{Rational, SignedRational};
+use crate::xmp::{Xmp, XmpForm, XmpProperty, XmpValue};
 
 /// Reads `data` as a TIFF file: the walk with the default limits, header
 /// first, then every value of every IFD the walk found, through each
@@ -251,6 +252,56 @@ pub fn open(data: &[u8]) {
             read_value(&value);
         }
     }
+}
+
+/// Reads `data` as an XMP packet with the default limits, as a caller
+/// reading a sidecar would. Then it asks the packet for everything it
+/// gives: each property looked up by its own name, and every value at
+/// every depth through each getter. Last, it clones, compares and formats
+/// the packet, which go as deep as the reader let it nest.
+///
+/// Whatever `data` holds, this must return, never panic, and do so in
+/// bounded time and memory. What it reads is thrown away: an error is an
+/// expected outcome for arbitrary bytes.
+pub fn xmp(data: &[u8]) {
+    let Ok(xmp) = Xmp::from_bytes(data) else {
+        return;
+    };
+    let _ = (xmp.toolkit(), xmp.about(), xmp.len(), xmp.is_empty());
+    for property in &xmp {
+        // The first of a name is the one a lookup finds, and the reader
+        // keeps no repeat.
+        let found = xmp.property(property.namespace(), property.name());
+        assert_eq!(found, Some(property.value()));
+        assert!(xmp.in_namespace(property.namespace()).count() >= 1);
+    }
+    // Every value, without recursion, as the reader built it.
+    let mut values: Vec<&XmpValue> = xmp.iter().map(XmpProperty::value).collect();
+    while let Some(value) = values.pop() {
+        let _ = (value.text(), value.language());
+        match value.form() {
+            XmpForm::Simple(text) | XmpForm::Uri(text) => {
+                let _ = text.len();
+            }
+            XmpForm::Structure(fields) => {
+                for field in fields {
+                    let _ = value.field(field.namespace(), field.name());
+                }
+            }
+            XmpForm::Array { kind, items } => {
+                let _ = (kind, items.len());
+            }
+        }
+        for qualifier in value.qualifiers() {
+            let _ = value.qualifier(qualifier.namespace(), qualifier.name());
+        }
+        values.extend(value.fields().iter().map(XmpProperty::value));
+        values.extend(value.items());
+        values.extend(value.qualifiers().iter().map(XmpProperty::value));
+    }
+    let copy = xmp.clone();
+    assert_eq!(copy, xmp);
+    let _ = format!("{xmp:?}");
 }
 
 /// Asks `entry` for each of its values and its `Debug` form, as a caller

@@ -44,9 +44,9 @@ and runs none of them.
 | `every_file_of_the_local_corpus_opens_and_gives_a_whole_jpeg`, in `tests/local_corpus.rs` | Runs the reader over a folder of your own camera files | As [the local corpus test](#the-local-corpus-test) says |
 | `write_fuzz_seeds`, in `src/container/tiff/robustness.rs` | Writes the seeds of the `tiff_walk` fuzz target again | `cargo test write_fuzz_seeds -- --ignored` |
 | `write_fuzz_seeds`, in `src/container/jpeg/mod.rs` | Writes the seeds of the `jpeg_probe` fuzz target again | The same command |
-| `write_fuzz_seeds`, in `tests/fuzz_seeds.rs` | Writes the seeds of the `open` and `jpeg_segments` fuzz targets again | The same command |
+| `write_fuzz_seeds`, in `tests/fuzz_seeds.rs` | Writes the seeds of the `open`, `jpeg_segments` and `xmp` fuzz targets again | The same command |
 
-The three seed writers run after a fixture or a stub changes; the
+The three seed writers run after a fixture, a stub or a packet changes; the
 command, from the repository root, runs all three.
 [`fuzz/seeds/README.md`](../fuzz/seeds/README.md) says what the seeds
 are.
@@ -150,7 +150,7 @@ rustup toolchain install nightly
 cargo install cargo-fuzz
 ```
 
-There are four targets:
+There are five targets:
 
 | Target | What it reads | Its seeds |
 |---|---|---|
@@ -158,6 +158,7 @@ There are four targets:
 | `jpeg_probe` | The search for a JPEG preview's frame header | `fuzz/seeds/jpeg_probe` |
 | `jpeg_segments` | The input as a JPEG file: the walk over its segments, the TIFF structure of its Exif segment with every value in it, and the index of its MPF segment | `fuzz/seeds/jpeg_segments` |
 | `open` | The input opened as a caller would: its metadata, its focus points and layout placed on a preview, every preview, and every entry of its directories with its value | `fuzz/seeds/open`, `fuzz/seeds/tiff_walk` and `fuzz/seeds/jpeg_segments` |
+| `xmp` | The input as an XMP packet: the XML reader, the RDF walk, and every value at every depth through each getter | `fuzz/seeds/xmp` |
 
 The seeds are a few valid files, committed in
 [`fuzz/seeds/`](../fuzz/seeds/README.md), which says what each folder
@@ -176,8 +177,8 @@ cargo +nightly fuzz run tiff_walk fuzz/corpus/tiff_walk fuzz/seeds/tiff_walk -- 
 The first directory is where the fuzzer saves what it finds. It is not
 committed, and libFuzzer refuses to start when it does not exist, hence
 the `mkdir`. The directories after it hold the seeds it starts from.
-The target `jpeg_probe` runs the same way, with `jpeg_probe` in place
-of `tiff_walk` throughout. The other two:
+The targets `jpeg_probe` and `xmp` run the same way, each with its name
+in place of `tiff_walk` throughout. The other two:
 
 ```sh
 mkdir -p fuzz/corpus/jpeg_segments

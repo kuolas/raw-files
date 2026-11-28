@@ -1,0 +1,4 @@
+# The fuzz seeds are bytes fed to the fuzzer, and a test checks each
+# against what it is generated from: no checkout may change their line
+# ends, as Git does to text files on Windows.
+fuzz/seeds/** -text
