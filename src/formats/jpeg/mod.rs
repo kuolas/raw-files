@@ -20,7 +20,8 @@
 //!   with the reader of the maker that IFD0's Make names ([`lookup`]), one
 //!   of the list of [`makers`].
 //! - [`metadata`] sets the picture's own size, and keeps the focus points
-//!   only when their frame has the picture's shape.
+//!   only when their frame has the picture's shape. `parse` then reads the
+//!   first XMP segment's packet.
 //! - `parse` then reads the MPF list, and [`previews`] checks the
 //!   candidates with the shared finder and adds the file itself.
 //!
@@ -30,8 +31,9 @@
 //! values and its thumbnail, never the file, which opens with its own
 //! preview, its image size and its MPF list's large thumbnails. A
 //! MakerNote that does not hold together costs what it would have given,
-//! and an MPF list that does not hold together costs only its large
-//! thumbnails. Only a failure of the reader is an error.
+//! an XMP packet that does not parse costs only itself, and an MPF list
+//! that does not hold together costs only its large thumbnails. Only a
+//! failure of the reader is an error.
 //!
 //! What cameras write in a JPEG, segment by segment, is in the JPEG notes
 //! (`docs/formats/jpeg/container-and-metadata.md`, sections 4, 6, 7 and
@@ -44,7 +46,7 @@ use super::makernote::sony;
 use super::makernote::{Picture, Reader};
 use super::tiff_metadata::{self, RawStorage, Standard};
 use super::tiff_previews::{self, Candidate};
-use super::{FormatSpec, JPEG_UNCLAIMED, Parsed, make_starts_with};
+use super::{FormatSpec, JPEG_UNCLAIMED, Parsed, embedded_xmp, make_starts_with};
 use crate::camera_settings::CameraSettings;
 use crate::container::jpeg::{Frame, Segments, mpf};
 use crate::container::tiff::{Tree, walk};
@@ -117,8 +119,10 @@ fn claims<R: Read + Seek>(_: &mut Source<R>, segments: &Segments) -> Result<bool
 ///   Index IFD's.
 ///
 /// [`metadata`] sets the picture's size and keeps the focus points that
-/// fit it, after the MakerNote is read and before the MPF list.
-/// [`previews`] checks the candidates.
+/// fit it, after the MakerNote is read and before the MPF list. The XMP
+/// packet is the first XMP segment's, read and parsed within `limits`
+/// ([`embedded_xmp`]); an XMP packet in the Exif segment's IFD0 is not
+/// read. [`previews`] checks the candidates.
 ///
 /// # Errors
 ///
@@ -151,12 +155,16 @@ fn parse<R: Read + Seek>(
         ),
         None => (Standard::default(), Vec::new(), Lookup::Absent),
     };
-    let metadata = metadata(
+    let mut metadata = metadata(
         src,
         standard,
         makernote.as_ref().found().map(Box::as_ref),
         size,
     )?;
+    metadata.xmp = match &segments.xmp {
+        Some(packet) => embedded_xmp(src, packet.clone(), limits)?,
+        None => None,
+    };
     candidates.extend(
         makernote
             .as_ref()

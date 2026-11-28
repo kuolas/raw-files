@@ -248,8 +248,10 @@ fn parse_tiff<M: Reader, R: Read + Seek>(
 ///
 /// The packet is read whenever the file is opened, wherever it lies
 /// (ADR024). The bytes are read once ([`Source::bytes_once`]). A packet
-/// among the directories the reader walked costs no read, as every
-/// measured packet lies there. One anywhere else costs one read.
+/// whose blocks the cache still holds from the walk over the directories
+/// or the segments costs no read, as every measured packet but one does.
+/// One anywhere else costs one read. So does a JPEG's whose block the
+/// cache dropped since, as long segments after the packet can make it.
 ///
 /// # Errors
 ///

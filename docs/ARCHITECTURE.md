@@ -81,7 +81,7 @@ adds a row.
 | `src/formats/nef/previews.rs` | Where a NEF file keeps its previews, the shared finder over the whole tree with the MakerNote's preview as its one extra candidate, and the tests of what the reader finds there. | nothing outside its tests |
 | `src/formats/arw/mod.rs` | The Sony ARW reader, for SRF, SR2 and ARQ files too: its claim by Make, and its parse, the shared `parse_tiff` with the Sony MakerNote reader and SR2Private. | `formats/mod.rs` (for `parse_tiff`), `makernote/mod.rs` (for `Reader`), `makernote/sony.rs`, `container`, `io`, `format`, `entries`, `limits`, `error` |
 | `src/formats/arw/previews.rs` | Where a Sony file keeps its previews, the shared finder over the whole tree with no candidate of its own, and the tests of what the reader finds there. | nothing outside its tests |
-| `src/formats/jpeg/mod.rs` | The JPEG reader: its claim by the first frame header, its parse of the Exif segment, MakerNote, previews and entries, and the list of makers whose MakerNote it reads, one line each. | `makernote/mod.rs` (for `Reader` and `Picture`), `makernote/nikon/`, `makernote/sony.rs`, `tiff_metadata`, `tiff_previews`, `container`, `io`, `format`, `preview`, `metadata`, `camera_settings` (for `CameraSettings`, to clear the raw values), `entries`, `geometry`, `orientation`, `limits`, `error` |
+| `src/formats/jpeg/mod.rs` | The JPEG reader: its claim by the first frame header, its parse of the Exif segment, MakerNote, XMP packet, previews and entries, and the list of makers whose MakerNote it reads, one line each. | `makernote/mod.rs` (for `Reader` and `Picture`), `makernote/nikon/`, `makernote/sony.rs`, `tiff_metadata`, `tiff_previews`, `container`, `io`, `format`, `preview`, `metadata`, `camera_settings` (for `CameraSettings`, to clear the raw values), `entries`, `geometry`, `orientation`, `limits`, `error` |
 
 ### The containers
 
@@ -98,7 +98,7 @@ adds a row.
 | `src/container/tiff/field_type.rs` | `FieldType`: the one table of the TIFF field types, each with its code, size and name. | — |
 | `src/container/tiff/walk.rs` | The IFD walk inside a block: it follows the links from IFD0 and returns every IFD it finds as a `Tree`, with each link it did not follow, bounded on any input. | `io`, `error`, `limits` |
 | `src/container/tiff/robustness.rs` | Tests only: the whole TIFF reader on truncated and corrupted files, which give an error or a tree within the limits, never a panic. | — |
-| `src/container/jpeg/mod.rs` | The JPEG container: one walk over a stream's marker segments, the probe that sizes a preview and the walk over a JPEG file. | `io`, `error`, `limits`, `container/tiff` (for `Block`) |
+| `src/container/jpeg/mod.rs` | The JPEG container: one walk over a stream's marker segments, the probe that sizes a preview and the walk over a JPEG file, which keeps its first frame header and its first Exif, XMP and MPF segments. | `io`, `error`, `limits`, `container/tiff` (for `Block`) |
 | `src/xml.rs` | The XML reader: the part of XML that XMP packets use, read into a tree of elements, attributes and text with each name's namespace resolved, iterative and bounded in depth. | `error`, `limits`, `namespaces` |
 | `src/container/jpeg/mpf.rs` | The MPF index of a JPEG file: where the large thumbnails the file holds after its first image lie, the first of each class. | `io`, `error`, `limits`, `container/tiff` |
 
@@ -138,7 +138,7 @@ adds a row.
 | `tests/support/mod.rs` | For the integration tests: the module that gathers the helpers of `tests/support/`, with the size and fraction conversions that the tests of every format use. | the files of `tests/support/`, the library |
 | `tests/support/tiff_builder.rs` | The fixture builder: small TIFF files described in code, with any rule broken on purpose, in either byte order or both, for unit and integration tests. | — (`std` only) |
 | `tests/support/jpeg_stub.rs` | The stub JPEG: a small well-formed stream with a chosen frame header and no image, and the baseline stub that built files hold as previews, for unit and integration tests. | — (`std` only) |
-| `tests/support/jpeg_builder.rs` | The JPEG file builder: segments, the stub as main image, an MPF index and the images after it, with where each part landed. | `tests/support/jpeg_stub.rs`, `tests/support/tiff_builder.rs` (for `Order`) (`std` only) |
+| `tests/support/jpeg_builder.rs` | The JPEG file builder: segments, Exif and XMP among them, the stub as main image, an MPF index and the images after it, with where each part landed. | `tests/support/jpeg_stub.rs`, `tests/support/tiff_builder.rs` (for `Order`) (`std` only) |
 | `tests/support/jpeg_files.rs` | Whole JPEG files: plain, Exif, padded, and Nikon and Sony camera layouts with their MakerNotes, for the JPEG reader's, robustness and fuzz-seed tests. | `tests/support/jpeg_builder.rs`, `tests/support/jpeg_stub.rs`, `tests/support/tiff_builder.rs`, `tests/support/nef.rs`, `tests/support/arw.rs` |
 | `tests/support/nef.rs` | For the integration tests: files laid out like the NEF files of a Z 9, D300, Z6III and D1H, and the Nikon MakerNote builder. | `tests/support/tiff_builder.rs`, `tests/support/jpeg_stub.rs` |
 | `tests/support/arw.rs` | For the integration tests: files laid out like each generation of Sony's RAW family, ARW 4 to the A100's ARW 1.0, with stub JPEGs. | `tests/support/tiff_builder.rs`, `tests/support/jpeg_stub.rs` |
@@ -151,7 +151,7 @@ adds a row.
 | `tests/jpeg_stub.rs` | Tests only: the stub JPEG, checked from outside the crate. | `tests/support` |
 | `tests/jpeg_builder.rs` | Tests only: the JPEG file builder, checked from outside the crate: its layout, the positions it reports and the MPF index it writes. | `tests/support` |
 | `tests/open.rs` | Tests only: opening files through the public API: detection, limits, errors, `Send`, and authorship, camera and location built by hand against what opening reads. | `tests/support` |
-| `tests/embedded_xmp.rs` | Tests only: the XMP packet a NEF or ARW file embeds, through the public API: where each holds it, what gives none, and how many reads it costs. | `tests/support` |
+| `tests/embedded_xmp.rs` | Tests only: the XMP packet a NEF, ARW or JPEG file embeds, through the public API: where each holds it, what gives none, and how many reads it costs. | `tests/support` |
 | `tests/nef.rs` | Tests only: the NEF reader from outside the crate, on files built in code, the committed files of `tests/fixtures/` and the downloaded samples. | `tests/support`, `tests/fixtures`, the downloaded samples |
 | `tests/arw.rs` | Tests only: the ARW reader from outside the crate, on each Sony layout built in code and on the downloaded Sony samples. | `tests/support`, the downloaded samples |
 | `tests/jpeg.rs` | Tests only: the JPEG reader from outside the crate, on files built in code, on the committed JPEGs of `tests/fixtures/` and on the downloaded samples. | `tests/support`, `tests/fixtures`, the downloaded samples |

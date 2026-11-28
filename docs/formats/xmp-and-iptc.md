@@ -7,12 +7,12 @@ Two standards hold these values. XMP is XML, inside the file or in a
 sidecar file beside it. IIM, the IPTC's Information Interchange Model,
 is an older binary block. This page records where NEF, ARW and camera
 JPEG files hold each, and what they hold. raw-files reads an XMP
-sidecar and the packet a NEF or ARW file embeds. It will read a JPEG's
-packet and the block inside a file, as
-[ADR024](../architecture-decisions/adr024-xmp-and-iptc.md) decides.
+sidecar and the packet a file embeds. It will read the block inside a
+file, as [ADR024](../architecture-decisions/adr024-xmp-and-iptc.md)
+decides.
 Its readers are written from this page and from the standards it cites
 ([ADR013](../architecture-decisions/adr013-clean-room-and-third-party-code.md)).
-The XML reader, the XMP data model and the read of a raw file's packet
+The XML reader, the XMP data model and the read of a file's packet
 are, and the others will be.
 
 Where this page says *my own* files, it is me, Alvaro Kuolas, who
@@ -135,6 +135,13 @@ backup disk is in no count. Where a count adds sets, it says so.
   near the start. Two edited public ARW files, the clone's 348 (a NEX-3)
   and 362 (a DSLR-A550), hold IFD0 in their last kilobyte, and the
   packet after it. [F]
+- **One JPEG's packet costs a read all the same.** It is a Kodak
+  EasyShare M5370's of mine, whose XMP segment lies at byte 299,815,
+  inside the segment walk. About 220 KB of FlashPix segments follow it,
+  and the reader's cache of 256 KiB drops the packet's block before the
+  packet is read. Opening the file takes one more read, of the packet's
+  9,187 bytes. Of 5,482 files measured, mine and public, it is the only
+  one. [F]
 - **Sizes.** The largest NEF packet is 34,816 bytes (a Z f), and every
   Z 9 packet is 32,768. The 128 camera packets of ARW files are 4,096
   bytes each, and the two edited ones 740 and 344. The largest JPEG
@@ -492,7 +499,9 @@ in short, on these files:
   following IFD0, as it finds the other entries. A packet among what it
   read costs no further read, and every measured packet lies there. One
   anywhere else costs one read, up to the cap on one value. In a JPEG
-  file, the packet will be the first APP1 XMP segment.
+  file, it is the first APP1 XMP segment's. It costs one read when the
+  segments after it pass through more than the reader's cache holds, as
+  on one file of mine (section 2).
 - **The IIM block** will be read from IFD0's 0x83BB, else from resource
   1028 of 0x8649. In a JPEG file, it will be the first resource 1028 of
   the `Photoshop 3.0` segments, joined in file order.
@@ -501,11 +510,11 @@ in short, on these files:
 - **Every XMP property** is given in XMP Part 1's data model, as an
   `Xmp`. The rating, the label and IPTC Core will be typed values, from
   XMP and from IIM each apart.
-- **The first copy stands** for a repeated property, and will stand for
-  a segment, a resource and a dataset.
+- **The first copy stands** for a repeated property and an XMP segment,
+  and will stand for a resource and a dataset.
 - **A packet that does not parse** costs only itself: the file opens,
-  with no packet. The 110 phone packets, all in JPEG files, will be
-  such packets.
+  with no packet. The 110 phone packets, all in JPEG files, are such
+  packets.
 
 ## 13. Named gaps
 

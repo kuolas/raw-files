@@ -120,8 +120,8 @@ impl Limits {
         self
     }
 
-    /// Sets how many bytes the value of one entry may take, in place of the
-    /// cap set before; [`max_value_bytes`](Self::max_value_bytes) reads it
+    /// Sets how many bytes the value of one entry, or the XMP packet a file
+    /// embeds, may take, in place of the cap set before; [`max_value_bytes`](Self::max_value_bytes) reads it
     /// and says what a lowered cap costs.
     #[must_use]
     pub fn with_max_value_bytes(mut self, n: u64) -> Self {
@@ -178,7 +178,8 @@ impl Limits {
         self.max_preview_bytes
     }
 
-    /// How many bytes the value of one entry may take at most.
+    /// How many bytes the value of one entry may take at most, and the XMP
+    /// packet a file embeds, wherever it lies.
     ///
     /// The cap holds for every value read whole from the file: those
     /// raw-files reads for the metadata and the previews when it opens a
@@ -194,7 +195,9 @@ impl Limits {
     ///
     /// - [`CameraFile::read_value`](crate::CameraFile::read_value) fails with
     ///   [`ErrorKind::LimitExceeded`](crate::ErrorKind::LimitExceeded).
-    /// - A value of the metadata is `None`, as a damaged one is.
+    /// - A value of the metadata is `None`, as a damaged one is. So is
+    ///   [`Metadata::xmp`](crate::Metadata::xmp) for a longer packet, a
+    ///   JPEG file's XMP segment included.
     /// - A preview or a directory that the file locates by such a value is
     ///   left out, with all it holds, such as the SubIFDs of a list longer
     ///   than the cap.

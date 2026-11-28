@@ -165,10 +165,10 @@ describes the files.
 - **A file whose size is a multiple of 64 KiB** need not be truncated:
   Sony pads to that size. [F]
 - **XMP.** An XMP segment can record an editor's crop, rating or
-  labels, and a camera's rating. raw-files will read it, with the IPTC
-  block, as the record on XMP and IPTC decides
+  labels, and a camera's rating. raw-files reads it, and will read the
+  IPTC block, as the record on XMP and IPTC decides
   ([ADR024](../../architecture-decisions/adr024-xmp-and-iptc.md)). It
-  will give every property, and the rating, the label and the IPTC Core
-  values typed. An editor's crop stays a property of its own namespace, and
+  gives every property, and will give the rating, the label and the
+  IPTC Core values typed. An editor's crop stays a property of its own namespace, and
   nothing reads it into the focus point or the picture's size. The
   [XMP and IPTC notes](../xmp-and-iptc.md) say what files hold.
