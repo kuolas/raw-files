@@ -52,7 +52,7 @@ adds a row.
 
 | File | Holds | May depend on |
 |---|---|---|
-| `src/lib.rs` | The crate root: the crate documentation and the re-exports of the public types. | `authorship`, `camera`, `camera_settings`, `datetime`, `entries`, `error`, `file`, `focus`, `format`, `geometry`, `limits`, `location`, `metadata`, `options`, `orientation`, `preview`, `rational`, `tags`, `value_error` |
+| `src/lib.rs` | The crate root: the crate documentation and the re-exports of the public types. | `authorship`, `camera`, `camera_settings`, `datetime`, `entries`, `error`, `file`, `focus`, `format`, `geometry`, `limits`, `location`, `metadata`, `options`, `orientation`, `preview`, `rational`, `tags`, `value_error`, `namespaces`, `xmp` |
 | `src/options.rs` | `Options`: how a file is opened, and under which `Limits`. | `file`, `limits`, `error` |
 | `src/file.rs` | `CameraFile`: the file handle, giving the format, the previews, the metadata and the entries, and reading a preview's bytes or an entry's value. | `container`, `formats`, `io`, `options`, `preview`, `metadata`, `entries`, `format`, `limits`, `error`, `geometry` |
 
@@ -122,6 +122,8 @@ adds a row.
 | `src/entries/names.rs` | The name of an entry's tag, from the table of `tags` for its kind of directory. | `entries`, `tags` |
 | `src/entries/skipped.rs` | `SkippedDirectory`: a directory a file links to that could not be read, with the link and the cause; and what a reader found where one of its own links leads. | `entries`, `error` |
 | `src/tags.rs` | `tags`: a constant for each tag `Entry::name` has a name for, one module per kind of directory, each row giving the constant and its name at once. | — |
+| `src/xmp.rs` | `Xmp`, `XmpProperty`, `XmpValue`, `XmpForm` and `XmpArrayKind`: every property of an XMP packet in XMP Part 1's data model, each named by namespace URI and local name, built through `with_…` methods. | `namespaces` |
+| `src/namespaces.rs` | `namespaces`: the URIs of the XMP namespaces of the rating, the label, IPTC Core and the qualifiers `xml:lang` and `rdf:type`, one constant each, cited to its standard. | — |
 | `src/format.rs` | `Format`: the camera file formats the library reads, NEF, ARW and JPEG, with their names, extensions and whether each holds raw data. | — |
 
 ### The tests

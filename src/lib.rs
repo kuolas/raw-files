@@ -391,6 +391,7 @@ mod jpeg_stub;
 mod limits;
 mod location;
 mod metadata;
+pub mod namespaces;
 mod options;
 mod orientation;
 mod preview;
@@ -417,6 +418,7 @@ mod tiff_builder;
 #[cfg(test)]
 mod testing;
 mod value_error;
+mod xmp;
 
 pub use authorship::Authorship;
 pub use camera::{Camera, Make};
@@ -449,3 +451,4 @@ pub use orientation::Orientation;
 pub use preview::{Preview, PreviewFormat};
 pub use rational::{Rational, SignedRational};
 pub use value_error::ValueError;
+pub use xmp::{Xmp, XmpArrayKind, XmpForm, XmpProperty, XmpValue};
