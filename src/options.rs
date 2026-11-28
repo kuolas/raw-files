@@ -9,9 +9,10 @@ use std::path::Path;
 use crate::error::Result;
 use crate::file::CameraFile;
 use crate::limits::Limits;
+use crate::xmp::Xmp;
 
-/// How to open a camera file, a RAW file or a JPEG: today, with which
-/// [`Limits`].
+/// How to open a camera file, a RAW file or a JPEG, or read an XMP
+/// sidecar: today, with which [`Limits`].
 ///
 /// The defaults suit untrusted files, and opening with them is what
 /// [`CameraFile::open`], [`CameraFile::from_bytes`] and
@@ -91,6 +92,44 @@ impl Options {
     /// As for [`CameraFile::from_reader`].
     pub fn from_reader<R: Read + Seek>(&self, reader: R) -> Result<CameraFile<R>> {
         CameraFile::new(reader, self.limits)
+    }
+
+    /// Reads the XMP sidecar file at `path` under these options' limits.
+    ///
+    /// See [`Xmp::open`], which this is with the default options, for how
+    /// sidecars are named.
+    ///
+    /// # Errors
+    ///
+    /// [`Io`](crate::ErrorKind::Io) if the file cannot be opened, and
+    /// otherwise as for [`xmp_from_reader`](Self::xmp_from_reader).
+    pub fn open_xmp(&self, path: impl AsRef<Path>) -> Result<Xmp> {
+        self.xmp_from_reader(File::open(path)?)
+    }
+
+    /// Reads an XMP packet, or a sidecar file's whole text, from `bytes`
+    /// under these options' limits.
+    ///
+    /// See [`Xmp::from_bytes`], which this is with the default options.
+    ///
+    /// # Errors
+    ///
+    /// As for [`Xmp::from_bytes`], with these options' limits.
+    pub fn xmp_from_bytes(&self, bytes: &[u8]) -> Result<Xmp> {
+        Xmp::read(bytes, &self.limits)
+    }
+
+    /// Reads an XMP packet, or a sidecar file's whole text, from `reader`
+    /// under these options' limits: at most
+    /// [`Limits::max_value_bytes`] of it.
+    ///
+    /// See [`Xmp::from_reader`], which this is with the default options.
+    ///
+    /// # Errors
+    ///
+    /// As for [`Xmp::from_reader`], with these options' limits.
+    pub fn xmp_from_reader(&self, reader: impl Read) -> Result<Xmp> {
+        Xmp::read_from(reader, &self.limits)
     }
 }
 

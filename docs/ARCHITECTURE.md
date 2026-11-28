@@ -55,7 +55,7 @@ adds a row.
 | File | Holds | May depend on |
 |---|---|---|
 | `src/lib.rs` | The crate root: the crate documentation and the re-exports of the public types. | `authorship`, `camera`, `camera_settings`, `datetime`, `entries`, `error`, `file`, `focus`, `format`, `geometry`, `limits`, `location`, `metadata`, `options`, `orientation`, `preview`, `rational`, `tags`, `value_error`, `namespaces`, `xmp` |
-| `src/options.rs` | `Options`: how a file is opened, and under which `Limits`. | `file`, `limits`, `error` |
+| `src/options.rs` | `Options`: how a file is opened, or an XMP sidecar read, and under which `Limits`. | `file`, `limits`, `error`, `xmp` |
 | `src/file.rs` | `CameraFile`: the file handle, giving the format, the previews, the metadata and the entries, and reading a preview's bytes or an entry's value. | `container`, `formats`, `io`, `options`, `preview`, `metadata`, `entries`, `format`, `limits`, `error`, `geometry` |
 
 ### The format readers

@@ -6,11 +6,12 @@ picture.
 Two standards hold these values. XMP is XML, inside the file or in a
 sidecar file beside it. IIM, the IPTC's Information Interchange Model,
 is an older binary block. This page records where NEF, ARW and camera
-JPEG files hold each, and what they hold. raw-files will read both as
+JPEG files hold each, and what they hold. raw-files reads an XMP
+sidecar, and will read the packet and the block inside a file, as
 [ADR024](../architecture-decisions/adr024-xmp-and-iptc.md) decides.
-Its readers will be written from this page and from the standards it
-cites
+Its readers are written from this page and from the standards it cites
 ([ADR013](../architecture-decisions/adr013-clean-room-and-third-party-code.md)).
+The XML reader and the XMP data model are, and the others will be.
 
 Where this page says *my own* files, it is me, Alvaro Kuolas, who
 maintains raw-files, writing about my own cameras' files. They stay
@@ -491,13 +492,13 @@ in short, on these files:
 - **The IIM block** will be read from IFD0's 0x83BB, else from resource
   1028 of 0x8649. In a JPEG file, it will be the first resource 1028 of
   the `Photoshop 3.0` segments, joined in file order.
-- **A sidecar** will be read only when a caller hands it in, by either
-  name.
-- **Every XMP property** will be given in XMP Part 1's data model. The
-  rating, the label and IPTC Core will be typed values, from XMP and
-  from IIM each apart.
-- **The first copy will stand**, for a segment, a resource, a property
-  and a dataset.
+- **A sidecar** is read only when a caller hands it in, by either name:
+  `Xmp::open` reads it by its path, `Xmp::from_reader` from a reader.
+- **Every XMP property** is given in XMP Part 1's data model, as an
+  `Xmp`. The rating, the label and IPTC Core will be typed values, from
+  XMP and from IIM each apart.
+- **The first copy stands** for a repeated property, and will stand for
+  a segment, a resource and a dataset.
 - **The 110 phone packets** will cost only themselves: the file opens,
   with no packet.
 

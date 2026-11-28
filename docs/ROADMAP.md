@@ -157,9 +157,9 @@ and the creator.
 
 - raw-files will read them from the XMP packet a file embeds and from
   its older IPTC block, each given apart.
-- A caller will hand in an XMP sidecar, by its path, its bytes or a
-  reader; opening a file will still read that file alone.
-- Every XMP property will be given too, by its namespace and name.
+- A caller hands in an XMP sidecar, by its path, its bytes or a
+  reader. raw-files gives every property it holds, by its namespace and
+  name. Opening a file still reads that file alone.
 
 The [XMP and IPTC notes](formats/xmp-and-iptc.md) say what files hold.
 

@@ -552,6 +552,15 @@ does. An entry that can break a caller opens with **Breaking:**.
   - `rdf:value` gives a value whose other fields qualify it.
   - A typed node is read as a structure, its type kept as the qualifier
     `rdf:type`.
+- `Xmp::open` and `Xmp::from_reader` read an XMP sidecar, by its path
+  or from a reader, beside `Xmp::from_bytes`
+  ([#237](https://github.com/kuolas/raw-files/issues/237)).
+  - Each reads at most `Limits::max_value_bytes`, and fails with
+    `ErrorKind::LimitExceeded` past it.
+  - `Options::open_xmp`, `Options::xmp_from_bytes` and
+    `Options::xmp_from_reader` read under other limits.
+  - raw-files never looks for a sidecar: the caller names it.
+    `Xmp::open`'s docs show both names tools give one.
 
 ### Changed
 
