@@ -12,21 +12,37 @@
 //! (§7.4).
 //!
 //! A property is an attribute of an `rdf:Description`, a simple value, or
-//! one of its child elements:
+//! one of its child elements. The value of an element, whether a
+//! property, a field of a structure or an item of an array, takes one of
+//! these forms:
 //!
-//! - an element with text alone is a simple value (§7.5), the text as
-//!   written, white space included;
-//! - an element with an `rdf:resource` attribute and no content is a URI
-//!   (§7.5).
+//! - text alone is a simple value (§7.5), the text as written, white
+//!   space included;
+//! - an `rdf:resource` attribute and no content is a URI (§7.5);
+//! - an `rdf:parseType="Resource"` attribute makes a structure of the
+//!   element's own children (§7.9.2.3);
+//! - attributes alone, with no content, make a structure of simple fields
+//!   (§7.9.2.4);
+//! - one `rdf:Description` element makes a structure of its attributes and
+//!   its children (§7.6, §7.9.2.2);
+//! - one `rdf:Bag`, `rdf:Seq` or `rdf:Alt` element makes an unordered,
+//!   ordered or alternative array of its `rdf:li` children (§7.7).
+//!
+//! A field or an item takes any of these forms in turn, so values nest
+//! as deep as the XML does.
 //!
 //! Damage here has a smaller reach than in the XML. A property whose RDF
-//! breaks XMP Part 1, §7, is left out, and the others stand. So is a
+//! breaks XMP Part 1, §7, anywhere inside its value, is left out, and the
+//! others stand: `rdf:parseType="Literal"`, `rdf:ID`, `rdf:nodeID`,
+//! `rdf:li` outside an array, or text beside an element, for example. So
+//! is a
 //! property whose name is in the RDF namespace, which XMP forbids but for
 //! `rdf:type`, or the XML namespace, or no namespace at all: an XMP name
 //! needs a namespace (§6.2). An `rdf:Description` that breaks §7.4
 //! itself, with text in it, an `xml:lang`, or an RDF attribute other than
 //! `rdf:about` and `rdf:type`, is left out with every property it holds.
-//! A property repeated in the packet is left out after its first. An
+//! A property repeated in the packet, or a field in its structure, is left
+//! out after its first. An
 //! attribute with no namespace is not an XMP name, and is ignored, as an
 //! attribute of the XML namespace other than `xml:lang` is.
 //!
@@ -38,11 +54,11 @@
 
 use std::collections::HashSet;
 
-use super::{Xmp, XmpProperty, XmpValue};
+use super::{Xmp, XmpArrayKind, XmpForm, XmpProperty, XmpValue};
 use crate::error::{Error, Result};
 use crate::limits::Limits;
 use crate::namespaces::{RDF, XML};
-use crate::xml::{self, Attribute, Child, Document, Element};
+use crate::xml::{self, Attribute, Child, Children, Document, Element};
 
 /// The namespace of the `x:xmpmeta` element (XMP Part 1, §7.3.3).
 const XMP_META: &str = "adobe:ns:meta/";
@@ -170,30 +186,273 @@ impl<'d> Walk<'d> {
         }
     }
 
-    /// The value of a property element; `None` when it is left out.
+    /// The value of a property element. `None` when it is left out: its
+    /// RDF, or that of a value inside it, breaks XMP Part 1, §7.
+    ///
+    /// The walk goes down the value's elements without recursing. It keeps
+    /// a stack of the structures and arrays still open. Each element is
+    /// opened, and a value read whole goes to the structure or array that
+    /// holds it. That one is read whole once its last child has gone to
+    /// it.
     fn property(&mut self, element: Element<'d>) -> Result<Option<XmpValue>> {
+        let mut open: Vec<Frame<'d>> = Vec::new();
+        let mut next = Some(element);
+        loop {
+            let (element, value) = if let Some(element) = next.take() {
+                match self.open(element)? {
+                    Opened::Broken => return Ok(None),
+                    Opened::Frame(frame) => {
+                        open.push(frame);
+                        continue;
+                    }
+                    Opened::Value(value) => (element, value),
+                }
+            } else {
+                let Some(frame) = open.last_mut() else {
+                    return Ok(None);
+                };
+                match frame.children.next() {
+                    Some(Child::Text(run)) if xml::is_blank(run) => continue,
+                    Some(Child::Text(_)) => return Ok(None),
+                    Some(Child::Element(child)) if frame.allows(child) => {
+                        next = Some(child);
+                        continue;
+                    }
+                    Some(Child::Element(_)) => return Ok(None),
+                    None => {
+                        let Some(frame) = open.pop() else {
+                            return Ok(None);
+                        };
+                        let element = frame.element;
+                        (element, self.count(frame.finish(), element.offset())?)
+                    }
+                }
+            };
+            match open.last_mut() {
+                None => return Ok(Some(value)),
+                Some(frame) => {
+                    if !frame.take(element, value) {
+                        return Ok(None);
+                    }
+                }
+            }
+        }
+    }
+
+    /// What a property element holds, from its attributes and content:
+    /// a value read whole, a structure or array whose elements are read
+    /// next, or RDF that XMP Part 1 forbids.
+    fn open(&mut self, element: Element<'d>) -> Result<Opened<'d>> {
         let mut resource = None;
+        let mut parse_type = None;
+        let mut fields = Vec::new();
         for attribute in element.attributes() {
             match (attribute.namespace, attribute.local) {
                 (Some(RDF), "resource") => resource = Some(attribute.value),
-                (None, _) => {}
-                (Some(XML), local) if local != "lang" => {}
-                _ => return Ok(None),
+                (Some(RDF), "parseType") => parse_type = Some(attribute.value),
+                (Some(RDF), "type") => fields.push(attribute),
+                (Some(RDF), _) => return Ok(Opened::Broken),
+                // A qualifier, read by a later part of the walk.
+                (Some(XML), "lang") => return Ok(Opened::Broken),
+                (None | Some(XML), _) => {}
+                (Some(_), _) => fields.push(attribute),
             }
         }
+        let mut first = None;
+        let mut more = false;
         let mut text = String::new();
         for child in element.children() {
             match child {
-                Child::Element(_) => return Ok(None),
+                Child::Element(child) if first.is_none() => first = Some(child),
+                Child::Element(_) => more = true,
                 Child::Text(run) => text.push_str(run),
             }
         }
-        let value = match resource {
-            Some(uri) if xml::is_blank(&text) => XmpValue::uri(uri),
-            Some(_) => return Ok(None),
-            None => XmpValue::simple(text),
+        let blank = xml::is_blank(&text);
+        if let Some(parse_type) = parse_type {
+            // A structure whose fields are the element's own children
+            // (section 7.9.2.3); no field may be an attribute then.
+            if parse_type != "Resource" || resource.is_some() || !fields.is_empty() {
+                return Ok(Opened::Broken);
+            }
+            return Ok(Opened::Frame(Frame::fields(element, element.children())));
+        }
+        if let Some(uri) = resource {
+            if !fields.is_empty() || first.is_some() || !blank {
+                return Ok(Opened::Broken);
+            }
+            let value = self.count(XmpValue::uri(uri), element.offset())?;
+            return Ok(Opened::Value(value));
+        }
+        if !fields.is_empty() {
+            // A structure whose fields are all attributes, with no content
+            // (section 7.9.2.4).
+            if first.is_some() || !blank {
+                return Ok(Opened::Broken);
+            }
+            let mut structure = Vec::with_capacity(fields.len());
+            for field in fields {
+                let value = self.count(XmpValue::simple(field.value), element.offset())?;
+                let namespace = field.namespace.unwrap_or_default();
+                structure.push(XmpProperty::new(namespace, field.local, value));
+            }
+            let value = self.count(
+                XmpValue::of(XmpForm::Structure(structure)),
+                element.offset(),
+            )?;
+            return Ok(Opened::Value(value));
+        }
+        let Some(child) = first else {
+            let value = self.count(XmpValue::simple(text), element.offset())?;
+            return Ok(Opened::Value(value));
         };
-        self.count(value, element.offset()).map(Some)
+        // One element and no text beside it: an array, or a structure in
+        // an rdf:Description (sections 7.6 and 7.7).
+        if more || !blank {
+            return Ok(Opened::Broken);
+        }
+        let kind = match (child.namespace(), child.local()) {
+            (Some(RDF), "Bag") => XmpArrayKind::Unordered,
+            (Some(RDF), "Seq") => XmpArrayKind::Ordered,
+            (Some(RDF), "Alt") => XmpArrayKind::Alternative,
+            (Some(RDF), "Description") => return self.description_value(element, child),
+            // A typed node, read by a later part of the walk; any other
+            // RDF name breaks section 7.
+            _ => return Ok(Opened::Broken),
+        };
+        let attributes_allowed =
+            child
+                .attributes()
+                .all(|attribute| match (attribute.namespace, attribute.local) {
+                    (None, _) => true,
+                    (Some(XML), local) => local != "lang",
+                    (Some(_), _) => false,
+                });
+        if !attributes_allowed {
+            return Ok(Opened::Broken);
+        }
+        Ok(Opened::Frame(Frame::items(element, child.children(), kind)))
+    }
+
+    /// The structure an `rdf:Description` inside a property element holds:
+    /// its attributes are fields, and its child elements the others
+    /// (sections 7.6 and 7.9.2.2).
+    fn description_value(
+        &mut self,
+        element: Element<'d>,
+        description: Element<'d>,
+    ) -> Result<Opened<'d>> {
+        let mut frame = Frame::fields(element, description.children());
+        for attribute in description.attributes() {
+            match (attribute.namespace, attribute.local) {
+                (Some(RDF), "type") => {}
+                // rdf:about, rdf:ID and rdf:nodeID have no place in a
+                // value (section 7.4).
+                (Some(RDF), _) | (Some(XML), "lang") => return Ok(Opened::Broken),
+                (None | Some(XML), _) => continue,
+                (Some(_), _) => {}
+            }
+            let value = self.count(XmpValue::simple(attribute.value), description.offset())?;
+            frame.add(
+                attribute.namespace.unwrap_or_default(),
+                attribute.local,
+                value,
+            );
+        }
+        Ok(Opened::Frame(frame))
+    }
+}
+
+/// What [`Walk::open`] found in a property element.
+enum Opened<'d> {
+    /// A value read whole.
+    Value(XmpValue),
+    /// A structure or an array, whose elements the walk reads next.
+    Frame(Frame<'d>),
+    /// RDF that XMP Part 1 forbids: the property is left out.
+    Broken,
+}
+
+/// A structure or an array still being read.
+struct Frame<'d> {
+    /// The property, field or item element whose value this is.
+    element: Element<'d>,
+    /// The elements still to read: the fields, or the `rdf:li` items.
+    children: Children<'d>,
+    kind: FrameKind<'d>,
+}
+
+enum FrameKind<'d> {
+    Fields {
+        fields: Vec<XmpProperty>,
+        /// The name of each field, to leave a repeat out.
+        names: HashSet<(&'d str, &'d str)>,
+    },
+    Items {
+        kind: XmpArrayKind,
+        items: Vec<XmpValue>,
+    },
+}
+
+impl<'d> Frame<'d> {
+    fn fields(element: Element<'d>, children: Children<'d>) -> Self {
+        Self {
+            element,
+            children,
+            kind: FrameKind::Fields {
+                fields: Vec::new(),
+                names: HashSet::new(),
+            },
+        }
+    }
+
+    fn items(element: Element<'d>, children: Children<'d>, kind: XmpArrayKind) -> Self {
+        Self {
+            element,
+            children,
+            kind: FrameKind::Items {
+                kind,
+                items: Vec::new(),
+            },
+        }
+    }
+
+    /// Whether `child` may stand in this structure or array: a field whose
+    /// name XMP allows, or an `rdf:li` item.
+    fn allows(&self, child: Element<'_>) -> bool {
+        match self.kind {
+            FrameKind::Fields { .. } => property_namespace(child).is_some(),
+            FrameKind::Items { .. } => child.is(RDF, "li"),
+        }
+    }
+
+    /// Takes the value of `child`, one of this frame's elements; whether
+    /// the RDF allows it.
+    fn take(&mut self, child: Element<'d>, value: XmpValue) -> bool {
+        match &mut self.kind {
+            FrameKind::Fields { .. } => {
+                self.add(child.namespace().unwrap_or_default(), child.local(), value);
+            }
+            FrameKind::Items { items, .. } => items.push(value),
+        }
+        true
+    }
+
+    /// Adds a field, unless the structure gave its name before.
+    fn add(&mut self, namespace: &'d str, local: &'d str, value: XmpValue) {
+        if let FrameKind::Fields { fields, names } = &mut self.kind
+            && names.insert((namespace, local))
+        {
+            fields.push(XmpProperty::new(namespace, local, value));
+        }
+    }
+
+    /// The structure or array, read whole.
+    fn finish(self) -> XmpValue {
+        XmpValue::of(match self.kind {
+            FrameKind::Fields { fields, .. } => XmpForm::Structure(fields),
+            FrameKind::Items { kind, items } => XmpForm::Array { kind, items },
+        })
     }
 }
 
@@ -465,6 +724,264 @@ mod tests {
         let repeated = packet("<rdf:Description xmp:Rating='1'/><rdf:Description xmp:Rating='2'/>");
         let one = Limits::default().with_max_xmp_values(1);
         assert!(Xmp::read(repeated.as_bytes(), &one).is_err());
+    }
+
+    /// The structure `{stDim:w: 8.5, stDim:h: 11.0}`, in the example
+    /// namespace.
+    fn page_size() -> XmpValue {
+        XmpValue::structure([
+            XmpProperty::new("urn:example:", "w", "8.5"),
+            XmpProperty::new("urn:example:", "h", "11.0"),
+        ])
+    }
+
+    #[test]
+    fn a_structure_in_each_of_its_three_forms_gives_one_value() {
+        let xmp = read_body(
+            "<ex:a rdf:parseType='Resource'><ex:w>8.5</ex:w><ex:h>11.0</ex:h></ex:a>\
+             <ex:b><rdf:Description><ex:w>8.5</ex:w><ex:h>11.0</ex:h></rdf:Description></ex:b>\
+             <ex:c ex:w='8.5' ex:h='11.0'/>\
+             <ex:d><rdf:Description ex:w='8.5'><ex:h>11.0</ex:h></rdf:Description></ex:d>",
+        );
+        assert_eq!(names(&xmp), ["a", "b", "c", "d"]);
+        for property in &xmp {
+            assert_eq!(property.value(), &page_size(), "{}", property.name());
+        }
+    }
+
+    #[test]
+    fn an_empty_structure_is_a_structure() {
+        let xmp = read_body("<ex:a rdf:parseType='Resource'/><ex:b><rdf:Description/></ex:b>");
+        for property in &xmp {
+            assert_eq!(property.value().form(), &XmpForm::Structure(Vec::new()));
+        }
+        assert_eq!(xmp.len(), 2);
+    }
+
+    #[test]
+    fn bag_seq_and_alt_give_the_three_kinds_of_array() {
+        let xmp = read_body(
+            "<dc:subject><rdf:Bag><rdf:li>harbor</rdf:li><rdf:li>sunrise</rdf:li></rdf:Bag></dc:subject>\
+             <dc:creator><rdf:Seq><rdf:li>Claude Monet</rdf:li></rdf:Seq></dc:creator>\
+             <dc:rights><rdf:Alt><rdf:li>Public domain</rdf:li></rdf:Alt></dc:rights>",
+        );
+        let kinds = [
+            (
+                "subject",
+                XmpArrayKind::Unordered,
+                vec!["harbor", "sunrise"],
+            ),
+            ("creator", XmpArrayKind::Ordered, vec!["Claude Monet"]),
+            ("rights", XmpArrayKind::Alternative, vec!["Public domain"]),
+        ];
+        for (name, kind, items) in kinds {
+            let value = xmp.property(DC, name).expect(name);
+            let expected = XmpValue::array(kind, items.into_iter().map(XmpValue::from));
+            assert_eq!(value, &expected, "{name}");
+        }
+    }
+
+    #[test]
+    fn an_empty_bag_is_an_empty_array() {
+        // As editors write dc:subject with no keyword.
+        let xmp = read_body("<dc:subject><rdf:Bag/></dc:subject>");
+        let subject = xmp.property(DC, "subject").expect("subject");
+        assert_eq!(subject, &XmpValue::array(XmpArrayKind::Unordered, []));
+        assert!(subject.items().is_empty());
+    }
+
+    #[test]
+    fn values_nest_in_any_form() {
+        let xmp = read_body(
+            "<ex:list><rdf:Seq>\
+               <rdf:li rdf:parseType='Resource'><ex:w>8.5</ex:w><ex:h>11.0</ex:h></rdf:li>\
+               <rdf:li ex:w='8.5' ex:h='11.0'/>\
+               <rdf:li rdf:resource='urn:example:item'/>\
+               <rdf:li><rdf:Bag><rdf:li>inner</rdf:li></rdf:Bag></rdf:li>\
+             </rdf:Seq></ex:list>\
+             <ex:outer rdf:parseType='Resource'><ex:tags><rdf:Bag><rdf:li>t</rdf:li></rdf:Bag></ex:tags>\
+               <ex:inner rdf:parseType='Resource'><ex:leaf>deep</ex:leaf></ex:inner></ex:outer>",
+        );
+        let expected = XmpValue::array(
+            XmpArrayKind::Ordered,
+            [
+                page_size(),
+                page_size(),
+                XmpValue::uri("urn:example:item"),
+                XmpValue::array(XmpArrayKind::Unordered, ["inner".into()]),
+            ],
+        );
+        assert_eq!(xmp.property("urn:example:", "list"), Some(&expected));
+        let outer = xmp.property("urn:example:", "outer").expect("outer");
+        let tags = outer.field("urn:example:", "tags").expect("tags");
+        assert_eq!(tags.items(), [XmpValue::simple("t")]);
+        let leaf = outer
+            .field("urn:example:", "inner")
+            .and_then(|inner| inner.field("urn:example:", "leaf"));
+        assert_eq!(leaf.and_then(XmpValue::text), Some("deep"));
+    }
+
+    #[test]
+    fn a_repeated_field_gives_its_first_value() {
+        let xmp = read_body(
+            "<ex:a rdf:parseType='Resource'><ex:w>first</ex:w><ex:w>second</ex:w></ex:a>\
+             <ex:b><rdf:Description ex:w='attribute'><ex:w>element</ex:w></rdf:Description></ex:b>",
+        );
+        let a = xmp.property("urn:example:", "a").expect("a");
+        assert_eq!(a.fields().len(), 1);
+        assert_eq!(
+            a.field("urn:example:", "w").and_then(XmpValue::text),
+            Some("first")
+        );
+        let b = xmp.property("urn:example:", "b").expect("b");
+        assert_eq!(
+            b.field("urn:example:", "w").and_then(XmpValue::text),
+            Some("attribute")
+        );
+    }
+
+    #[test]
+    fn each_form_xmp_forbids_costs_its_property_and_no_other() {
+        for (form, broken) in [
+            (
+                "parseType Literal",
+                "<ex:p rdf:parseType='Literal'><b>x</b></ex:p>",
+            ),
+            (
+                "parseType Collection",
+                "<ex:p rdf:parseType='Collection'><ex:i/></ex:p>",
+            ),
+            ("rdf:ID", "<ex:p rdf:ID='id'>x</ex:p>"),
+            ("rdf:nodeID", "<ex:p rdf:nodeID='n'/>"),
+            ("rdf:datatype", "<ex:p rdf:datatype='urn:t'>1</ex:p>"),
+            (
+                "rdf:li outside an array",
+                "<ex:p rdf:parseType='Resource'><rdf:li>x</rdf:li></ex:p>",
+            ),
+            ("text beside an element", "<ex:p>text<rdf:Bag/></ex:p>"),
+            (
+                "text in a structure",
+                "<ex:p rdf:parseType='Resource'>text<ex:f>x</ex:f></ex:p>",
+            ),
+            (
+                "text in an array",
+                "<ex:p><rdf:Bag>text<rdf:li>x</rdf:li></rdf:Bag></ex:p>",
+            ),
+            ("two elements", "<ex:p><rdf:Bag/><rdf:Bag/></ex:p>"),
+            (
+                "rdf:about inside",
+                "<ex:p><rdf:Description rdf:about=''><ex:f>x</ex:f></rdf:Description></ex:p>",
+            ),
+            (
+                "xml:lang on rdf:Description",
+                "<ex:p><rdf:Description xml:lang='en'><ex:f>x</ex:f></rdf:Description></ex:p>",
+            ),
+            (
+                "fields as attributes and elements",
+                "<ex:p ex:f='1'><ex:g>2</ex:g></ex:p>",
+            ),
+            (
+                "fields as attributes with parseType",
+                "<ex:p rdf:parseType='Resource' ex:f='1'/>",
+            ),
+            (
+                "fields as attributes with text",
+                "<ex:p ex:f='1'>text</ex:p>",
+            ),
+            (
+                "a resource with fields",
+                "<ex:p rdf:resource='urn:x' ex:f='1'/>",
+            ),
+            (
+                "a resource with parseType",
+                "<ex:p rdf:resource='urn:x' rdf:parseType='Resource'/>",
+            ),
+            (
+                "an array item not rdf:li",
+                "<ex:p><rdf:Bag><ex:i>x</ex:i></rdf:Bag></ex:p>",
+            ),
+            (
+                "rdf:_1",
+                "<ex:p><rdf:Seq><rdf:_1>x</rdf:_1></rdf:Seq></ex:p>",
+            ),
+            (
+                "an attribute on an array",
+                "<ex:p><rdf:Bag ex:a='1'><rdf:li>x</rdf:li></rdf:Bag></ex:p>",
+            ),
+            (
+                "xml:lang on an array",
+                "<ex:p><rdf:Alt xml:lang='en'><rdf:li>x</rdf:li></rdf:Alt></ex:p>",
+            ),
+            ("an RDF element in a value", "<ex:p><rdf:Statement/></ex:p>"),
+            (
+                "a field with no namespace",
+                "<ex:p rdf:parseType='Resource'><f>x</f></ex:p>",
+            ),
+            (
+                "a field in the XML namespace",
+                "<ex:p rdf:parseType='Resource'><xml:f>x</xml:f></ex:p>",
+            ),
+            (
+                "damage deep inside",
+                "<ex:p rdf:parseType='Resource'><ex:q><rdf:Bag><rdf:li rdf:ID='i'/></rdf:Bag></ex:q></ex:p>",
+            ),
+        ] {
+            let xmp = read_body(&format!(
+                "<xmp:Label>before</xmp:Label>{broken}<xmp:Rating>3</xmp:Rating>"
+            ));
+            assert_eq!(names(&xmp), ["Label", "Rating"], "{form}");
+        }
+    }
+
+    #[test]
+    fn white_space_and_comments_between_elements_are_no_text() {
+        let xmp = read_body(
+            "<dc:subject>\n  <!-- keywords -->\n  <rdf:Bag>\n    <rdf:li>a</rdf:li>\n  </rdf:Bag>\n</dc:subject>",
+        );
+        let subject = xmp.property(DC, "subject").expect("subject");
+        assert_eq!(subject.items(), [XmpValue::simple("a")]);
+    }
+
+    #[test]
+    fn nested_values_count_toward_the_limit() {
+        // The property, its two fields, the second an array, and that
+        // array's two items: 5 values.
+        let body = "<ex:p rdf:parseType='Resource'><ex:a>1</ex:a>\
+            <ex:b><rdf:Bag><rdf:li>x</rdf:li><rdf:li>y</rdf:li></rdf:Bag></ex:b></ex:p>";
+        let text = packet(&format!("<rdf:Description>{body}</rdf:Description>"));
+        let five = Limits::default().with_max_xmp_values(5);
+        let xmp = Xmp::read(text.as_bytes(), &five).expect("five values");
+        assert_eq!(xmp.len(), 1);
+        let four = Limits::default().with_max_xmp_values(4);
+        let err = Xmp::read(text.as_bytes(), &four).expect_err("past the limit");
+        assert_eq!(err.kind(), ErrorKind::LimitExceeded);
+        // Fields as attributes count too: the structure and its two fields.
+        let attributes = packet("<rdf:Description><ex:p ex:a='1' ex:b='2'/></rdf:Description>");
+        let two = Limits::default().with_max_xmp_values(2);
+        assert!(Xmp::read(attributes.as_bytes(), &two).is_err());
+        let three = Limits::default().with_max_xmp_values(3);
+        assert!(Xmp::read(attributes.as_bytes(), &three).is_ok());
+    }
+
+    #[test]
+    fn values_nest_as_deep_as_the_xml_limit_allows() {
+        // x:xmpmeta, rdf:RDF and rdf:Description, then 61 property levels.
+        let levels = 61;
+        let body = format!(
+            "{}x{}",
+            "<ex:p rdf:parseType='Resource'>".repeat(levels - 1) + "<ex:p>",
+            "</ex:p>".repeat(levels)
+        );
+        let text = packet(&format!("<rdf:Description>{body}</rdf:Description>"));
+        let xmp = Xmp::from_bytes(text.as_bytes()).expect("64 levels");
+        let mut value = xmp.property("urn:example:", "p");
+        for _ in 1..levels {
+            value = value.and_then(|value| value.field("urn:example:", "p"));
+        }
+        assert_eq!(value.and_then(XmpValue::text), Some("x"));
+        let deeper = text.replacen("<ex:p>", "<ex:p rdf:parseType='Resource'><ex:p>", 1);
+        let err = Xmp::from_bytes(deeper.as_bytes()).expect_err("65 levels");
+        assert_eq!(err.kind(), ErrorKind::LimitExceeded);
     }
 
     #[test]

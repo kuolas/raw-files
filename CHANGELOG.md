@@ -534,6 +534,16 @@ does. An entry that can break a caller opens with **Breaking:**.
   - A packet past either cap fails with `ErrorKind::LimitExceeded`.
   - `Limits::unlimited()` lifts both. Its docs say why the cap on depth
     also guards the stack.
+- `Xmp` reads structures and arrays: a property, field or item may hold
+  either, nested as deep as the XML allows
+  ([#237](https://github.com/kuolas/raw-files/issues/237)).
+  - A structure is read in each of XMP Part 1's three forms: an
+    `rdf:Description`, `rdf:parseType="Resource"`, or simple fields as
+    attributes.
+  - `rdf:Bag`, `rdf:Seq` and `rdf:Alt` give the three `XmpArrayKind`s,
+    their `rdf:li` items in order.
+  - RDF that XMP forbids anywhere inside a property costs that property
+    alone.
 
 ### Changed
 
