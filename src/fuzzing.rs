@@ -162,8 +162,9 @@ pub fn jpeg_probe(data: &[u8]) {
 /// Reads `data` as a JPEG file, all of it with the default limits: the walk
 /// over its segments, then whether the frame header it kept is lossless;
 /// the TIFF structure of its Exif segment, with every value of every IFD
-/// read through each accessor, as [`tiff_walk`] reads a TIFF file; and the
-/// index of its MPF segment.
+/// read through each accessor, as [`tiff_walk`] reads a TIFF file; the
+/// packet of its XMP segment, walked as the `xmp` target walks one; and
+/// the index of its MPF segment.
 ///
 /// Whatever `data` holds, this must return, never panic, and do so in
 /// bounded time and memory. What it reads is thrown away: an error or a
@@ -184,6 +185,13 @@ pub fn jpeg_segments(data: &[u8]) {
         && let Ok(tree) = walk(&mut src, exif, &limits)
     {
         read_values(&mut src, &tree);
+    }
+    // The packet lies inside one segment, at most 65,533 bytes.
+    if let Some(packet) = &found.xmp
+        && let Ok(bytes) = src.bytes_once(packet.start, packet.end.saturating_sub(packet.start))
+        && let Ok(xmp) = Xmp::read(&bytes, &limits)
+    {
+        read_xmp(&xmp);
     }
     if let Some(index) = &found.mpf {
         let _ = mpf::index(&mut src, index, &limits);

@@ -285,8 +285,10 @@ impl Metadata {
     /// settings there.
     ///
     /// A NEF or ARW file holds its packet in IFD0's tag 0x02BC, of type
-    /// BYTE or UNDEFINED (XMP Part 3, Table 13). It is read and parsed when
-    /// the file is opened, wherever it lies. It is `None`:
+    /// BYTE or UNDEFINED (XMP Part 3, Table 13). A JPEG file holds it in an
+    /// APP1 segment whose payload starts with `http://ns.adobe.com/xap/1.0/`
+    /// and a zero byte (Table 6). It is read and parsed when the file is
+    /// opened, wherever it lies. It is `None`:
     ///
     /// - when the file holds no packet;
     /// - when IFD0's 0x02BC is of another type, or so short that it is held
@@ -294,8 +296,15 @@ impl Metadata {
     /// - when the packet is longer than the cap on one value
     ///   ([`Limits::max_value_bytes`](crate::Limits::max_value_bytes));
     /// - when it does not parse, as [`Xmp::from_bytes`] would refuse it.
-    ///   Such a packet stays reachable as the bytes of IFD0's 0x02BC, from
-    ///   [`CameraFile::entries`](crate::CameraFile::entries).
+    ///   A NEF's or ARW's stays reachable as the bytes of IFD0's 0x02BC,
+    ///   from [`CameraFile::entries`](crate::CameraFile::entries). A JPEG's
+    ///   is not reachable through raw-files: its segments are not entries.
+    ///
+    /// A JPEG file that holds two XMP segments gives the first, as it gives
+    /// its first Exif segment; the second is ignored, even when the first
+    /// does not parse. Extended XMP, the segments that continue a packet
+    /// too long for one, is not joined to it: the packet is the first
+    /// segment's alone.
     ///
     /// The packet is given apart from the texts the Exif tags record, which
     /// [`authorship`](Self::authorship) gives. Nothing is merged, even where

@@ -561,7 +561,8 @@ Every text and GPS value counted lies inside the blocks raw-files'
   ILCE-7M3 (57,346 bytes, nearly all padding), the D5300 (2,046 bytes)
   and the G7 X (3,996 bytes). [F] An APP13 segment that starts with
   `Photoshop 3.0` holds the IPTC block, which none of the eight camera
-  files writes. [F] raw-files will read both as the
+  files writes. [F] raw-files reads the first XMP segment's packet into
+  `Metadata::xmp`, and will read the IPTC block, as the
   [XMP and IPTC notes](../xmp-and-iptc.md) describe them, with the
   standards they cite.
 - **APP2** segments of two kinds may follow the Exif segment: FlashPix
@@ -1191,7 +1192,8 @@ them
   public files, 2,122 of mine), FlashPix extensions (2,139 of mine),
   ICC profiles (16), Photoshop segments holding IPTC resources (10),
   JFIF (2 public, 142 of mine), Adobe (4) and comments (1). raw-files
-  will read XMP and IPTC as the [XMP and IPTC notes](../xmp-and-iptc.md)
+  reads the XMP packet apart from the view, into `Metadata::xmp`, and
+  will read IPTC, as the [XMP and IPTC notes](../xmp-and-iptc.md)
   describe them. **[F]**
 - **Other makers' MakerNotes**, on 2,837 files: the view gives their
   bytes through the Exif IFD's 0x927C entry, and walks none of them

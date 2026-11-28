@@ -10,6 +10,7 @@ use std::io::{self, Cursor, Read, Seek, SeekFrom};
 use std::rc::Rc;
 
 use raw_files::{CameraFile, Directory, Format, Limits, Options, Xmp, namespaces};
+use support::jpeg_builder::JpegBuilder;
 use support::tiff_builder::{Order, RawValue, TiffBuilder};
 use support::xmp_packets;
 
@@ -298,4 +299,153 @@ fn the_z9_packet_is_given_whole() {
     assert_eq!(xmp, &Xmp::from_bytes(&packet).unwrap());
     let rating = xmp.property(namespaces::XMP, "Rating");
     assert_eq!(rating.and_then(raw_files::XmpValue::text), Some("0"));
+}
+
+/// The JPEG file `builder` describes, opened.
+fn opened(builder: &JpegBuilder) -> CameraFile<Cursor<Vec<u8>>> {
+    CameraFile::from_reader(Cursor::new(builder.build().bytes)).expect("the file opens")
+}
+
+/// The bytes of an Exif segment's TIFF structure whose IFD0 holds the Make
+/// `make`.
+fn exif(make: &str) -> Vec<u8> {
+    let mut tiff = TiffBuilder::new(Order::Little);
+    let ifd0 = tiff.ifd();
+    tiff.ascii(ifd0, MAKE, make);
+    tiff.build().bytes
+}
+
+/// A packet like [`packet`] with a rating of `rating`.
+fn rated(rating: u8) -> Vec<u8> {
+    let mut packet = packet();
+    let at = packet
+        .windows(10)
+        .position(|w| w == b"Rating=\"3\"")
+        .unwrap();
+    packet[at + 8] = b'0' + rating;
+    packet
+}
+
+#[test]
+fn a_jpegs_packet_is_given_before_or_after_its_exif_segment() {
+    for xmp_first in [false, true] {
+        let mut builder = JpegBuilder::new();
+        if xmp_first {
+            builder.xmp_bytes(&packet()).exif(&exif("Canon"));
+        } else {
+            builder.exif(&exif("Canon")).xmp_bytes(&packet());
+        }
+        let file = opened(&builder);
+        assert_eq!(file.format(), Format::Jpeg);
+        assert_eq!(file.metadata().xmp(), Some(&expected()), "{xmp_first}");
+        assert_eq!(file.metadata().camera().recorded_make(), Some("Canon"));
+    }
+    // Without an Exif segment too.
+    let mut builder = JpegBuilder::new();
+    builder.xmp_bytes(&packet());
+    let file = opened(&builder);
+    assert_eq!(file.metadata().xmp(), Some(&expected()));
+}
+
+#[test]
+fn a_jpeg_with_two_xmp_segments_gives_the_first() {
+    let mut builder = JpegBuilder::new();
+    builder
+        .xmp_bytes(&rated(1))
+        .exif(&exif("NIKON CORPORATION"))
+        .xmp_bytes(&rated(5));
+    let file = opened(&builder);
+    let rating = file
+        .metadata()
+        .xmp()
+        .and_then(|xmp| xmp.property(namespaces::XMP, "Rating"));
+    assert_eq!(rating.and_then(raw_files::XmpValue::text), Some("1"));
+    // The first stands even when it does not parse.
+    let mut builder = JpegBuilder::new();
+    builder.xmp("<x:xmpmeta>").xmp_bytes(&rated(5));
+    let file = opened(&builder);
+    assert_eq!(file.metadata().xmp(), None);
+}
+
+#[test]
+fn a_jpeg_with_an_extended_xmp_segment_alone_gives_no_packet() {
+    // The extension's identifier, then a GUID of 32 hexadecimal digits,
+    // the full length, the offset and the portion (XMP Part 3, Table 7).
+    let mut extended = b"http://ns.adobe.com/xmp/extension/\0".to_vec();
+    extended.extend_from_slice(b"0123456789ABCDEF0123456789ABCDEF");
+    let portion = packet();
+    let len = u32::try_from(portion.len()).unwrap();
+    extended.extend_from_slice(&len.to_be_bytes());
+    extended.extend_from_slice(&0_u32.to_be_bytes());
+    extended.extend_from_slice(&portion);
+    let mut builder = JpegBuilder::new();
+    builder.exif(&exif("SONY")).segment(0xE1, &extended);
+    let file = opened(&builder);
+    assert_eq!(file.metadata().xmp(), None);
+    assert_eq!(file.metadata().camera().recorded_make(), Some("SONY"));
+}
+
+#[test]
+fn a_jpegs_damaged_packet_gives_none_and_the_rest_of_the_metadata() {
+    let mut broken = packet();
+    let at = broken.windows(9).position(|w| w == b"</rdf:RDF").unwrap();
+    broken[at + 8] = b'X';
+    let mut builder = JpegBuilder::new();
+    builder.exif(&exif("NIKON CORPORATION")).xmp_bytes(&broken);
+    let file = opened(&builder);
+    assert_eq!(file.metadata().xmp(), None);
+    assert_eq!(
+        file.metadata().camera().recorded_make(),
+        Some("NIKON CORPORATION")
+    );
+    assert_eq!(file.previews().len(), 1);
+}
+
+#[test]
+fn a_jpegs_packet_longer_than_the_cap_on_one_value_gives_none() {
+    let packet = packet();
+    let mut builder = JpegBuilder::new();
+    builder.xmp_bytes(&packet);
+    let bytes = builder.build().bytes;
+    let len = u64::try_from(packet.len()).unwrap();
+    let open = |cap: u64| {
+        Options::new()
+            .with_limits(Limits::default().with_max_value_bytes(cap))
+            .from_reader(Cursor::new(bytes.clone()))
+            .unwrap()
+    };
+    assert_eq!(open(len).metadata().xmp(), Some(&expected()));
+    assert_eq!(open(len - 1).metadata().xmp(), None);
+}
+
+#[test]
+fn a_packet_in_a_jpegs_exif_segment_is_not_read() {
+    // IFD0 of the Exif segment holds a packet under 0x02BC, which no
+    // camera writes there: a JPEG's packet is its XMP segment's alone.
+    let mut tiff = TiffBuilder::new(Order::Little);
+    let ifd0 = tiff.ifd();
+    tiff.ascii(ifd0, MAKE, "NIKON CORPORATION")
+        .byte(ifd0, XMP, &packet());
+    let mut builder = JpegBuilder::new();
+    builder.exif(&tiff.build().bytes);
+    let file = opened(&builder);
+    assert_eq!(file.metadata().xmp(), None);
+    builder.xmp_bytes(&rated(5));
+    let file = opened(&builder);
+    let rating = file
+        .metadata()
+        .xmp()
+        .and_then(|xmp| xmp.property(namespaces::XMP, "Rating"));
+    assert_eq!(rating.and_then(raw_files::XmpValue::text), Some("5"));
+}
+
+#[test]
+fn the_lightroom_packet_is_given_whole() {
+    let packet = xmp_packets::lightroom_jpeg();
+    let mut builder = JpegBuilder::new();
+    builder.exif(&exif("NIKON CORPORATION")).xmp_bytes(&packet);
+    let file = opened(&builder);
+    let xmp = file.metadata().xmp().expect("the Lightroom packet");
+    assert_eq!(xmp, &Xmp::from_bytes(&packet).unwrap());
+    assert!(!xmp.is_empty());
 }

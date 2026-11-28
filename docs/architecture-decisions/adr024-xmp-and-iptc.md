@@ -316,8 +316,10 @@ Rejected:
 - A new namespace needs no release: the property list gives it.
 - A culler's reject mark is `Rating::Rejected`, the standard's -1.
 - A missing rating is `None`, never the 0 XMP Part 1 says to assume.
-- Opening a file costs one more read only for a packet that lies past
-  what `open` reads; no measured file has one.
+- Opening a file costs one more read for a packet that lies past what
+  `open` reads, or whose block the reader's cache has dropped by the time
+  it is read. One measured JPEG of mine pays it: long segments follow
+  its packet.
 - A later copy of a repeated segment, resource or property is not
   given. On the 17 measured JPEGs that repeat one, a caller sees the
   first.

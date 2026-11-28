@@ -115,8 +115,8 @@ Linux and Windows alike.
   read when asked for, and has a short form to print.
   [`CameraFile::entries`](https://docs.rs/raw-files/latest/raw_files/struct.CameraFile.html#method.entries)
   lists the directories.
-- **XMP.** The XMP packet a NEF or ARW file embeds, read when the file
-  is opened. And the XMP file an editor writes beside a picture, read by
+- **XMP.** The XMP packet a NEF, ARW or JPEG file embeds, read when
+  the file is opened. And the XMP file an editor writes beside a picture, read by
   its path, its bytes or a reader. raw-files gives every property a
   packet holds, with its structures, arrays and qualifiers, each named by
   its namespace and local name. raw-files never looks for a sidecar

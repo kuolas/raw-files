@@ -574,6 +574,15 @@ does. An entry that can break a caller opens with **Breaking:**.
     gives none, and the file opens. Its bytes stay readable from IFD0's
     entry.
   - It is given apart from the Exif texts of `Metadata::authorship`.
+- `Metadata::xmp` gives a JPEG file's XMP packet too: its first APP1
+  segment that starts with `http://ns.adobe.com/xap/1.0/` and a zero
+  byte ([#237](https://github.com/kuolas/raw-files/issues/237)).
+  - A second XMP segment is ignored, as a second Exif segment is.
+  - Long segments after the packet can cost one read, where the
+    reader's cache no longer holds the packet's block.
+  - Extended XMP's segments are not joined to the packet.
+  - A packet that does not parse gives none, and is not reachable
+    through raw-files: a JPEG's segments are not entries.
 
 ### Changed
 

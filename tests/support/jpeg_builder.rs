@@ -21,8 +21,9 @@
 //!   - [`JpegBuilder::exif`]: an APP1 segment, `FF E1`, holding `Exif`, two
 //!     zero bytes, and then the given TIFF structure, whose first byte is
 //!     its TIFF header;
-//!   - [`JpegBuilder::xmp`]: an APP1 segment holding the XMP namespace,
-//!     `http://ns.adobe.com/xap/1.0/` and a zero byte, then the given text;
+//!   - [`JpegBuilder::xmp`] and [`JpegBuilder::xmp_bytes`]: an APP1
+//!     segment holding the XMP namespace, `http://ns.adobe.com/xap/1.0/`
+//!     and a zero byte, then the given packet;
 //!   - [`JpegBuilder::app2`]: an APP2 segment, `FF E2`, holding the given
 //!     payload as it is;
 //!   - [`JpegBuilder::mpf`]: an APP2 segment holding the MPF index of the
@@ -169,6 +170,8 @@ enum Report {
     Nothing,
     /// Where its TIFF structure lies, after the Exif identifier.
     Exif,
+    /// Where its packet lies, after the XMP identifier.
+    Xmp,
     /// Where its payload lies.
     App2,
 }
@@ -284,11 +287,18 @@ impl JpegBuilder {
         self.add(APP1, payload, Report::Exif)
     }
 
-    /// Adds an APP1 segment holding [`XMP_ID`] and then `text`.
+    /// Adds an APP1 segment holding [`XMP_ID`] and then `text`;
+    /// [`Built::xmp_packet`] says where `text` landed.
     pub fn xmp(&mut self, text: &str) -> &mut Self {
+        self.xmp_bytes(text.as_bytes())
+    }
+
+    /// Adds an APP1 segment holding [`XMP_ID`] and then `packet`, which
+    /// need not be UTF-8; [`Built::xmp_packet`] says where it landed.
+    pub fn xmp_bytes(&mut self, packet: &[u8]) -> &mut Self {
         let mut payload = XMP_ID.to_vec();
-        payload.extend_from_slice(text.as_bytes());
-        self.add(APP1, payload, Report::Nothing)
+        payload.extend_from_slice(packet);
+        self.add(APP1, payload, Report::Xmp)
     }
 
     /// Adds an APP2 segment holding `payload` as it is;
@@ -441,6 +451,7 @@ impl JpegBuilder {
     pub fn build(&self) -> Built {
         let mut bytes = vec![0xFF, 0xD8];
         let mut exif = Vec::new();
+        let mut xmp = Vec::new();
         let mut app2 = Vec::new();
         // Where the MPF segment's payload starts, written as zeros first.
         let mut mpf_payload_at = None;
@@ -455,6 +466,7 @@ impl JpegBuilder {
                     match report {
                         Report::Nothing => {}
                         Report::Exif => exif.push(payload_at + to_u64(EXIF_ID.len())..end),
+                        Report::Xmp => xmp.push(payload_at + to_u64(XMP_ID.len())..end),
                         Report::App2 => app2.push(payload_at..end),
                     }
                 }
@@ -506,6 +518,7 @@ impl JpegBuilder {
         Built {
             bytes,
             exif,
+            xmp,
             app2,
             frame_header,
             image_end,
@@ -637,6 +650,7 @@ pub struct Built {
     /// The file.
     pub bytes: Vec<u8>,
     exif: Vec<Range<u64>>,
+    xmp: Vec<Range<u64>>,
     app2: Vec<Range<u64>>,
     frame_header: u64,
     image_end: u64,
@@ -651,6 +665,13 @@ impl Built {
     /// segment.
     pub fn exif_tiff(&self, n: usize) -> Range<u64> {
         self.exif[n].clone()
+    }
+
+    /// Where the packet of the `n`th XMP segment lies: from the byte after
+    /// its identifier, 29 bytes into the segment's payload, to the end of
+    /// the segment.
+    pub fn xmp_packet(&self, n: usize) -> Range<u64> {
+        self.xmp[n].clone()
     }
 
     /// Where the payload of the `n`th segment added with

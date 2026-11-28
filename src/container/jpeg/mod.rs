@@ -15,8 +15,8 @@
 //!   candidate itself: `probe` reads the width and height from the frame
 //!   header in the bytes the tags give.
 //! - [`segments`] reads a JPEG file: it keeps the file's frame header, its
-//!   Exif segment and its MPF segment, the parts a reader of the file
-//!   needs.
+//!   Exif segment, its XMP segment and its MPF segment, the parts a reader
+//!   of the file needs.
 //! - [`mpf::index`] reads the MPF segment's index: where the large
 //!   thumbnails the file holds after its first image lie, the first of
 //!   each class.
@@ -31,7 +31,8 @@
 //! The JPEG notes describe the marker segments, the frame header, and the
 //! Exif and MPF segments, with the standards' clauses
 //! (`docs/formats/jpeg/container-and-metadata.md`, sections 1, 2, 4
-//! and 7).
+//! and 7). The XMP and IPTC notes describe the XMP segment and the files
+//! that repeat it (`docs/formats/xmp-and-iptc.md`, sections 2 and 9).
 
 pub(crate) mod mpf;
 
@@ -64,6 +65,12 @@ const APP2: u8 = 0xE2;
 /// byte and a zero byte of padding (CIPA DC-008 4.7.2.3 and Figure 36,
 /// p. 105).
 const EXIF_ID: &[u8] = b"Exif\0\0";
+
+/// What the payload of an XMP segment starts with: the XMP namespace URI
+/// and a zero byte, 29 bytes, then the packet (XMP Part 3, Tables 5 and 6,
+/// pp. 13 to 14). Extended XMP's segments start with another URI, so they
+/// are not taken for it.
+const XMP_ID: &[u8] = b"http://ns.adobe.com/xap/1.0/\0";
 
 /// What the payload of an MPF segment starts with: `MPF` and a zero byte
 /// (CIPA DC-007 5.2.1 and Figure 4, pp. 10 to 11).
@@ -118,6 +125,10 @@ pub(crate) struct Segments {
     /// that header (CIPA DC-008 4.6.2, p. 28), and all of it lies inside
     /// the segment (ADR014).
     pub exif: Option<Block>,
+    /// Where the XMP packet of the first XMP segment lies: from the byte
+    /// after the segment's identifier, 29 bytes into its payload, to the
+    /// end of the segment (XMP Part 3, Table 6, pp. 13 to 14).
+    pub xmp: Option<Range<u64>>,
     /// The MPF index of the first MPF segment: its base is the MP header, 4
     /// bytes into the segment's payload, and its bounds run from there to
     /// the end of the segment. The index's offsets count from the MP header
@@ -352,12 +363,37 @@ fn frame_size<R: Read + Seek>(src: &mut Source<R>, segment: &Segment) -> Result<
     }))
 }
 
+/// Where the bytes that `segment` holds after `id`, its identifier, lie:
+/// from the first byte after the identifier to the end of the segment.
+/// `None` when the payload does not start with `id`, being too short to
+/// hold it included. A payload that holds `id` and too little after it
+/// still gives a range, which may be too short to read: the reader of
+/// those bytes finds that out, as damage.
+///
+/// # Errors
+///
+/// Those of reading `src`.
+fn after_id<R: Read + Seek>(
+    src: &mut Source<R>,
+    segment: &Segment,
+    id: &[u8],
+) -> Result<Option<Range<u64>>> {
+    let Ok(id_len) = u64::try_from(id.len()) else {
+        return Ok(None);
+    };
+    let at = segment.payload.start;
+    let Some(start) = within(at, id_len, segment.payload.end) else {
+        return Ok(None);
+    };
+    if src.bytes(at, id_len)? != id {
+        return Ok(None);
+    }
+    Ok(Some(start..segment.payload.end))
+}
+
 /// The block that `segment` holds after `id`, its identifier: its base is
 /// the first byte after the identifier, and its bounds run from there to
-/// the end of the segment. `None` when the payload does not start with
-/// `id`, being too short to hold it included. A payload that holds `id`
-/// and too little after it still gives a block, which may be too small to
-/// read: the reader of the block finds that out, as damage.
+/// the end of the segment, as [`after_id`] finds them.
 ///
 /// # Errors
 ///
@@ -367,17 +403,7 @@ fn block_after<R: Read + Seek>(
     segment: &Segment,
     id: &[u8],
 ) -> Result<Option<Block>> {
-    let Ok(id_len) = u64::try_from(id.len()) else {
-        return Ok(None);
-    };
-    let at = segment.payload.start;
-    let Some(base) = within(at, id_len, segment.payload.end) else {
-        return Ok(None);
-    };
-    if src.bytes(at, id_len)? != id {
-        return Ok(None);
-    }
-    Ok(Some(Block::new(base, base..segment.payload.end)))
+    Ok(after_id(src, segment, id)?.map(|bounds| Block::new(bounds.start, bounds)))
 }
 
 /// Finds the frame header of the JPEG stream in the `len` bytes at
@@ -424,9 +450,11 @@ pub(crate) fn probe<R: Read + Seek>(
 }
 
 /// Walks the segments of the JPEG file in `src`, from SOI, and keeps its
-/// first frame header, its first Exif segment and its first MPF segment. A
-/// later Exif or MPF segment is skipped, as XMP and every other application
-/// segment are. What the walk found before it ended is kept, whatever ended
+/// first frame header, its first Exif segment, its first XMP segment and
+/// its first MPF segment. A later Exif, XMP or MPF segment is skipped, as
+/// every other application segment is, Extended XMP's included: the first
+/// copy stands, as for Exif (ADR014, ADR024). What the walk found before it
+/// ended is kept, whatever ended
 /// it ([`Walk`]), the cap of `limits` included
 /// ([`Limits::max_jpeg_markers`]).
 ///
@@ -455,8 +483,15 @@ pub(crate) fn segments<R: Read + Seek>(
                 frame_seen = true;
                 found.frame = frame_size(walk.source(), &segment)?;
             }
-        } else if segment.marker == APP1 && found.exif.is_none() {
-            found.exif = block_after(walk.source(), &segment, EXIF_ID)?;
+        } else if segment.marker == APP1 {
+            // An APP1 segment holds Exif or XMP, told apart by its
+            // identifier, so at most one of these finds it.
+            if found.exif.is_none() {
+                found.exif = block_after(walk.source(), &segment, EXIF_ID)?;
+            }
+            if found.xmp.is_none() {
+                found.xmp = after_id(walk.source(), &segment, XMP_ID)?;
+            }
         } else if segment.marker == APP2 && found.mpf.is_none() {
             found.mpf = block_after(walk.source(), &segment, MPF_ID)?;
         }
@@ -1051,11 +1086,12 @@ mod tests {
     }
 
     /// The segments found in a camera's JPEG: its frame header, its Exif
-    /// segment and its MPF segment.
+    /// segment, its XMP segment and its MPF segment.
     fn camera_jpeg_segments(built: &Built) -> Segments {
         Segments {
             frame: baseline(640, 480),
             exif: Some(exif_block(built, 0)),
+            xmp: Some(built.xmp_packet(0)),
             mpf: Some(mpf_block(built, 0)),
         }
     }
@@ -1109,7 +1145,7 @@ mod tests {
     }
 
     #[test]
-    fn a_camera_jpeg_gives_its_frame_exif_and_mpf() {
+    fn a_camera_jpeg_gives_its_frame_exif_xmp_and_mpf() {
         let built = camera_jpeg();
         let found = segments_of(&built.bytes);
         assert_eq!(found, camera_jpeg_segments(&built));
@@ -1145,6 +1181,7 @@ mod tests {
             Segments {
                 frame: baseline(640, 480),
                 exif: Some(exif_block(&built, 0)),
+                xmp: None,
                 mpf: Some(mpf_block(&built, 0)),
             }
         );
@@ -1173,6 +1210,7 @@ mod tests {
             Segments {
                 frame: baseline(640, 480),
                 exif: Some(exif_block(&built, 0)),
+                xmp: None,
                 mpf: Some(mpf_block(&built, 0)),
             }
         );
@@ -1194,6 +1232,7 @@ mod tests {
                 Segments {
                     frame: None,
                     exif: Some(exif_block(&built, 0)),
+                    xmp: None,
                     mpf: None,
                 },
                 "length {length}"
@@ -1214,6 +1253,7 @@ mod tests {
             Segments {
                 frame: baseline(640, 480),
                 exif: Some(exif_block(&built, 0)),
+                xmp: None,
                 mpf: Some(mpf_block(&built, 0)),
             }
         );
@@ -1235,6 +1275,7 @@ mod tests {
                 Segments {
                     frame: None,
                     exif: None,
+                    xmp: None,
                     mpf: mpf.clone(),
                 },
                 "cut at {cut}"
@@ -1247,6 +1288,7 @@ mod tests {
             Segments {
                 frame: None,
                 exif: Some(exif_block(&built, 0)),
+                xmp: None,
                 mpf,
             }
         );
@@ -1281,11 +1323,13 @@ mod tests {
     fn an_xmp_segment_is_not_exif() {
         let mut builder = JpegBuilder::new();
         builder.xmp("<x:xmpmeta/>");
+        let built = builder.build();
         assert_eq!(
-            segments_of(&builder.build().bytes),
+            segments_of(&built.bytes),
             Segments {
                 frame: baseline(640, 480),
                 exif: None,
+                xmp: Some(built.xmp_packet(0)),
                 mpf: None,
             }
         );
@@ -1293,6 +1337,74 @@ mod tests {
         builder.exif(&TIFF);
         let built = builder.build();
         assert_eq!(segments_of(&built.bytes).exif, Some(exif_block(&built, 0)));
+    }
+
+    #[test]
+    fn the_xmp_segment_is_found_before_or_after_the_exif_segment() {
+        for xmp_first in [false, true] {
+            let mut builder = JpegBuilder::new();
+            if xmp_first {
+                builder.xmp("<x:xmpmeta/>").exif(&TIFF);
+            } else {
+                builder.exif(&TIFF).xmp("<x:xmpmeta/>");
+            }
+            let built = builder.build();
+            let found = segments_of(&built.bytes);
+            assert_eq!(found.exif, Some(exif_block(&built, 0)), "{xmp_first}");
+            let packet = built.xmp_packet(0);
+            assert_eq!(found.xmp, Some(packet.clone()), "{xmp_first}");
+            // The packet alone, after the identifier, to the segment's end.
+            let at = usize::try_from(packet.start).unwrap();
+            let end = usize::try_from(packet.end).unwrap();
+            assert_eq!(&built.bytes[at..end], b"<x:xmpmeta/>");
+            assert_eq!(&built.bytes[at - 29..at], b"http://ns.adobe.com/xap/1.0/\0");
+        }
+    }
+
+    #[test]
+    fn a_second_xmp_segment_is_skipped() {
+        let mut builder = JpegBuilder::new();
+        builder.xmp("<first/>").exif(&TIFF).xmp("<second/>");
+        let built = builder.build();
+        let found = segments_of(&built.bytes);
+        assert_eq!(found.xmp, Some(built.xmp_packet(0)));
+        assert_ne!(built.xmp_packet(0), built.xmp_packet(1));
+        assert_eq!(found.exif, Some(exif_block(&built, 0)));
+    }
+
+    #[test]
+    fn an_app1_segment_without_the_whole_xmp_identifier_is_not_xmp() {
+        // Extended XMP, which starts with another URI; the URI without its
+        // zero byte, cut short, and with another byte in place of the
+        // zero: none is XMP, and each lets an XMP segment after it be
+        // taken.
+        let extended = b"http://ns.adobe.com/xmp/extension/\0GUID";
+        let no_zero = b"http://ns.adobe.com/xap/1.0/<x:xmpmeta/>";
+        let short = b"http://ns.adobe.com/xap/1.0";
+        let other = b"http://ns.adobe.com/xap/1.0/\x01<x:xmpmeta/>";
+        for payload in [&extended[..], no_zero, short, other, b""] {
+            let mut builder = JpegBuilder::new();
+            builder.segment(0xE1, payload);
+            assert_eq!(
+                segments_of(&builder.build().bytes).xmp,
+                None,
+                "{payload:02X?}"
+            );
+            builder.xmp("<x:xmpmeta/>");
+            let built = builder.build();
+            assert_eq!(
+                segments_of(&built.bytes).xmp,
+                Some(built.xmp_packet(0)),
+                "{payload:02X?}"
+            );
+        }
+        // The identifier alone is XMP, with an empty packet.
+        let mut builder = JpegBuilder::new();
+        builder.xmp("");
+        let built = builder.build();
+        let packet = built.xmp_packet(0);
+        assert_eq!(packet.start, packet.end);
+        assert_eq!(segments_of(&built.bytes).xmp, Some(packet));
     }
 
     #[test]
@@ -1390,6 +1502,7 @@ mod tests {
                 Segments {
                     frame: None,
                     exif: Some(exif_block(&built, 0)),
+                    xmp: None,
                     mpf: None,
                 },
                 "marker {marker:02X}"
@@ -1418,6 +1531,7 @@ mod tests {
                 Segments {
                     frame: None,
                     exif: Some(exif_block(&built, 0)),
+                    xmp: None,
                     mpf: None,
                 },
                 "{eoi:02X?}"
@@ -1467,6 +1581,7 @@ mod tests {
                 Segments {
                     frame: None,
                     exif: Some(exif_block(&built, 0)),
+                    xmp: None,
                     mpf: None,
                 },
                 "{payload:02X?}"
@@ -1646,6 +1761,9 @@ mod tests {
                     .then_some(whole.frame)
                     .flatten(),
                 exif: (cut >= exif.end).then(|| whole.exif.clone()).flatten(),
+                xmp: (cut >= built.xmp_packet(0).end)
+                    .then(|| whole.xmp.clone())
+                    .flatten(),
                 mpf: (cut >= built.app2_payload(0).end)
                     .then(|| whole.mpf.clone())
                     .flatten(),
