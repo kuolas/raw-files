@@ -544,6 +544,14 @@ does. An entry that can break a caller opens with **Breaking:**.
     their `rdf:li` items in order.
   - RDF that XMP forbids anywhere inside a property costs that property
     alone.
+- `Xmp` reads a value's qualifiers, which `XmpValue::qualifiers` gives
+  in the packet's order
+  ([#237](https://github.com/kuolas/raw-files/issues/237)).
+  - `xml:lang` gives a value of any form its language, which
+    `XmpValue::language` gives as written.
+  - `rdf:value` gives a value whose other fields qualify it.
+  - A typed node is read as a structure, its type kept as the qualifier
+    `rdf:type`.
 
 ### Changed
 

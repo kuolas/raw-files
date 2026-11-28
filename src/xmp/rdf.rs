@@ -12,7 +12,8 @@
 //! (§7.4).
 //!
 //! A property is an attribute of an `rdf:Description`, a simple value, or
-//! one of its child elements. The value of an element, whether a
+//! one of its child elements. An `rdf:type` attribute, here or as a field
+//! or qualifier, is a URI, since RDF reads its value as one. The value of an element, whether a
 //! property, a field of a structure or an item of an array, takes one of
 //! these forms:
 //!
@@ -29,22 +30,35 @@
 //!   ordered or alternative array of its `rdf:li` children (§7.7).
 //!
 //! A field or an item takes any of these forms in turn, so values nest
-//! as deep as the XML does.
+//! as deep as the XML does. Qualifiers are read with them (§7.8):
+//!
+//! - an `xml:lang` attribute on the element gives its value a language,
+//!   whatever the form;
+//! - an `rdf:value` among a structure's fields makes its value the one
+//!   read, and the other fields its qualifiers, in any of the structure's
+//!   forms;
+//! - a typed node is an element of another namespace where an
+//!   `rdf:Description` may stand (§7.9.2.5). It is read as one, and its
+//!   namespace URI and name, joined, become the value's `rdf:type`
+//!   qualifier.
 //!
 //! Damage here has a smaller reach than in the XML. A property whose RDF
 //! breaks XMP Part 1, §7, anywhere inside its value, is left out, and the
-//! others stand: `rdf:parseType="Literal"`, `rdf:ID`, `rdf:nodeID`,
-//! `rdf:li` outside an array, or text beside an element, for example. So
-//! is a
-//! property whose name is in the RDF namespace, which XMP forbids but for
-//! `rdf:type`, or the XML namespace, or no namespace at all: an XMP name
-//! needs a namespace (§6.2). An `rdf:Description` that breaks §7.4
-//! itself, with text in it, an `xml:lang`, or an RDF attribute other than
-//! `rdf:about` and `rdf:type`, is left out with every property it holds.
-//! A property repeated in the packet, or a field in its structure, is left
-//! out after its first. An
-//! attribute with no namespace is not an XMP name, and is ignored, as an
-//! attribute of the XML namespace other than `xml:lang` is.
+//! others stand. Such RDF includes `rdf:parseType="Literal"`, `rdf:ID`,
+//! `rdf:nodeID`, `rdf:li` outside an array, and text beside an element.
+//! Some names cost their property too (§6.2):
+//!
+//! - a name in the RDF namespace, which XMP forbids but for `rdf:type`;
+//! - a name in the XML namespace;
+//! - a name with no namespace, since an XMP name needs one.
+//!
+//! An `rdf:Description` that breaks §7.4 itself is left out with every
+//! property it holds. It breaks it with text in it, an `xml:lang`, or an
+//! RDF attribute other than `rdf:about` and `rdf:type`. A property
+//! repeated in the packet is left out after its first, and so is a
+//! repeated field or qualifier. An attribute with no namespace is not an
+//! XMP name, and is ignored. So is an attribute of the XML namespace
+//! other than `xml:lang`.
 //!
 //! The walk is a loop, never recursive. It counts every value it builds,
 //! and stops with [`ErrorKind::LimitExceeded`] past
@@ -224,7 +238,12 @@ impl<'d> Walk<'d> {
                             return Ok(None);
                         };
                         let element = frame.element;
-                        (element, self.count(frame.finish(), element.offset())?)
+                        let value = match frame.finish() {
+                            None => return Ok(None),
+                            Some(Finished::New(value)) => self.count(value, element.offset())?,
+                            Some(Finished::Qualified(value)) => value,
+                        };
+                        (element, value)
                     }
                 }
             };
@@ -239,21 +258,24 @@ impl<'d> Walk<'d> {
         }
     }
 
-    /// What a property element holds, from its attributes and content:
-    /// a value read whole, a structure or array whose elements are read
-    /// next, or RDF that XMP Part 1 forbids.
+    /// What a property element holds, from its attributes and content.
+    /// It is a value read whole, a structure or array whose elements are
+    /// read next, or RDF that XMP Part 1 forbids.
     fn open(&mut self, element: Element<'d>) -> Result<Opened<'d>> {
+        let offset = element.offset();
         let mut resource = None;
         let mut parse_type = None;
+        let mut value = None;
+        let mut language = None;
         let mut fields = Vec::new();
         for attribute in element.attributes() {
             match (attribute.namespace, attribute.local) {
                 (Some(RDF), "resource") => resource = Some(attribute.value),
                 (Some(RDF), "parseType") => parse_type = Some(attribute.value),
+                (Some(RDF), "value") => value = Some(attribute.value),
                 (Some(RDF), "type") => fields.push(attribute),
                 (Some(RDF), _) => return Ok(Opened::Broken),
-                // A qualifier, read by a later part of the walk.
-                (Some(XML), "lang") => return Ok(Opened::Broken),
+                (Some(XML), "lang") => language = Some(attribute.value),
                 (None | Some(XML), _) => {}
                 (Some(_), _) => fields.push(attribute),
             }
@@ -269,45 +291,73 @@ impl<'d> Walk<'d> {
             }
         }
         let blank = xml::is_blank(&text);
+        // The value's language, the one qualifier written as an attribute
+        // of the element itself, whatever the form (section 7.8).
+        let mut qualifiers = Vec::new();
+        if let Some(language) = language {
+            let language = self.count(XmpValue::simple(language), offset)?;
+            qualifiers.push(XmpProperty::new(XML, "lang", language));
+        }
         if let Some(parse_type) = parse_type {
             // A structure whose fields are the element's own children
             // (section 7.9.2.3); no field may be an attribute then.
-            if parse_type != "Resource" || resource.is_some() || !fields.is_empty() {
+            if parse_type != "Resource"
+                || resource.is_some()
+                || value.is_some()
+                || !fields.is_empty()
+            {
                 return Ok(Opened::Broken);
             }
-            return Ok(Opened::Frame(Frame::fields(element, element.children())));
+            let frame = Frame::fields(element, element.children(), qualifiers);
+            return Ok(Opened::Frame(frame));
         }
         if let Some(uri) = resource {
-            if !fields.is_empty() || first.is_some() || !blank {
+            if value.is_some() || !fields.is_empty() || first.is_some() || !blank {
                 return Ok(Opened::Broken);
             }
-            let value = self.count(XmpValue::uri(uri), element.offset())?;
-            return Ok(Opened::Value(value));
+            let uri = XmpValue {
+                form: XmpForm::Uri(uri.to_owned()),
+                qualifiers,
+            };
+            return Ok(Opened::Value(self.count(uri, offset)?));
         }
-        if !fields.is_empty() {
-            // A structure whose fields are all attributes, with no content
-            // (section 7.9.2.4).
+        if value.is_some() || !fields.is_empty() {
+            // Simple fields as attributes, with no content (section
+            // 7.9.2.4): a structure, or with rdf:value, a value and its
+            // qualifiers.
             if first.is_some() || !blank {
                 return Ok(Opened::Broken);
             }
-            let mut structure = Vec::with_capacity(fields.len());
+            let mut attributes = Vec::with_capacity(fields.len());
             for field in fields {
-                let value = self.count(XmpValue::simple(field.value), element.offset())?;
+                let field_value = self.count(attribute_value(field), offset)?;
                 let namespace = field.namespace.unwrap_or_default();
-                structure.push(XmpProperty::new(namespace, field.local, value));
+                attributes.push(XmpProperty::new(namespace, field.local, field_value));
             }
-            let value = self.count(
-                XmpValue::of(XmpForm::Structure(structure)),
-                element.offset(),
-            )?;
-            return Ok(Opened::Value(value));
+            let read = match value {
+                Some(value) => {
+                    qualifiers.extend(attributes);
+                    XmpValue {
+                        form: XmpForm::Simple(value.to_owned()),
+                        qualifiers,
+                    }
+                }
+                None => XmpValue {
+                    form: XmpForm::Structure(attributes),
+                    qualifiers,
+                },
+            };
+            return Ok(Opened::Value(self.count(read, offset)?));
         }
         let Some(child) = first else {
-            let value = self.count(XmpValue::simple(text), element.offset())?;
-            return Ok(Opened::Value(value));
+            let simple = XmpValue {
+                form: XmpForm::Simple(text),
+                qualifiers,
+            };
+            return Ok(Opened::Value(self.count(simple, offset)?));
         };
-        // One element and no text beside it: an array, or a structure in
-        // an rdf:Description (sections 7.6 and 7.7).
+        // One element and no text beside it: an array, a structure in an
+        // rdf:Description, or a typed node (sections 7.6, 7.7, 7.9.2.5).
         if more || !blank {
             return Ok(Opened::Broken);
         }
@@ -315,10 +365,18 @@ impl<'d> Walk<'d> {
             (Some(RDF), "Bag") => XmpArrayKind::Unordered,
             (Some(RDF), "Seq") => XmpArrayKind::Ordered,
             (Some(RDF), "Alt") => XmpArrayKind::Alternative,
-            (Some(RDF), "Description") => return self.description_value(element, child),
-            // A typed node, read by a later part of the walk; any other
-            // RDF name breaks section 7.
-            _ => return Ok(Opened::Broken),
+            (Some(RDF), "Description") => {
+                return self.description_value(element, child, qualifiers);
+            }
+            // Any other RDF name breaks section 7, and a typed node needs a
+            // namespace to name its type.
+            (Some(RDF | XML) | None, _) => return Ok(Opened::Broken),
+            (Some(namespace), local) => {
+                let kind =
+                    self.count(XmpValue::uri(format!("{namespace}{local}")), child.offset())?;
+                qualifiers.push(XmpProperty::new(RDF, "type", kind));
+                return self.description_value(element, child, qualifiers);
+            }
         };
         let attributes_allowed =
             child
@@ -331,28 +389,40 @@ impl<'d> Walk<'d> {
         if !attributes_allowed {
             return Ok(Opened::Broken);
         }
-        Ok(Opened::Frame(Frame::items(element, child.children(), kind)))
+        let frame = Frame::items(element, child.children(), kind, qualifiers);
+        Ok(Opened::Frame(frame))
     }
 
-    /// The structure an `rdf:Description` inside a property element holds:
-    /// its attributes are fields, and its child elements the others
-    /// (sections 7.6 and 7.9.2.2).
+    /// What an `rdf:Description` or a typed node inside a property element
+    /// holds, with `qualifiers` already found.
+    ///
+    /// It is a structure of its attributes and child elements (sections
+    /// 7.6 and 7.9.2.2). With an `rdf:value`, it is that value instead,
+    /// with the others as its qualifiers (section 7.8).
     fn description_value(
         &mut self,
         element: Element<'d>,
         description: Element<'d>,
+        qualifiers: Vec<XmpProperty>,
     ) -> Result<Opened<'d>> {
-        let mut frame = Frame::fields(element, description.children());
+        let mut frame = Frame::fields(element, description.children(), qualifiers);
         for attribute in description.attributes() {
             match (attribute.namespace, attribute.local) {
+                (Some(RDF), "value") => {
+                    let value =
+                        self.count(XmpValue::simple(attribute.value), description.offset())?;
+                    frame.set_value(value);
+                    continue;
+                }
                 (Some(RDF), "type") => {}
                 // rdf:about, rdf:ID and rdf:nodeID have no place in a
-                // value (section 7.4).
+                // value (section 7.4), nor xml:lang on rdf:Description
+                // (section 7.8).
                 (Some(RDF), _) | (Some(XML), "lang") => return Ok(Opened::Broken),
                 (None | Some(XML), _) => continue,
                 (Some(_), _) => {}
             }
-            let value = self.count(XmpValue::simple(attribute.value), description.offset())?;
+            let value = self.count(attribute_value(attribute), description.offset())?;
             frame.add(
                 attribute.namespace.unwrap_or_default(),
                 attribute.local,
@@ -373,12 +443,24 @@ enum Opened<'d> {
     Broken,
 }
 
+/// What [`Frame::finish`] read.
+enum Finished {
+    /// A structure or an array: a value not counted yet.
+    New(XmpValue),
+    /// The `rdf:value` of a structure that only qualifies it, counted when
+    /// it was read, with the structure's fields as its qualifiers.
+    Qualified(XmpValue),
+}
+
 /// A structure or an array still being read.
 struct Frame<'d> {
     /// The property, field or item element whose value this is.
     element: Element<'d>,
     /// The elements still to read: the fields, or the `rdf:li` items.
     children: Children<'d>,
+    /// The qualifiers found before the content: the language, and the
+    /// type of a typed node.
+    qualifiers: Vec<XmpProperty>,
     kind: FrameKind<'d>,
 }
 
@@ -387,6 +469,11 @@ enum FrameKind<'d> {
         fields: Vec<XmpProperty>,
         /// The name of each field, to leave a repeat out.
         names: HashSet<(&'d str, &'d str)>,
+        /// The `rdf:value`, when the fields only qualify it.
+        value: Option<XmpValue>,
+        /// Whether a second `rdf:value` was found, which breaks section
+        /// 7.8.
+        values: bool,
     },
     Items {
         kind: XmpArrayKind,
@@ -395,21 +482,30 @@ enum FrameKind<'d> {
 }
 
 impl<'d> Frame<'d> {
-    fn fields(element: Element<'d>, children: Children<'d>) -> Self {
+    fn fields(element: Element<'d>, children: Children<'d>, qualifiers: Vec<XmpProperty>) -> Self {
         Self {
             element,
             children,
+            qualifiers,
             kind: FrameKind::Fields {
                 fields: Vec::new(),
                 names: HashSet::new(),
+                value: None,
+                values: false,
             },
         }
     }
 
-    fn items(element: Element<'d>, children: Children<'d>, kind: XmpArrayKind) -> Self {
+    fn items(
+        element: Element<'d>,
+        children: Children<'d>,
+        kind: XmpArrayKind,
+        qualifiers: Vec<XmpProperty>,
+    ) -> Self {
         Self {
             element,
             children,
+            qualifiers,
             kind: FrameKind::Items {
                 kind,
                 items: Vec::new(),
@@ -418,18 +514,27 @@ impl<'d> Frame<'d> {
     }
 
     /// Whether `child` may stand in this structure or array: a field whose
-    /// name XMP allows, or an `rdf:li` item.
+    /// name XMP allows or an `rdf:value`, or an `rdf:li` item.
     fn allows(&self, child: Element<'_>) -> bool {
         match self.kind {
-            FrameKind::Fields { .. } => property_namespace(child).is_some(),
+            FrameKind::Fields { .. } => {
+                property_namespace(child).is_some() || child.is(RDF, "value")
+            }
             FrameKind::Items { .. } => child.is(RDF, "li"),
         }
     }
 
     /// Takes the value of `child`, one of this frame's elements; whether
-    /// the RDF allows it.
+    /// the RDF allows it. An `rdf:value` may have no qualifier of its own
+    /// (section 7.8).
     fn take(&mut self, child: Element<'d>, value: XmpValue) -> bool {
         match &mut self.kind {
+            FrameKind::Fields { .. } if child.is(RDF, "value") => {
+                if !value.qualifiers.is_empty() {
+                    return false;
+                }
+                self.set_value(value);
+            }
             FrameKind::Fields { .. } => {
                 self.add(child.namespace().unwrap_or_default(), child.local(), value);
             }
@@ -438,20 +543,67 @@ impl<'d> Frame<'d> {
         true
     }
 
+    /// Sets the `rdf:value` the fields qualify; a second one breaks the
+    /// structure.
+    fn set_value(&mut self, value: XmpValue) {
+        if let FrameKind::Fields {
+            value: slot,
+            values,
+            ..
+        } = &mut self.kind
+        {
+            if slot.is_some() {
+                *values = true;
+            } else {
+                *slot = Some(value);
+            }
+        }
+    }
+
     /// Adds a field, unless the structure gave its name before.
     fn add(&mut self, namespace: &'d str, local: &'d str, value: XmpValue) {
-        if let FrameKind::Fields { fields, names } = &mut self.kind
+        if let FrameKind::Fields { fields, names, .. } = &mut self.kind
             && names.insert((namespace, local))
         {
             fields.push(XmpProperty::new(namespace, local, value));
         }
     }
 
-    /// The structure or array, read whole.
-    fn finish(self) -> XmpValue {
-        XmpValue::of(match self.kind {
-            FrameKind::Fields { fields, .. } => XmpForm::Structure(fields),
-            FrameKind::Items { kind, items } => XmpForm::Array { kind, items },
+    /// The structure or array, read whole; `None` for a structure with two
+    /// `rdf:value`s.
+    fn finish(self) -> Option<Finished> {
+        let mut qualifiers = self.qualifiers;
+        Some(match self.kind {
+            FrameKind::Fields { values: true, .. } => return None,
+            FrameKind::Fields {
+                fields,
+                value: Some(mut value),
+                ..
+            } => {
+                // The fields qualify the value, after the qualifiers found
+                // before them; a name already there is left out. The
+                // fields' names are already unique, so each is checked
+                // against those few alone.
+                let before = qualifiers.len();
+                for field in fields {
+                    let known = qualifiers[..before].iter().any(|qualifier| {
+                        qualifier.namespace == field.namespace && qualifier.name == field.name
+                    });
+                    if !known {
+                        qualifiers.push(field);
+                    }
+                }
+                value.qualifiers = qualifiers;
+                Finished::Qualified(value)
+            }
+            FrameKind::Fields { fields, .. } => Finished::New(XmpValue {
+                form: XmpForm::Structure(fields),
+                qualifiers,
+            }),
+            FrameKind::Items { kind, items } => Finished::New(XmpValue {
+                form: XmpForm::Array { kind, items },
+                qualifiers,
+            }),
         })
     }
 }
@@ -982,6 +1134,300 @@ mod tests {
         let deeper = text.replacen("<ex:p>", "<ex:p rdf:parseType='Resource'><ex:p>", 1);
         let err = Xmp::from_bytes(deeper.as_bytes()).expect_err("65 levels");
         assert_eq!(err.kind(), ErrorKind::LimitExceeded);
+    }
+
+    #[test]
+    fn xml_lang_gives_a_language_to_a_value_of_any_form() {
+        let xmp = read_body(
+            "<dc:source xml:lang='en-US'>A book</dc:source>\
+             <xmp:BaseURL rdf:resource='https://example.com/' xml:lang='en'/>\
+             <ex:s xml:lang='fr' rdf:parseType='Resource'><ex:f>x</ex:f></ex:s>\
+             <ex:t xml:lang='de' ex:f='x'/>\
+             <dc:subject xml:lang='en'><rdf:Bag><rdf:li>XMP</rdf:li>\
+               <rdf:li xml:lang='fr'>Norme</rdf:li></rdf:Bag></dc:subject>\
+             <ex:u rdf:parseType='Resource'><ex:f xml:lang='it'>y</ex:f></ex:u>",
+        );
+        let language = |name: &str| {
+            let namespace = if name == "source" || name == "subject" {
+                DC
+            } else if name == "BaseURL" {
+                XMP
+            } else {
+                "urn:example:"
+            };
+            xmp.property(namespace, name).and_then(XmpValue::language)
+        };
+        assert_eq!(language("source"), Some("en-US"));
+        assert_eq!(language("BaseURL"), Some("en"));
+        assert_eq!(language("s"), Some("fr"));
+        assert_eq!(language("t"), Some("de"));
+        assert_eq!(language("subject"), Some("en"));
+        assert_eq!(
+            xmp.property(DC, "source").and_then(XmpValue::text),
+            Some("A book")
+        );
+        assert_eq!(
+            xmp.property(XMP, "BaseURL").map(XmpValue::form),
+            Some(&XmpForm::Uri("https://example.com/".to_owned()))
+        );
+        let subject = xmp.property(DC, "subject").expect("subject");
+        // A language on the array is the default of its items, not copied
+        // to them.
+        let items: Vec<Option<&str>> = subject.items().iter().map(XmpValue::language).collect();
+        assert_eq!(items, [None, Some("fr")]);
+        let field = xmp
+            .property("urn:example:", "u")
+            .and_then(|u| u.field("urn:example:", "f"));
+        assert_eq!(field.and_then(XmpValue::language), Some("it"));
+    }
+
+    #[test]
+    fn an_alt_of_languages_keeps_its_order_with_x_default_first_or_not() {
+        for (order, body) in [
+            (
+                ["x-default", "en", "fr"],
+                "<rdf:li xml:lang='x-default'>Hi</rdf:li><rdf:li xml:lang='en'>Hi</rdf:li><rdf:li xml:lang='fr'>Salut</rdf:li>",
+            ),
+            (
+                ["en", "fr", "x-default"],
+                "<rdf:li xml:lang='en'>Hi</rdf:li><rdf:li xml:lang='fr'>Salut</rdf:li><rdf:li xml:lang='x-default'>Hi</rdf:li>",
+            ),
+        ] {
+            let xmp = read_body(&format!("<dc:title><rdf:Alt>{body}</rdf:Alt></dc:title>"));
+            let title = xmp.property(DC, "title").expect("title");
+            let languages: Vec<&str> = title
+                .items()
+                .iter()
+                .filter_map(XmpValue::language)
+                .collect();
+            assert_eq!(languages, order);
+            let default = title
+                .items()
+                .iter()
+                .find(|item| item.language() == Some("x-default"));
+            assert_eq!(default.and_then(XmpValue::text), Some("Hi"));
+        }
+    }
+
+    #[test]
+    fn rdf_value_gives_a_value_with_general_qualifiers_in_each_form() {
+        let expected = XmpValue::simple("Adobe XMP Specification").with_qualifier(
+            "urn:example:",
+            "qualifier",
+            "artificial example",
+        );
+        let xmp = read_body(
+            "<ex:a><rdf:Description><rdf:value>Adobe XMP Specification</rdf:value>\
+               <ex:qualifier>artificial example</ex:qualifier></rdf:Description></ex:a>\
+             <ex:b rdf:parseType='Resource'><ex:qualifier>artificial example</ex:qualifier>\
+               <rdf:value>Adobe XMP Specification</rdf:value></ex:b>\
+             <ex:c><rdf:Description rdf:value='Adobe XMP Specification' ex:qualifier='artificial example'/></ex:c>\
+             <ex:d rdf:value='Adobe XMP Specification' ex:qualifier='artificial example'/>",
+        );
+        assert_eq!(names(&xmp), ["a", "b", "c", "d"]);
+        for property in &xmp {
+            assert_eq!(property.value(), &expected, "{}", property.name());
+        }
+    }
+
+    #[test]
+    fn a_qualified_value_keeps_its_own_form_and_its_language_first() {
+        let xmp = read_body(
+            "<xmp:BaseURL xml:lang='en'><rdf:Description><rdf:value rdf:resource='https://example.com/'/>\
+               <ex:q rdf:parseType='Resource'><ex:f>structured</ex:f></ex:q></rdf:Description></xmp:BaseURL>\
+             <ex:list rdf:parseType='Resource'><rdf:value><rdf:Seq><rdf:li>a</rdf:li></rdf:Seq></rdf:value>\
+               <ex:q>about the list</ex:q></ex:list>",
+        );
+        let url = xmp.property(XMP, "BaseURL").expect("BaseURL");
+        assert_eq!(url.form(), &XmpForm::Uri("https://example.com/".to_owned()));
+        let names: Vec<&str> = url.qualifiers().iter().map(XmpProperty::name).collect();
+        assert_eq!(names, ["lang", "q"]);
+        let q = url.qualifier("urn:example:", "q").expect("q");
+        assert_eq!(
+            q.field("urn:example:", "f").and_then(XmpValue::text),
+            Some("structured")
+        );
+        let list = xmp.property("urn:example:", "list").expect("list");
+        assert_eq!(list.items(), [XmpValue::simple("a")]);
+        assert_eq!(
+            list.qualifier("urn:example:", "q").and_then(XmpValue::text),
+            Some("about the list")
+        );
+    }
+
+    #[test]
+    fn a_qualifier_on_an_item_stays_with_the_item() {
+        let xmp = read_body(
+            "<dc:creator><rdf:Seq>\
+               <rdf:li><rdf:Description><rdf:value>William Gilbert</rdf:value><ex:role>lyricist</ex:role></rdf:Description></rdf:li>\
+               <rdf:li rdf:parseType='Resource'><rdf:value>Arthur Sullivan</rdf:value><ex:role>composer</ex:role></rdf:li>\
+             </rdf:Seq></dc:creator>",
+        );
+        let creators = xmp.property(DC, "creator").expect("creator");
+        let roles: Vec<(Option<&str>, Option<&str>)> = creators
+            .items()
+            .iter()
+            .map(|item| {
+                (
+                    item.text(),
+                    item.qualifier("urn:example:", "role")
+                        .and_then(XmpValue::text),
+                )
+            })
+            .collect();
+        assert_eq!(
+            roles,
+            [
+                (Some("William Gilbert"), Some("lyricist")),
+                (Some("Arthur Sullivan"), Some("composer"))
+            ]
+        );
+        assert!(creators.qualifiers().is_empty());
+    }
+
+    #[test]
+    fn a_typed_node_keeps_its_type_as_a_qualifier() {
+        let xmp = read_body(
+            "<ex:Prop1><ex:myType><ex:Field>value</ex:Field></ex:myType></ex:Prop1>\
+             <ex:Prop2><ex:myType ex:Field='value'><rdf:value>v</rdf:value></ex:myType></ex:Prop2>\
+             <ex:Prop3><ex:myType><rdf:type rdf:resource='urn:example:other'/></ex:myType></ex:Prop3>\
+             <ex:Prop4><rdf:Description><ex:Field>value</ex:Field><rdf:type rdf:resource='urn:example:myType'/></rdf:Description></ex:Prop4>",
+        );
+        let kind = XmpValue::uri("urn:example:myType");
+        let prop1 = xmp.property("urn:example:", "Prop1").expect("Prop1");
+        assert_eq!(
+            prop1
+                .field("urn:example:", "Field")
+                .and_then(XmpValue::text),
+            Some("value")
+        );
+        assert_eq!(prop1.qualifier(RDF, "type"), Some(&kind));
+        let prop2 = xmp.property("urn:example:", "Prop2").expect("Prop2");
+        assert_eq!(prop2.text(), Some("v"));
+        let names: Vec<&str> = prop2.qualifiers().iter().map(XmpProperty::name).collect();
+        assert_eq!(names, ["type", "Field"]);
+        // A typed node's type is a qualifier, and an rdf:type field a field.
+        let prop3 = xmp.property("urn:example:", "Prop3").expect("Prop3");
+        assert_eq!(prop3.qualifier(RDF, "type"), Some(&kind));
+        assert_eq!(
+            prop3.field(RDF, "type"),
+            Some(&XmpValue::uri("urn:example:other"))
+        );
+        let prop4 = xmp.property("urn:example:", "Prop4").expect("Prop4");
+        assert!(prop4.qualifiers().is_empty());
+        assert_eq!(prop4.field(RDF, "type"), Some(&kind));
+    }
+
+    #[test]
+    fn an_rdf_type_attribute_gives_the_type_a_typed_node_gives() {
+        let xmp = read_body(
+            "<ex:a><ex:T ex:f='1'><rdf:value>v</rdf:value></ex:T></ex:a>\
+             <ex:b><rdf:Description rdf:type='urn:example:T' ex:f='1'><rdf:value>v</rdf:value></rdf:Description></ex:b>\
+             <ex:c rdf:value='v' rdf:type='urn:example:T'/>\
+             <ex:d rdf:type='urn:example:T' ex:f='1'/>",
+        );
+        let kind = XmpValue::uri("urn:example:T");
+        for name in ["a", "b", "c"] {
+            let value = xmp.property("urn:example:", name).expect(name);
+            assert_eq!(value.qualifier(RDF, "type"), Some(&kind), "{name}");
+        }
+        let d = xmp.property("urn:example:", "d").expect("d");
+        assert_eq!(d.field(RDF, "type"), Some(&kind));
+    }
+
+    #[test]
+    fn a_repeated_qualifier_gives_its_first_value() {
+        let xmp = read_body(
+            "<ex:p><ex:myType><rdf:value>v</rdf:value><rdf:type rdf:resource='urn:example:other'/>\
+               <ex:q>first</ex:q><ex:q>second</ex:q></ex:myType></ex:p>",
+        );
+        let p = xmp.property("urn:example:", "p").expect("p");
+        assert_eq!(
+            p.qualifier(RDF, "type"),
+            Some(&XmpValue::uri("urn:example:myType"))
+        );
+        assert_eq!(
+            p.qualifier("urn:example:", "q").and_then(XmpValue::text),
+            Some("first")
+        );
+        assert_eq!(p.qualifiers().len(), 2);
+    }
+
+    #[test]
+    fn each_qualifier_form_xmp_forbids_costs_its_property_and_no_other() {
+        for (form, broken) in [
+            (
+                "xml:lang on rdf:value",
+                "<ex:p><rdf:Description><rdf:value xml:lang='en'>x</rdf:value><ex:q>y</ex:q></rdf:Description></ex:p>",
+            ),
+            (
+                "nested general qualifiers",
+                "<ex:p><rdf:Description><ex:q1>one</ex:q1><rdf:value><rdf:Description><ex:q2>two</ex:q2><rdf:value>v</rdf:value></rdf:Description></rdf:value></rdf:Description></ex:p>",
+            ),
+            (
+                "two rdf:value elements",
+                "<ex:p rdf:parseType='Resource'><rdf:value>a</rdf:value><rdf:value>b</rdf:value></ex:p>",
+            ),
+            (
+                "rdf:value as attribute and element",
+                "<ex:p><rdf:Description rdf:value='a'><rdf:value>b</rdf:value></rdf:Description></ex:p>",
+            ),
+            (
+                "rdf:value with parseType",
+                "<ex:p rdf:parseType='Resource' rdf:value='a'/>",
+            ),
+            (
+                "rdf:value with a resource",
+                "<ex:p rdf:resource='urn:x' rdf:value='a'/>",
+            ),
+            ("rdf:value with content", "<ex:p rdf:value='a'>text</ex:p>"),
+            (
+                "xml:lang on a typed node",
+                "<ex:p><ex:myType xml:lang='en'><ex:f>x</ex:f></ex:myType></ex:p>",
+            ),
+            (
+                "a typed node with no namespace",
+                "<ex:p xmlns=''><myType><ex:f>x</ex:f></myType></ex:p>",
+            ),
+            (
+                "a typed node of the XML namespace",
+                "<ex:p><xml:myType ex:f='1'/></ex:p>",
+            ),
+            (
+                "rdf:about on a typed node",
+                "<ex:p><ex:myType rdf:about=''><ex:f>x</ex:f></ex:myType></ex:p>",
+            ),
+            (
+                "a qualifier named rdf:li",
+                "<ex:p rdf:parseType='Resource'><rdf:value>v</rdf:value><rdf:li>x</rdf:li></ex:p>",
+            ),
+        ] {
+            let xmp = read_body(&format!(
+                "<xmp:Label>before</xmp:Label>{broken}<xmp:Rating>3</xmp:Rating>"
+            ));
+            assert_eq!(names(&xmp), ["Label", "Rating"], "{form}");
+        }
+    }
+
+    #[test]
+    fn qualifiers_count_toward_the_limit() {
+        // The structure, its language, its type and its field: 4 values.
+        let text = packet(
+            "<rdf:Description><ex:p xml:lang='en'><ex:T><ex:f>x</ex:f></ex:T></ex:p></rdf:Description>",
+        );
+        let four = Limits::default().with_max_xmp_values(4);
+        assert!(Xmp::read(text.as_bytes(), &four).is_ok());
+        let three = Limits::default().with_max_xmp_values(3);
+        let err = Xmp::read(text.as_bytes(), &three).expect_err("past the limit");
+        assert_eq!(err.kind(), ErrorKind::LimitExceeded);
+        // An rdf:value and its qualifier are two values, not three.
+        let qualified = packet(
+            "<rdf:Description><ex:p rdf:parseType='Resource'><rdf:value>v</rdf:value><ex:q>w</ex:q></ex:p></rdf:Description>",
+        );
+        let two = Limits::default().with_max_xmp_values(2);
+        assert!(Xmp::read(qualified.as_bytes(), &two).is_ok());
+        let one = Limits::default().with_max_xmp_values(1);
+        assert!(Xmp::read(qualified.as_bytes(), &one).is_err());
     }
 
     #[test]
