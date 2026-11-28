@@ -141,6 +141,11 @@
 //!   JPEG quality by its step. Of the files with an image area or a raw
 //!   size, it counts those whose value came from raw-files' table of
 //!   bodies rather than from a tag the file records.
+//! - **The XMP packets**: how many files give one. How many hold one
+//!   raw-files does not give, by the message of the error that reading
+//!   or parsing it gives, the test finding a JPEG's XMP segment by a walk
+//!   of its own. How many raw files hold IFD0's 0x02BC of another type
+//!   than BYTE or UNDEFINED.
 //! - **The focus point**: the files that have one, and how many of those
 //!   record that the camera confirmed focus, that it missed, or
 //!   neither. The points by origin: "Recorded" is a position the camera
@@ -191,9 +196,9 @@ use std::rc::Rc;
 
 use raw_files::{
     Altitude, Authorship, AutoHdrExposureDifference, Camera, CameraFile, DateTime, Direction,
-    Directory, FocusLayout, FocusOrigin, FocusPoints, Format, HdrExposureDifferential,
+    Directory, FieldType, FocusLayout, FocusOrigin, FocusPoints, Format, HdrExposureDifferential,
     HighDynamicRange, Latitude, Lens, Location, Longitude, Metadata, North, PictureStyle,
-    PlacedFocusLayout, Point, Rational, Size, Value,
+    PlacedFocusLayout, Point, Rational, Size, Value, Xmp,
 };
 
 /// A file that counts the bytes its reads return, into a counter the caller
@@ -1048,6 +1053,122 @@ impl EntriesTally {
     }
 }
 
+/// The XMP packets the files embed, in counts: the files whose packet
+/// raw-files gives, and those that hold one it does not give, by why. No
+/// property's value is kept.
+#[derive(Default)]
+struct XmpTally {
+    /// Files whose packet the metadata gives.
+    given: usize,
+    /// Files that hold a packet the metadata does not give, by the message
+    /// of the error reading or parsing it gives, its offset left out.
+    not_given: BTreeMap<String, usize>,
+    /// Raw files whose IFD0 0x02BC is of a type other than BYTE or
+    /// UNDEFINED, which gives no packet.
+    other_type: usize,
+}
+
+impl XmpTally {
+    /// Counts the packet of `file`. For a JPEG file, `whole` is the file's
+    /// bytes, where the test finds the first XMP segment on its own; a raw
+    /// file's packet is its IFD0 0x02BC entry, a value of four bytes or
+    /// fewer counted apart, since the reader does not parse it.
+    fn record<R: Read + Seek>(&mut self, file: &CameraFile<R>, whole: Option<&[u8]>) {
+        if file.metadata().xmp().is_some() {
+            self.given += 1;
+            return;
+        }
+        let parsed = match whole {
+            Some(bytes) => match first_xmp_packet(bytes) {
+                Some(packet) => Xmp::from_bytes(packet).map(drop),
+                None => return,
+            },
+            None => {
+                let Some(entry) = file.entries().entry(Directory::Ifd(0), 0x02BC) else {
+                    return;
+                };
+                if !matches!(entry.field_type(), FieldType::Byte | FieldType::Undefined) {
+                    self.other_type += 1;
+                    return;
+                }
+                if entry.byte_range().is_none() {
+                    // Four bytes or fewer, which the reader does not parse.
+                    *self
+                        .not_given
+                        .entry("a value held in the entry itself".to_owned())
+                        .or_default() += 1;
+                    return;
+                }
+                file.read_value(&entry)
+                    .and_then(|value| Xmp::from_bytes(value.bytes().unwrap_or_default()))
+                    .map(drop)
+            }
+        };
+        let message = match parsed {
+            // Not expected: the test parses under the limits the file was
+            // opened with.
+            Ok(()) => "parses here, yet was not given".to_owned(),
+            Err(error) => without_offset(&error),
+        };
+        *self.not_given.entry(message).or_default() += 1;
+    }
+
+    fn print(&self) {
+        println!("XMP packets given: {}", self.given);
+        println!("XMP packets not given, by why: {:?}", self.not_given);
+        println!(
+            "IFD0 0x02BC of a type other than BYTE or UNDEFINED: {}",
+            self.other_type
+        );
+    }
+}
+
+/// The message of `error`, without the offset its text ends with.
+fn without_offset(error: &raw_files::Error) -> String {
+    let text = error.to_string();
+    match error.offset() {
+        Some(offset) => text
+            .strip_suffix(&format!(" at byte {offset}"))
+            .unwrap_or(&text)
+            .to_owned(),
+        None => text,
+    }
+}
+
+/// The packet of the first APP1 segment of the JPEG file `bytes` whose
+/// payload starts with the XMP namespace and a zero byte, found by a walk
+/// of the test's own over the segments before the scan; `None` when there
+/// is none.
+fn first_xmp_packet(bytes: &[u8]) -> Option<&[u8]> {
+    const XMP_ID: &[u8] = b"http://ns.adobe.com/xap/1.0/\0";
+    let mut pos = 2;
+    loop {
+        if *bytes.get(pos)? != 0xFF {
+            return None;
+        }
+        match *bytes.get(pos + 1)? {
+            0xFF => pos += 1,
+            0x01 | 0xD0..=0xD8 => pos += 2,
+            0x00 | 0xD9 | 0xDA => return None,
+            code => {
+                let len = usize::from(u16::from_be_bytes([
+                    *bytes.get(pos + 2)?,
+                    *bytes.get(pos + 3)?,
+                ]));
+                let next = pos + 2 + len;
+                if len < 2 || next > bytes.len() {
+                    return None;
+                }
+                let payload = &bytes[pos + 4..next];
+                if code == 0xE1 && payload.starts_with(XMP_ID) {
+                    return Some(&payload[XMP_ID.len()..]);
+                }
+                pos = next;
+            }
+        }
+    }
+}
+
 /// What the files say about where the camera focused, in counts: the
 /// focus point, the list of the points the camera used and the layout of
 /// the body's points. No center, no area size and no point number is
@@ -1473,6 +1594,7 @@ struct Tally {
     settings: SettingsTally,
     focus: FocusTally,
     entries: EntriesTally,
+    xmp: XmpTally,
     /// Files whose metadata gives an orientation other than their largest
     /// preview's: both come from the same tag, so this must stay zero.
     orientation_disagreements: usize,
@@ -1524,6 +1646,7 @@ impl Tally {
         println!("largest-preview sizes: {:?}", self.sizes);
         println!("largest-preview orientations: {:?}", self.orientations);
         self.entries.print();
+        self.xmp.print();
         println!(
             "files with a recorded make: {}, a recorded model: {}, software: {}, a serial number: {}",
             m.recorded_make, m.recorded_model, m.software, m.serial_number
@@ -2119,6 +2242,9 @@ fn check(path: &Path, tally: &mut Tally) {
     tally.settings.record_versions(&camera_file);
     tally.focus.record(camera_file.metadata());
     tally.entries.record(&camera_file);
+    if format.is_raw() {
+        tally.xmp.record(&camera_file, None);
+    }
     let Some(preview) = camera_file.largest_preview() else {
         tally.no_preview += 1;
         return;
@@ -2138,12 +2264,25 @@ fn check(path: &Path, tally: &mut Tally) {
         .entry(format!("{:?}", preview.orientation()))
         .or_default() += 1;
     match camera_file.read_preview(&preview) {
-        Ok(bytes) => match wholeness(&bytes, preview.byte_len(), format) {
-            Wholeness::Whole => {}
-            Wholeness::EndsEarly => tally.ends_early += 1,
-            Wholeness::OtherDataAfterEnd => tally.other_data_after_end += 1,
-            Wholeness::NotWhole => tally.not_whole_jpeg += 1,
-        },
+        Ok(bytes) => {
+            // A JPEG file's own preview starts at its first byte, as no
+            // other does, and is the whole file, where the test finds its
+            // XMP segment. Its largest preview is that one, unless an MPF
+            // image is as large, in which case the file is read again.
+            if !format.is_raw() {
+                if preview.byte_range().start == 0 {
+                    tally.xmp.record(&camera_file, Some(&bytes));
+                } else if let Ok(whole) = fs::read(path) {
+                    tally.xmp.record(&camera_file, Some(&whole));
+                }
+            }
+            match wholeness(&bytes, preview.byte_len(), format) {
+                Wholeness::Whole => {}
+                Wholeness::EndsEarly => tally.ends_early += 1,
+                Wholeness::OtherDataAfterEnd => tally.other_data_after_end += 1,
+                Wholeness::NotWhole => tally.not_whole_jpeg += 1,
+            }
+        }
         Err(error) => {
             tally.fail(error.kind());
             return;
@@ -3578,4 +3717,95 @@ fn the_settings_tally_counts_the_lens_corrections_and_the_scene() {
             (("Scene mode", "AUTO".to_string()), 2)
         ])
     );
+}
+
+/// A packet of one property, a rating of 3.
+const XMP_PACKET: &str = "<x:xmpmeta xmlns:x=\"adobe:ns:meta/\">\
+    <rdf:RDF xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\">\
+    <rdf:Description rdf:about=\"\" xmlns:xmp=\"http://ns.adobe.com/xap/1.0/\" \
+    xmp:Rating=\"3\"/></rdf:RDF></x:xmpmeta>";
+
+/// A little-endian TIFF file in miniature whose IFD0 holds Nikon's Make
+/// and `packet` under 0x02BC as field type `typ`, BYTE, UNDEFINED or
+/// LONG, with the count that covers it: a NEF to the reader.
+fn nef_with_packet(typ: u16, packet: &[u8]) -> Vec<u8> {
+    let make = b"NIKON CORPORATION\0";
+    // The header, IFD0's count, two entries and the next-IFD pointer, then
+    // the Make's value and the packet.
+    let make_at: u32 = 8 + 2 + 2 * 12 + 4;
+    let packet_at = make_at + make.len() as u32;
+    let mut bytes = vec![b'I', b'I', 42, 0, 8, 0, 0, 0, 2, 0];
+    for (tag, typ, count, at) in [
+        (0x010F_u16, 2_u16, make.len() as u32, make_at),
+        (
+            0x02BC,
+            typ,
+            packet.len() as u32 / if typ == 4 { 4 } else { 1 },
+            packet_at,
+        ),
+    ] {
+        bytes.extend_from_slice(&tag.to_le_bytes());
+        bytes.extend_from_slice(&typ.to_le_bytes());
+        bytes.extend_from_slice(&count.to_le_bytes());
+        bytes.extend_from_slice(&at.to_le_bytes());
+    }
+    bytes.extend_from_slice(&[0; 4]);
+    bytes.extend_from_slice(make);
+    bytes.extend_from_slice(packet);
+    bytes
+}
+
+/// A JPEG file in miniature that opens as JPEG: an XMP segment holding
+/// `packet` when there is one, a frame header of 16 by 16, the scan and
+/// the end marker.
+fn jpeg_with_packet(packet: Option<&[u8]>) -> Vec<u8> {
+    let mut bytes = vec![0xFF, 0xD8];
+    if let Some(packet) = packet {
+        let mut payload = b"http://ns.adobe.com/xap/1.0/\0".to_vec();
+        payload.extend_from_slice(packet);
+        bytes.extend(segment(0xE1, &payload));
+    }
+    bytes.extend(segment(0xC0, &[8, 0, 16, 0, 16, 1, 1, 0x11, 0]));
+    bytes.extend(segment(0xDA, &[1, 1, 0x00, 0, 63, 0]));
+    bytes.extend_from_slice(SCAN);
+    bytes.extend_from_slice(&[0xFF, 0xD9]);
+    bytes
+}
+
+#[test]
+fn the_xmp_tally_counts_the_packets_given_and_why_others_are_not() {
+    let good = XMP_PACKET.as_bytes();
+    // `</rdf:RDF>` written `</rdf:RDX>`: the end tags no longer match.
+    let broken = XMP_PACKET.replace("</rdf:RDF>", "</rdf:RDX>");
+    let broken = broken.as_bytes();
+    let byte = 1;
+    let long = 4;
+    let files = [
+        (nef_with_packet(byte, good), false),
+        (nef_with_packet(7, broken), false),
+        (nef_with_packet(long, &good[..good.len() / 4 * 4]), false),
+        (nef_with_packet(byte, b"<a/>"), false),
+        (jpeg_with_packet(Some(good)), true),
+        (jpeg_with_packet(Some(broken)), true),
+        (jpeg_with_packet(None), true),
+    ];
+    let mut tally = XmpTally::default();
+    for (bytes, is_jpeg) in &files {
+        let file = CameraFile::from_reader(io::Cursor::new(bytes.clone())).unwrap();
+        assert_eq!(file.format().is_raw(), !is_jpeg);
+        tally.record(&file, is_jpeg.then_some(&bytes[..]));
+    }
+    assert_eq!(tally.given, 2);
+    assert_eq!(
+        tally.not_given,
+        BTreeMap::from([
+            ("a value held in the entry itself".to_owned(), 1),
+            ("an end tag does not match its start tag".to_owned(), 2),
+        ])
+    );
+    assert_eq!(tally.other_type, 1);
+    // The test's walk finds the packet where the library does.
+    let jpeg = jpeg_with_packet(Some(good));
+    assert_eq!(first_xmp_packet(&jpeg), Some(good));
+    assert_eq!(first_xmp_packet(&jpeg_with_packet(None)), None);
 }

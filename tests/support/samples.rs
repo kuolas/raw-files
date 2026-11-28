@@ -390,7 +390,8 @@ pub fn check(sample: &Sample, format: Format, folder: Folder) {
 /// `None` when it must give none, as for every body that raw-files has no
 /// table of. The layout placed on the picture is its frame and how many
 /// points it holds ([`SamplePlacedLayout`]), `None` when the reader must
-/// give none.
+/// give none. The XMP packet the file embeds is its property count and
+/// its namespaces ([`SampleXmp`]), `None` when the reader must give none.
 ///
 /// The files are public, but the repository holds no camera's or lens's
 /// serial number, so a serial number is recorded by its shape alone and a
@@ -410,6 +411,7 @@ pub struct SampleMetadata {
     pub serial_number: Option<SerialShape>,
     pub texts: &'static [Text],
     pub location: Option<&'static [LocationPart]>,
+    pub xmp: Option<SampleXmp>,
     pub capture_time: Option<&'static str>,
     pub digitized_time: Option<&'static str>,
     pub orientation: Orientation,
@@ -427,6 +429,54 @@ pub struct SampleMetadata {
     pub placed_focus_layout: Option<SamplePlacedLayout>,
     pub settings: SampleSettings,
 }
+
+/// The XMP packet a sample file embeds, as the reader must give it
+/// ([`Metadata::xmp`](raw_files::Metadata::xmp)): how many properties it
+/// holds, and the namespace URIs they are in, each once, in the order of
+/// the URIs. No property's value is kept: a row records the packet's
+/// shape, as the XMP notes count it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct SampleXmp {
+    pub properties: usize,
+    pub namespaces: &'static [&'static str],
+}
+
+impl SampleXmp {
+    /// The shape of `xmp`: its property count and its namespaces, each
+    /// once, in the order of the URIs.
+    pub fn given(xmp: &raw_files::Xmp) -> (usize, Vec<String>) {
+        let namespaces: BTreeSet<&str> =
+            xmp.iter().map(raw_files::XmpProperty::namespace).collect();
+        let namespaces = namespaces.into_iter().map(str::to_owned).collect();
+        (xmp.len(), namespaces)
+    }
+
+    /// The shape a row records, as [`given`](Self::given) gives one.
+    pub fn expected(self) -> (usize, Vec<String>) {
+        let namespaces = self.namespaces.iter().copied().map(str::to_owned).collect();
+        (self.properties, namespaces)
+    }
+}
+
+/// A packet of `properties` properties in `namespaces`, for a row.
+pub const fn packet(properties: usize, namespaces: &'static [&'static str]) -> Option<SampleXmp> {
+    Some(SampleXmp {
+        properties,
+        namespaces,
+    })
+}
+
+/// The namespace of the XMP basic properties, such as `xmp:Rating`
+/// (XMP Part 1, §8.4).
+pub const XMP: &str = raw_files::namespaces::XMP;
+
+/// The namespace of Adobe Camera Raw's defaults, `crd:`, which Nikon's
+/// newer bodies write.
+pub const CRD: &str = "http://ns.adobe.com/camera-raw-defaults/1.0/";
+
+/// The namespace of XMP's media management properties, `xmpMM:`, which
+/// Sony's newer bodies write (XMP Part 2, §8.6).
+pub const XMP_MM: &str = "http://ns.adobe.com/xap/1.0/mm/";
 
 /// The layout of the body's autofocus points placed on a sample file's
 /// picture, as the reader must give it
@@ -953,6 +1003,11 @@ pub fn check_metadata(expected: &SampleMetadata, format: Format, folder: Folder)
         metadata.location().map(LocationPart::given),
         expected.location.map(<[LocationPart]>::to_vec),
         "{label}: location"
+    );
+    assert_eq!(
+        metadata.xmp().map(SampleXmp::given),
+        expected.xmp.map(SampleXmp::expected),
+        "{label}: XMP packet"
     );
     assert_eq!(
         metadata

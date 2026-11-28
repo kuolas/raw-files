@@ -63,11 +63,11 @@ use support::nef::{
     z6iii_file_with_blobs, z9_file, z9_file_with, z9_file_with_blobs,
 };
 use support::samples::{
-    Folder, HDR_OFF, Jpeg, LocationPart, Sample, SampleEntries, SampleFineTune, SampleFlash,
+    CRD, Folder, HDR_OFF, Jpeg, LocationPart, Sample, SampleEntries, SampleFineTune, SampleFlash,
     SampleFocus, SampleLens, SampleMetadata, SamplePictureStyle, SamplePlacedLayout,
-    SampleSettings, SerialShape, Text, active_d_lighting, auto_distortion_control, check,
+    SampleSettings, SerialShape, Text, XMP, active_d_lighting, auto_distortion_control, check,
     check_enciphered, check_entries, check_every, check_fixture_tables, check_metadata,
-    check_placed_layout, check_tables, scene_mode, sizes, steps, vignette_control,
+    check_placed_layout, check_tables, packet, scene_mode, sizes, steps, vignette_control,
 };
 use support::tiff_builder::{
     Built, EXIF_IFD, ORDERS, Order, RawValue, SHORT, SUB_IFDS, TiffBuilder,
@@ -1140,6 +1140,7 @@ const FIXTURE_METADATA: &[SampleMetadata] = &[
         serial_number: None,
         texts: &[],
         location: None,
+        xmp: None,
         capture_time: Some("2026-10-19T19:26:32.53-03:00"),
         digitized_time: Some("2026-10-19T19:26:32.53-03:00"),
         orientation: Orientation::NoTransforms,
@@ -1262,6 +1263,7 @@ const FIXTURE_METADATA: &[SampleMetadata] = &[
         serial_number: None,
         texts: &[],
         location: None,
+        xmp: None,
         capture_time: Some("2026-10-19T19:26:52.73-03:00"),
         digitized_time: Some("2026-10-19T19:26:52.73-03:00"),
         orientation: Orientation::NoTransforms,
@@ -1363,6 +1365,7 @@ const FIXTURE_METADATA: &[SampleMetadata] = &[
         serial_number: None,
         texts: &[],
         location: None,
+        xmp: None,
         capture_time: Some("2026-11-19T19:45:25.75-03:00"),
         digitized_time: Some("2026-11-19T19:45:25.75-03:00"),
         orientation: Orientation::NoTransforms,
@@ -1467,6 +1470,7 @@ const FIXTURE_METADATA: &[SampleMetadata] = &[
         // DateTimeOriginal and SubSecTimeOriginal, with the offset from
         // WorldTime, -180 minutes with daylight saving time off, since the
         // D600 writes no OffsetTimeOriginal.
+        xmp: None,
         capture_time: Some("2026-10-26T13:15:08.10-03:00"),
         digitized_time: Some("2026-10-26T13:15:08.10-03:00"),
         orientation: Orientation::NoTransforms,
@@ -3402,6 +3406,7 @@ const METADATA: &[SampleMetadata] = &[
         }),
         texts: &[Text::Copyright],
         location: Some(&[LocationPart::Altitude, LocationPart::Time]),
+        xmp: packet(21, &[CRD, XMP]),
         capture_time: Some("2022-02-05T13:45:03.04-05:00"),
         digitized_time: Some("2022-02-05T13:45:03.04-05:00"),
         orientation: Orientation::NoTransforms,
@@ -3510,6 +3515,7 @@ const METADATA: &[SampleMetadata] = &[
         }),
         texts: &[Text::Copyright],
         location: Some(&[LocationPart::Altitude, LocationPart::Time]),
+        xmp: packet(21, &[CRD, XMP]),
         capture_time: Some("2022-02-05T13:46:41.85-05:00"),
         digitized_time: Some("2022-02-05T13:46:41.85-05:00"),
         orientation: Orientation::NoTransforms,
@@ -3618,6 +3624,7 @@ const METADATA: &[SampleMetadata] = &[
         }),
         texts: &[Text::Copyright],
         location: Some(&[LocationPart::Altitude, LocationPart::Time]),
+        xmp: packet(21, &[CRD, XMP]),
         capture_time: Some("2022-02-05T13:48:11.45-05:00"),
         digitized_time: Some("2022-02-05T13:48:11.45-05:00"),
         orientation: Orientation::NoTransforms,
@@ -3723,6 +3730,7 @@ const METADATA: &[SampleMetadata] = &[
         serial_number: None,
         texts: &[Text::Copyright],
         location: None,
+        xmp: None,
         capture_time: Some("2022-03-24T10:09:27.01"),
         digitized_time: Some("2022-03-24T10:09:27.01"),
         orientation: Orientation::NoTransforms,
@@ -3802,6 +3810,7 @@ const METADATA: &[SampleMetadata] = &[
         serial_number: None,
         texts: &[Text::Copyright],
         location: None,
+        xmp: None,
         capture_time: Some("2004-07-30T12:23:24.51"),
         digitized_time: Some("2004-07-30T12:23:24.51"),
         orientation: Orientation::NoTransforms,
@@ -3881,6 +3890,7 @@ const METADATA: &[SampleMetadata] = &[
         serial_number: None,
         texts: &[Text::Copyright],
         location: None,
+        xmp: None,
         capture_time: Some("2006-07-22T20:31:52.61"),
         digitized_time: Some("2006-07-22T20:31:52.61"),
         orientation: Orientation::NoTransforms,
@@ -3960,6 +3970,7 @@ const METADATA: &[SampleMetadata] = &[
         serial_number: None,
         texts: &[],
         location: None,
+        xmp: None,
         capture_time: Some("2013-08-02T19:12:06.20"),
         digitized_time: Some("2013-08-02T19:12:06.20"),
         orientation: Orientation::NoTransforms,
@@ -4048,6 +4059,7 @@ const METADATA: &[SampleMetadata] = &[
         serial_number: None,
         texts: &[],
         location: None,
+        xmp: None,
         capture_time: Some("2017-09-02T16:55:01.80"),
         digitized_time: Some("2017-09-02T16:55:01.80"),
         orientation: Orientation::NoTransforms,
@@ -4136,6 +4148,7 @@ const METADATA: &[SampleMetadata] = &[
         serial_number: None,
         texts: &[Text::Comment],
         location: None,
+        xmp: None,
         capture_time: Some("2007-10-13T10:27:30.16"),
         digitized_time: Some("2007-10-13T10:27:30.16"),
         orientation: Orientation::NoTransforms,
@@ -4227,6 +4240,7 @@ const METADATA: &[SampleMetadata] = &[
         }),
         texts: &[],
         location: None,
+        xmp: None,
         capture_time: Some("2017-01-17T21:27:12.34+01:00"),
         digitized_time: Some("2017-01-17T21:27:12.34+01:00"),
         orientation: Orientation::NoTransforms,
@@ -4327,6 +4341,7 @@ const METADATA: &[SampleMetadata] = &[
         }),
         texts: &[Text::Artist, Text::Copyright],
         location: None,
+        xmp: None,
         capture_time: Some("2018-01-17T12:31:01.00+01:00"),
         digitized_time: Some("2018-01-17T12:31:01.00+01:00"),
         orientation: Orientation::NoTransforms,
@@ -4427,6 +4442,7 @@ const METADATA: &[SampleMetadata] = &[
         }),
         texts: &[Text::Artist, Text::Copyright],
         location: None,
+        xmp: None,
         capture_time: Some("2017-01-22T14:19:23.70-07:00"),
         digitized_time: Some("2017-01-22T14:19:23.70-07:00"),
         orientation: Orientation::NoTransforms,
@@ -4535,6 +4551,7 @@ const METADATA: &[SampleMetadata] = &[
         }),
         texts: &[Text::Artist],
         location: None,
+        xmp: packet(2, &[XMP]),
         capture_time: Some("2017-01-15T21:38:43.42+01:00"),
         digitized_time: Some("2017-01-15T21:38:43.42+01:00"),
         orientation: Orientation::NoTransforms,
@@ -4635,6 +4652,7 @@ const METADATA: &[SampleMetadata] = &[
         }),
         texts: &[Text::Artist, Text::Copyright],
         location: None,
+        xmp: packet(2, &[XMP]),
         capture_time: Some("2017-12-05T23:50:41.81+01:00"),
         digitized_time: Some("2017-12-05T23:50:41.81+01:00"),
         orientation: Orientation::NoTransforms,
@@ -4735,6 +4753,7 @@ const METADATA: &[SampleMetadata] = &[
         }),
         texts: &[],
         location: None,
+        xmp: packet(3, &[XMP]),
         capture_time: Some("2017-10-15T17:35:49.60+01:00"),
         digitized_time: Some("2017-10-15T17:35:49.60+01:00"),
         orientation: Orientation::NoTransforms,
@@ -4835,6 +4854,7 @@ const METADATA: &[SampleMetadata] = &[
         }),
         texts: &[],
         location: None,
+        xmp: packet(19, &[CRD, XMP]),
         capture_time: Some("2020-03-28T14:14:56.69+00:00"),
         digitized_time: Some("2020-03-28T14:14:56.69+00:00"),
         orientation: Orientation::NoTransforms,
@@ -4935,6 +4955,7 @@ const METADATA: &[SampleMetadata] = &[
         }),
         texts: &[Text::Artist, Text::Copyright],
         location: None,
+        xmp: packet(19, &[CRD, XMP]),
         capture_time: Some("2019-11-29T17:15:20.24+01:00"),
         digitized_time: Some("2019-11-29T17:15:20.24+01:00"),
         orientation: Orientation::NoTransforms,
@@ -5043,6 +5064,7 @@ const METADATA: &[SampleMetadata] = &[
         }),
         texts: &[Text::Artist, Text::Copyright],
         location: None,
+        xmp: packet(30, &[CRD, XMP]),
         capture_time: Some("2023-10-18T17:19:29.68-04:00"),
         digitized_time: Some("2023-10-18T17:19:29.68-04:00"),
         orientation: Orientation::NoTransforms,
@@ -5151,6 +5173,7 @@ const METADATA: &[SampleMetadata] = &[
         }),
         texts: &[],
         location: None,
+        xmp: packet(30, &[CRD, XMP]),
         capture_time: Some("2024-06-29T15:38:47.93-04:00"),
         digitized_time: Some("2024-06-29T15:38:47.93-04:00"),
         orientation: Orientation::NoTransforms,
@@ -5259,6 +5282,7 @@ const METADATA: &[SampleMetadata] = &[
         }),
         texts: &[],
         location: None,
+        xmp: packet(30, &[CRD, XMP]),
         capture_time: Some("2024-06-29T15:39:01.13-04:00"),
         digitized_time: Some("2024-06-29T15:39:01.13-04:00"),
         orientation: Orientation::NoTransforms,
@@ -5367,6 +5391,7 @@ const METADATA: &[SampleMetadata] = &[
         }),
         texts: &[],
         location: None,
+        xmp: packet(30, &[CRD, XMP]),
         capture_time: Some("2024-06-29T15:38:53.42-04:00"),
         digitized_time: Some("2024-06-29T15:38:53.42-04:00"),
         orientation: Orientation::NoTransforms,
@@ -5475,6 +5500,7 @@ const METADATA: &[SampleMetadata] = &[
         }),
         texts: &[],
         location: None,
+        xmp: None,
         capture_time: Some("2015-12-23T11:41:13.50+01:00"),
         digitized_time: Some("2015-12-23T11:41:13.50+01:00"),
         orientation: Orientation::NoTransforms,
@@ -5572,6 +5598,7 @@ const METADATA: &[SampleMetadata] = &[
         serial_number: None,
         texts: &[],
         location: None,
+        xmp: None,
         capture_time: Some("2017-05-20T11:55:14"),
         digitized_time: Some("2017-05-20T11:55:14"),
         orientation: Orientation::NoTransforms,
@@ -5661,6 +5688,7 @@ const METADATA: &[SampleMetadata] = &[
         serial_number: None,
         texts: &[],
         location: None,
+        xmp: None,
         capture_time: Some("2008-01-15T11:15:41"),
         digitized_time: Some("2008-01-15T11:15:41"),
         orientation: Orientation::NoTransforms,
@@ -5744,6 +5772,7 @@ const METADATA: &[SampleMetadata] = &[
         }),
         texts: &[],
         location: None,
+        xmp: packet(1, &[XMP]),
         capture_time: Some("2010-01-01T00:11:05.00+02:00"),
         digitized_time: Some("2010-01-01T00:11:05.00+02:00"),
         orientation: Orientation::NoTransforms,
@@ -5844,6 +5873,7 @@ const METADATA: &[SampleMetadata] = &[
         }),
         texts: &[],
         location: None,
+        xmp: packet(3, &[XMP]),
         capture_time: Some("2017-05-12T18:35:56.99-05:00"),
         digitized_time: Some("2017-05-12T18:35:56.99-05:00"),
         orientation: Orientation::NoTransforms,
@@ -5952,6 +5982,7 @@ const METADATA: &[SampleMetadata] = &[
         }),
         texts: &[],
         location: None,
+        xmp: packet(30, &[CRD, XMP]),
         capture_time: Some("2025-04-27T17:57:35.99+02:00"),
         digitized_time: Some("2025-04-27T17:57:35.99+02:00"),
         orientation: Orientation::NoTransforms,
@@ -6052,6 +6083,7 @@ const METADATA: &[SampleMetadata] = &[
         }),
         texts: &[],
         location: None,
+        xmp: packet(30, &[CRD, XMP]),
         capture_time: Some("2025-04-27T17:58:04.37+02:00"),
         digitized_time: Some("2025-04-27T17:58:04.37+02:00"),
         orientation: Orientation::NoTransforms,
@@ -6152,6 +6184,7 @@ const METADATA: &[SampleMetadata] = &[
         }),
         texts: &[],
         location: None,
+        xmp: packet(30, &[CRD, XMP]),
         capture_time: Some("2024-12-08T16:53:48.99+07:00"),
         digitized_time: Some("2024-12-08T16:53:48.99+07:00"),
         orientation: Orientation::NoTransforms,
@@ -6260,6 +6293,7 @@ const METADATA: &[SampleMetadata] = &[
         }),
         texts: &[],
         location: None,
+        xmp: packet(30, &[CRD, XMP]),
         capture_time: Some("2024-12-08T16:54:06.82+07:00"),
         digitized_time: Some("2024-12-08T16:54:06.82+07:00"),
         orientation: Orientation::NoTransforms,
@@ -6368,6 +6402,7 @@ const METADATA: &[SampleMetadata] = &[
         }),
         texts: &[],
         location: None,
+        xmp: packet(30, &[CRD, XMP]),
         capture_time: Some("2024-06-29T15:38:03.76-04:00"),
         digitized_time: Some("2024-06-29T15:38:03.76-04:00"),
         orientation: Orientation::NoTransforms,
@@ -6476,6 +6511,7 @@ const METADATA: &[SampleMetadata] = &[
         }),
         texts: &[],
         location: None,
+        xmp: packet(30, &[CRD, XMP]),
         capture_time: Some("2024-06-29T15:38:14.16-04:00"),
         digitized_time: Some("2024-06-29T15:38:14.16-04:00"),
         orientation: Orientation::NoTransforms,
@@ -6584,6 +6620,7 @@ const METADATA: &[SampleMetadata] = &[
         }),
         texts: &[Text::Artist, Text::Copyright, Text::Comment],
         location: None,
+        xmp: packet(3, &[XMP]),
         capture_time: Some("2018-01-12T13:15:24.15+01:00"),
         digitized_time: Some("2018-01-12T13:15:24.15+01:00"),
         orientation: Orientation::NoTransforms,
@@ -6692,6 +6729,7 @@ const METADATA: &[SampleMetadata] = &[
         }),
         texts: &[],
         location: None,
+        xmp: packet(28, &[CRD, XMP]),
         capture_time: Some("2022-07-26T15:56:46.86+02:00"),
         digitized_time: Some("2022-07-26T15:56:46.86+02:00"),
         orientation: Orientation::Rotate270,
@@ -6800,6 +6838,7 @@ const METADATA: &[SampleMetadata] = &[
         }),
         texts: &[Text::Artist],
         location: None,
+        xmp: packet(19, &[CRD, XMP]),
         capture_time: Some("2025-09-05T18:15:05.79+00:00"),
         digitized_time: Some("2025-09-05T18:15:05.79+00:00"),
         orientation: Orientation::NoTransforms,
@@ -7428,6 +7467,28 @@ fn an_enciphered_record_is_given_byte_for_byte() {
         assert_eq!(bytes.get(..4), Some(&b"0805"[..]));
         assert_eq!(bytes.len(), 62_151);
     }
+}
+
+#[test]
+fn the_z9_samples_packet_is_the_whole_of_its_entry() {
+    // A Z 9's packet is IFD0's 0x02BC, 32,768 BYTEs padded with spaces:
+    // a rating of 0, the creator tool and the creation time, and the
+    // public files' 18 properties of Adobe Camera Raw's defaults.
+    let Some(path) = support::samples::path("nikon-z9-lossless.nef") else {
+        return;
+    };
+    let file = CameraFile::open(&path).unwrap();
+    let entry = file.entries().entry(Directory::Ifd(0), 0x02BC).unwrap();
+    assert_eq!(entry.field_type(), raw_files::FieldType::Byte);
+    assert_eq!(entry.value_len(), 32_768);
+    let value = file.read_value(&entry).unwrap();
+    let packet = raw_files::Xmp::from_bytes(value.bytes().unwrap()).unwrap();
+    let xmp = file.metadata().xmp().expect("the Z 9's packet");
+    assert_eq!(xmp, &packet);
+    let rating = xmp.property(XMP, "Rating");
+    assert_eq!(rating.and_then(raw_files::XmpValue::text), Some("0"));
+    assert_eq!(xmp.in_namespace(XMP).count(), 3);
+    assert_eq!(xmp.in_namespace(CRD).count(), 18);
 }
 
 #[test]
