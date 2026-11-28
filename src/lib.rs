@@ -319,8 +319,9 @@
 //! - **An untrusted file cannot make the library allocate or walk without
 //!   bound.** [`Limits`] caps the number of directories, their entries and
 //!   their nesting. It also caps the size of a preview and of an entry's
-//!   value, and the markers a walk over a JPEG stream reads. Its defaults
-//!   suit untrusted input.
+//!   value, and the markers a walk over a JPEG stream reads. For an XMP
+//!   packet, it caps how deep it nests and how many values it gives. Its
+//!   defaults suit untrusted input.
 //! - **A cap fails only what it must.** A cap the walk cannot go on without
 //!   fails the open with [`LimitExceeded`](ErrorKind::LimitExceeded): the
 //!   first directory's size, or the total number of directories. So does a
@@ -418,6 +419,7 @@ mod tiff_builder;
 #[cfg(test)]
 mod testing;
 mod value_error;
+mod xml;
 mod xmp;
 
 pub use authorship::Authorship;

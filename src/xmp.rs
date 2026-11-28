@@ -25,6 +25,12 @@
 //! Every value can be built without a packet, for a caller's tests, as
 //! every record of raw-files can.
 
+mod rdf;
+
+use crate::error::Result;
+use crate::limits::Limits;
+use crate::xml;
+
 /// Every property of an XMP packet, in XMP Part 1's data model.
 ///
 /// A property is named by its namespace URI and its local name, never by
@@ -78,6 +84,62 @@ pub struct Xmp {
 }
 
 impl Xmp {
+    /// Reads an XMP packet, or a sidecar file's whole text, from `bytes`,
+    /// with the default [`Limits`].
+    ///
+    /// `bytes` are XML in UTF-8. The packet wrapper and an XML
+    /// declaration may come with it, as cameras and editors write them,
+    /// and NUL bytes after the end are ignored. The properties are read
+    /// from the first
+    /// `rdf:RDF` element, inside an `x:xmpmeta` element or not.
+    ///
+    /// Damage has two reaches. XML that is not well-formed costs the
+    /// whole packet, and this fails. A property whose RDF breaks XMP Part
+    /// 1, §7, costs that property alone: it is left out, and the others
+    /// stand.
+    ///
+    /// # Errors
+    ///
+    /// - [`Malformed`](crate::ErrorKind::Malformed) when `bytes` are not
+    ///   well-formed XML in UTF-8, or hold no `rdf:RDF` element. The
+    ///   message names what was found, and the error's
+    ///   [`offset`](crate::Error::offset) where in `bytes` it starts.
+    /// - [`LimitExceeded`](crate::ErrorKind::LimitExceeded) when the XML
+    ///   nests deeper than [`Limits::max_xml_depth`], or the packet gives
+    ///   more values than [`Limits::max_xmp_values`].
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use raw_files::{Xmp, namespaces};
+    ///
+    /// let packet = br#"<x:xmpmeta xmlns:x="adobe:ns:meta/" x:xmptk="XMP Core 6.0.0">
+    ///   <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+    ///     <rdf:Description rdf:about="" xmlns:xmp="http://ns.adobe.com/xap/1.0/"
+    ///         xmp:Rating="3">
+    ///       <xmp:Label>Red</xmp:Label>
+    ///     </rdf:Description>
+    ///   </rdf:RDF>
+    /// </x:xmpmeta>"#;
+    /// let xmp = Xmp::from_bytes(packet)?;
+    /// assert_eq!(xmp.toolkit(), Some("XMP Core 6.0.0"));
+    /// let rating = xmp.property(namespaces::XMP, "Rating");
+    /// assert_eq!(rating.and_then(|value| value.text()), Some("3"));
+    /// let label = xmp.property(namespaces::XMP, "Label");
+    /// assert_eq!(label.and_then(|value| value.text()), Some("Red"));
+    /// # Ok::<(), raw_files::Error>(())
+    /// ```
+    #[doc(alias = "sidecar")]
+    pub fn from_bytes(bytes: &[u8]) -> Result<Xmp> {
+        Self::read(bytes, &Limits::default())
+    }
+
+    /// Reads `bytes` under `limits`: the XML, then the RDF walk over it.
+    pub(crate) fn read(bytes: &[u8], limits: &Limits) -> Result<Xmp> {
+        let document = xml::parse(bytes, limits)?;
+        rdf::read(&document, limits)
+    }
+
     /// Every property, in the packet's order: the order of the elements
     /// that hold them, each `rdf:Description`'s attributes before its
     /// elements.

@@ -13,7 +13,9 @@
 /// one is. In a JPEG file, a cap crossed inside its Exif or MPF segment
 /// costs at most what that segment holds, not the file, which still opens.
 /// A walk over a JPEG stream stops at its cap as at a damaged segment
-/// ([`max_jpeg_markers`](Self::max_jpeg_markers)).
+/// ([`max_jpeg_markers`](Self::max_jpeg_markers)). An XMP packet that
+/// crosses a cap is not read ([`max_xml_depth`](Self::max_xml_depth),
+/// [`max_xmp_values`](Self::max_xmp_values)).
 ///
 /// Build it from [`Limits::default()`], or [`Limits::unlimited()`], and
 /// change a cap with its `with_…` method, such as
@@ -43,6 +45,8 @@ pub struct Limits {
     max_preview_bytes: u64,
     max_value_bytes: u64,
     max_jpeg_markers: u32,
+    max_xml_depth: u32,
+    max_xmp_values: u32,
 }
 
 impl Default for Limits {
@@ -54,6 +58,8 @@ impl Default for Limits {
             max_preview_bytes: 128 * 1024 * 1024,
             max_value_bytes: 1024 * 1024,
             max_jpeg_markers: 1_024,
+            max_xml_depth: 64,
+            max_xmp_values: 10_000,
         }
     }
 }
@@ -62,6 +68,10 @@ impl Limits {
     /// Every limit at the largest value its type holds.
     ///
     /// For trusted input and tests, never for files from anyone else.
+    ///
+    /// Without the cap on depth, an XMP packet can nest its values as
+    /// deep as it likes. Dropping, cloning, comparing or printing its
+    /// [`Xmp`](crate::Xmp) goes as deep, and can overflow the stack.
     #[must_use]
     pub fn unlimited() -> Self {
         Self {
@@ -71,6 +81,8 @@ impl Limits {
             max_preview_bytes: u64::MAX,
             max_value_bytes: u64::MAX,
             max_jpeg_markers: u32::MAX,
+            max_xml_depth: u32::MAX,
+            max_xmp_values: u32::MAX,
         }
     }
 
@@ -123,6 +135,24 @@ impl Limits {
     #[must_use]
     pub fn with_max_jpeg_markers(mut self, n: u32) -> Self {
         self.max_jpeg_markers = n;
+        self
+    }
+
+    /// Sets how deeply the elements of an XMP packet's XML may nest, in
+    /// place of the cap set before; [`max_xml_depth`](Self::max_xml_depth)
+    /// reads it.
+    #[must_use]
+    pub fn with_max_xml_depth(mut self, n: u32) -> Self {
+        self.max_xml_depth = n;
+        self
+    }
+
+    /// Sets how many values one XMP packet may give, in place of the cap
+    /// set before; [`max_xmp_values`](Self::max_xmp_values) reads it and
+    /// says what counts.
+    #[must_use]
+    pub fn with_max_xmp_values(mut self, n: u32) -> Self {
+        self.max_xmp_values = n;
         self
     }
 
@@ -216,6 +246,37 @@ impl Limits {
     pub fn max_jpeg_markers(self) -> u32 {
         self.max_jpeg_markers
     }
+
+    /// How deeply the elements of an XMP packet's XML may nest at most.
+    ///
+    /// The outermost element is at depth 1, and each element inside
+    /// another is one deeper. A packet whose XML goes deeper is not read:
+    /// reading it fails with
+    /// [`ErrorKind::LimitExceeded`](crate::ErrorKind::LimitExceeded).
+    ///
+    /// The cap also bounds how deeply the values of an [`Xmp`](crate::Xmp)
+    /// nest, and so the stack that dropping, cloning, comparing or
+    /// printing one takes. The default is well above the 22 levels of the
+    /// deepest packet measured, an editor's; a camera's go to 7.
+    pub fn max_xml_depth(self) -> u32 {
+        self.max_xml_depth
+    }
+
+    /// How many values one XMP packet may give at most.
+    ///
+    /// Each value the reader builds counts as one: a property, a field of
+    /// a structure, an item of an array, and a qualifier, such as a
+    /// value's language. A packet that gives more is not read: reading it
+    /// fails with
+    /// [`ErrorKind::LimitExceeded`](crate::ErrorKind::LimitExceeded).
+    ///
+    /// The cap bounds the memory the values take. Without it, a packet of
+    /// a megabyte could give a hundred thousand empty values. The default
+    /// is well above the 357 values of the largest packet measured, an
+    /// editor's; a camera's give 30 at most.
+    pub fn max_xmp_values(self) -> u32 {
+        self.max_xmp_values
+    }
 }
 
 #[cfg(test)]
@@ -231,6 +292,8 @@ mod tests {
         assert_eq!(limits.max_preview_bytes(), 128 * 1024 * 1024);
         assert_eq!(limits.max_value_bytes(), 1024 * 1024);
         assert_eq!(limits.max_jpeg_markers(), 1_024);
+        assert_eq!(limits.max_xml_depth(), 64);
+        assert_eq!(limits.max_xmp_values(), 10_000);
     }
 
     #[test]
@@ -254,6 +317,8 @@ mod tests {
             limits.max_jpeg_markers(),
             Limits::default().max_jpeg_markers()
         );
+        assert_eq!(limits.max_xml_depth(), Limits::default().max_xml_depth());
+        assert_eq!(limits.max_xmp_values(), Limits::default().max_xmp_values());
         assert_ne!(limits, Limits::default());
     }
 
@@ -275,6 +340,8 @@ mod tests {
             limits.max_jpeg_markers(),
             Limits::default().max_jpeg_markers()
         );
+        assert_eq!(limits.max_xml_depth(), Limits::default().max_xml_depth());
+        assert_eq!(limits.max_xmp_values(), Limits::default().max_xmp_values());
         assert_ne!(limits, Limits::default());
     }
 
@@ -299,6 +366,8 @@ mod tests {
             limits.max_jpeg_markers(),
             Limits::default().max_jpeg_markers()
         );
+        assert_eq!(limits.max_xml_depth(), Limits::default().max_xml_depth());
+        assert_eq!(limits.max_xmp_values(), Limits::default().max_xmp_values());
         assert_ne!(limits, Limits::default());
     }
 
@@ -320,6 +389,8 @@ mod tests {
             limits.max_jpeg_markers(),
             Limits::default().max_jpeg_markers()
         );
+        assert_eq!(limits.max_xml_depth(), Limits::default().max_xml_depth());
+        assert_eq!(limits.max_xmp_values(), Limits::default().max_xmp_values());
         assert_ne!(limits, Limits::default());
     }
 
@@ -341,6 +412,8 @@ mod tests {
             limits.max_jpeg_markers(),
             Limits::default().max_jpeg_markers()
         );
+        assert_eq!(limits.max_xml_depth(), Limits::default().max_xml_depth());
+        assert_eq!(limits.max_xmp_values(), Limits::default().max_xmp_values());
         assert_ne!(limits, Limits::default());
     }
 
@@ -362,6 +435,47 @@ mod tests {
             limits.max_value_bytes(),
             Limits::default().max_value_bytes()
         );
+        assert_eq!(limits.max_xml_depth(), Limits::default().max_xml_depth());
+        assert_eq!(limits.max_xmp_values(), Limits::default().max_xmp_values());
+        assert_ne!(limits, Limits::default());
+    }
+
+    /// Whether `limits` holds the default of every cap but the two XMP
+    /// caps, which the caller checks.
+    fn other_caps_are_the_defaults(limits: Limits) -> bool {
+        let default = Limits::default();
+        (
+            limits.max_ifds(),
+            limits.max_ifd_entries(),
+            limits.max_ifd_depth(),
+            limits.max_preview_bytes(),
+            limits.max_value_bytes(),
+            limits.max_jpeg_markers(),
+        ) == (
+            default.max_ifds(),
+            default.max_ifd_entries(),
+            default.max_ifd_depth(),
+            default.max_preview_bytes(),
+            default.max_value_bytes(),
+            default.max_jpeg_markers(),
+        )
+    }
+
+    #[test]
+    fn with_max_xml_depth_changes_only_its_cap() {
+        let limits = Limits::default().with_max_xml_depth(7);
+        assert_eq!(limits.max_xml_depth(), 7);
+        assert_eq!(limits.max_xmp_values(), Limits::default().max_xmp_values());
+        assert!(other_caps_are_the_defaults(limits));
+        assert_ne!(limits, Limits::default());
+    }
+
+    #[test]
+    fn with_max_xmp_values_changes_only_its_cap() {
+        let limits = Limits::default().with_max_xmp_values(7);
+        assert_eq!(limits.max_xmp_values(), 7);
+        assert_eq!(limits.max_xml_depth(), Limits::default().max_xml_depth());
+        assert!(other_caps_are_the_defaults(limits));
         assert_ne!(limits, Limits::default());
     }
 
@@ -375,7 +489,9 @@ mod tests {
             .with_max_ifd_depth(3)
             .with_max_preview_bytes(4)
             .with_max_value_bytes(5)
-            .with_max_jpeg_markers(6);
+            .with_max_jpeg_markers(6)
+            .with_max_xml_depth(7)
+            .with_max_xmp_values(8);
         assert_eq!(
             (
                 limits.max_ifds(),
@@ -383,9 +499,11 @@ mod tests {
                 limits.max_ifd_depth(),
                 limits.max_preview_bytes(),
                 limits.max_value_bytes(),
-                limits.max_jpeg_markers()
+                limits.max_jpeg_markers(),
+                limits.max_xml_depth(),
+                limits.max_xmp_values()
             ),
-            (1, 2, 3, 4, 5, 6)
+            (1, 2, 3, 4, 5, 6, 7, 8)
         );
     }
 
@@ -407,5 +525,7 @@ mod tests {
         assert_eq!(limits.max_preview_bytes(), u64::MAX);
         assert_eq!(limits.max_value_bytes(), u64::MAX);
         assert_eq!(limits.max_jpeg_markers(), u32::MAX);
+        assert_eq!(limits.max_xml_depth(), u32::MAX);
+        assert_eq!(limits.max_xmp_values(), u32::MAX);
     }
 }

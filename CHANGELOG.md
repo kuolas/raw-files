@@ -517,6 +517,23 @@ does. An entry that can break a caller opens with **Breaking:**.
   ```rust
   xmp.property(namespaces::DC, "subject")
   ```
+- `Xmp::from_bytes` reads an XMP packet with an XML reader of raw-files'
+  own, which takes no dependency
+  ([#237](https://github.com/kuolas/raw-files/issues/237)).
+  - It reads UTF-8 alone, with the packet wrapper and an XML
+    declaration. NUL bytes after the end are ignored.
+  - XML that is not well-formed fails with `ErrorKind::Malformed`,
+    whose message names what was found and where.
+  - A property that breaks XMP Part 1's rules is left out, and the
+    others stand. A repeated property gives its first value.
+- `Limits::max_xml_depth` caps how deep an XMP packet's XML nests, and
+  `Limits::max_xmp_values` how many values one packet gives
+  ([#237](https://github.com/kuolas/raw-files/issues/237)).
+  - Their defaults are 64 levels and 10,000 values. The measured packets
+    reach 22 levels and 357 values.
+  - A packet past either cap fails with `ErrorKind::LimitExceeded`.
+  - `Limits::unlimited()` lifts both. Its docs say why the cap on depth
+    also guards the stack.
 
 ### Changed
 

@@ -32,15 +32,17 @@ down to the values every part shares:
    structure: the header and the directories (IFDs) of a TIFF file, the
    marker segments of a JPEG file. They know no camera maker and no
    format. Every read goes through `Source`, the one checked reader, in
-   `src/io.rs`.
+   `src/io.rs`. The XML reader, in `src/xml.rs`, reads the structure of
+   an XMP packet already in memory, and knows nothing of XMP.
 4. **The values**: the other public types, such as `Metadata`,
    `Preview`, `Limits` and `Error`. A program can build a `Metadata`
    without a file.
 
 A part depends only on the parts below it. So no format reader calls
-the handle, and no container knows a format reader. There is one
-exception: `src/entries.rs` is a value, and it reads an entry's value
-through the container.
+the handle, and no container knows a format reader. There are two
+exceptions, values that read themselves: `src/entries.rs` reads an
+entry's value through the container, and `src/xmp.rs` reads a packet
+through the XML reader.
 
 ## The files
 
@@ -97,6 +99,7 @@ adds a row.
 | `src/container/tiff/walk.rs` | The IFD walk inside a block: it follows the links from IFD0 and returns every IFD it finds as a `Tree`, with each link it did not follow, bounded on any input. | `io`, `error`, `limits` |
 | `src/container/tiff/robustness.rs` | Tests only: the whole TIFF reader on truncated and corrupted files, which give an error or a tree within the limits, never a panic. | — |
 | `src/container/jpeg/mod.rs` | The JPEG container: one walk over a stream's marker segments, the probe that sizes a preview and the walk over a JPEG file. | `io`, `error`, `limits`, `container/tiff` (for `Block`) |
+| `src/xml.rs` | The XML reader: the part of XML that XMP packets use, read into a tree of elements, attributes and text with each name's namespace resolved, iterative and bounded in depth. | `error`, `limits`, `namespaces` |
 | `src/container/jpeg/mpf.rs` | The MPF index of a JPEG file: where the large thumbnails the file holds after its first image lie, the first of each class. | `io`, `error`, `limits`, `container/tiff` |
 
 ### The values
@@ -122,7 +125,8 @@ adds a row.
 | `src/entries/names.rs` | The name of an entry's tag, from the table of `tags` for its kind of directory. | `entries`, `tags` |
 | `src/entries/skipped.rs` | `SkippedDirectory`: a directory a file links to that could not be read, with the link and the cause; and what a reader found where one of its own links leads. | `entries`, `error` |
 | `src/tags.rs` | `tags`: a constant for each tag `Entry::name` has a name for, one module per kind of directory, each row giving the constant and its name at once. | — |
-| `src/xmp.rs` | `Xmp`, `XmpProperty`, `XmpValue`, `XmpForm` and `XmpArrayKind`: every property of an XMP packet in XMP Part 1's data model, each named by namespace URI and local name, built through `with_…` methods. | `namespaces` |
+| `src/xmp.rs` | `Xmp`, `XmpProperty`, `XmpValue`, `XmpForm` and `XmpArrayKind`: every property of an XMP packet in XMP Part 1's data model, each named by namespace URI and local name, built through `with_…` methods or read from a packet's bytes. | `namespaces`, `xml`, `xmp/rdf.rs`, `error`, `limits` |
+| `src/xmp/rdf.rs` | The RDF walk: the properties of a packet read from the XML reader's tree by XMP Part 1's rules, a property that breaks them left out, every value counted against the cap. | `xmp`, `xml`, `namespaces`, `error`, `limits` |
 | `src/namespaces.rs` | `namespaces`: the URIs of the XMP namespaces of the rating, the label, IPTC Core and the qualifiers `xml:lang` and `rdf:type`, one constant each, cited to its standard. | — |
 | `src/format.rs` | `Format`: the camera file formats the library reads, NEF, ARW and JPEG, with their names, extensions and whether each holds raw data. | — |
 
