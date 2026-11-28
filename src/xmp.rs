@@ -27,7 +27,10 @@
 
 mod rdf;
 
-use crate::error::Result;
+use std::io::Read;
+use std::path::Path;
+
+use crate::error::{Error, Result};
 use crate::limits::Limits;
 use crate::xml;
 
@@ -84,6 +87,70 @@ pub struct Xmp {
 }
 
 impl Xmp {
+    /// Reads the XMP sidecar file at `path`, with the default [`Limits`].
+    ///
+    /// A sidecar is an XMP file beside a picture, which an editor writes
+    /// instead of changing the picture. raw-files never looks for one:
+    /// opening a camera file reads that file alone, and the caller names
+    /// the sidecar. Tools name it in one of two ways, after the picture
+    /// `DSC_0001.NEF`:
+    ///
+    /// - `DSC_0001.xmp`, the picture's name with `.xmp` in place of its
+    ///   extension, as XMP Part 3 says and Lightroom writes;
+    /// - `DSC_0001.NEF.xmp`, the picture's whole name and `.xmp`, as
+    ///   darktable writes.
+    ///
+    /// A caller that finds both, or a sidecar and the packet inside the
+    /// picture, chooses between them: raw-files decides nothing.
+    ///
+    /// At most [`Limits::max_value_bytes`] are read, 1 MiB by default,
+    /// well above the 8,088 bytes of the largest sidecar measured.
+    /// [`Options::open_xmp`](crate::Options::open_xmp) opens a sidecar
+    /// under other limits.
+    ///
+    /// # Errors
+    ///
+    /// - [`Io`](crate::ErrorKind::Io) when the file cannot be opened or
+    ///   read.
+    /// - [`LimitExceeded`](crate::ErrorKind::LimitExceeded) when the file
+    ///   is longer than [`Limits::max_value_bytes`].
+    /// - Otherwise as for [`from_bytes`](Self::from_bytes).
+    ///
+    /// # Examples
+    ///
+    /// Read the sidecar of a picture under either name, and say its
+    /// rating:
+    ///
+    /// ```no_run
+    /// use std::path::{Path, PathBuf};
+    ///
+    /// use raw_files::{Xmp, namespaces};
+    ///
+    /// /// The two names tools give the sidecar of `picture`: darktable's,
+    /// /// then XMP Part 3's.
+    /// fn sidecar_names(picture: &Path) -> [PathBuf; 2] {
+    ///     let mut darktable = picture.as_os_str().to_owned();
+    ///     darktable.push(".xmp");
+    ///     [PathBuf::from(darktable), picture.with_extension("xmp")]
+    /// }
+    ///
+    /// # fn main() -> raw_files::Result<()> {
+    /// let picture = Path::new("DSC_0001.NEF");
+    /// // This caller prefers darktable's sidecar where both exist.
+    /// if let Some(path) = sidecar_names(picture).iter().find(|path| path.is_file()) {
+    ///     let xmp = Xmp::open(path)?;
+    ///     if let Some(rating) = xmp.property(namespaces::XMP, "Rating").and_then(|v| v.text()) {
+    ///         println!("{}: rated {rating}", path.display());
+    ///     }
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
+    #[doc(alias = "sidecar")]
+    pub fn open(path: impl AsRef<Path>) -> Result<Xmp> {
+        Self::read_from(std::fs::File::open(path)?, &Limits::default())
+    }
+
     /// Reads an XMP packet, or a sidecar file's whole text, from `bytes`,
     /// with the default [`Limits`].
     ///
@@ -134,10 +201,69 @@ impl Xmp {
         Self::read(bytes, &Limits::default())
     }
 
+    /// Reads an XMP packet, or a sidecar file's whole text, from
+    /// `reader`, with the default [`Limits`].
+    ///
+    /// At most [`Limits::max_value_bytes`] are read, 1 MiB by default.
+    /// [`open`](Self::open) says how a sidecar is named, and
+    /// [`Options::xmp_from_reader`](crate::Options::xmp_from_reader)
+    /// reads under other limits.
+    ///
+    /// # Errors
+    ///
+    /// - [`Io`](crate::ErrorKind::Io) when `reader` fails.
+    /// - [`LimitExceeded`](crate::ErrorKind::LimitExceeded) when `reader`
+    ///   gives more than [`Limits::max_value_bytes`].
+    /// - Otherwise as for [`from_bytes`](Self::from_bytes).
+    ///
+    /// # Examples
+    ///
+    /// Read a sidecar that darktable wrote, a whole XML document with no
+    /// packet wrapper:
+    ///
+    /// ```
+    /// use raw_files::{Xmp, namespaces};
+    ///
+    /// let sidecar = r#"<?xml version="1.0" encoding="UTF-8"?>
+    /// <x:xmpmeta xmlns:x="adobe:ns:meta/" x:xmptk="XMP Core 4.4.0-Exiv2">
+    ///  <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+    ///   <rdf:Description rdf:about="" xmlns:xmp="http://ns.adobe.com/xap/1.0/"
+    ///     xmlns:dc="http://purl.org/dc/elements/1.1/" xmp:Rating="1">
+    ///    <dc:subject><rdf:Bag><rdf:li>harbor</rdf:li></rdf:Bag></dc:subject>
+    ///   </rdf:Description>
+    ///  </rdf:RDF>
+    /// </x:xmpmeta>
+    /// "#;
+    /// let xmp = Xmp::from_reader(sidecar.as_bytes())?;
+    /// assert_eq!(xmp.toolkit(), Some("XMP Core 4.4.0-Exiv2"));
+    /// let subject = xmp.property(namespaces::DC, "subject").map(|v| v.items().len());
+    /// assert_eq!(subject, Some(1));
+    /// # Ok::<(), raw_files::Error>(())
+    /// ```
+    #[doc(alias = "sidecar")]
+    pub fn from_reader(reader: impl Read) -> Result<Xmp> {
+        Self::read_from(reader, &Limits::default())
+    }
+
     /// Reads `bytes` under `limits`: the XML, then the RDF walk over it.
     pub(crate) fn read(bytes: &[u8], limits: &Limits) -> Result<Xmp> {
         let document = xml::parse(bytes, limits)?;
         rdf::read(&document, limits)
+    }
+
+    /// Reads what `reader` gives under `limits`, refusing more than
+    /// [`Limits::max_value_bytes`] before any of it is parsed.
+    pub(crate) fn read_from(reader: impl Read, limits: &Limits) -> Result<Xmp> {
+        let cap = limits.max_value_bytes();
+        let mut bytes = Vec::new();
+        reader.take(cap.saturating_add(1)).read_to_end(&mut bytes)?;
+        if u64::try_from(bytes.len()).map_or(true, |len| len > cap) {
+            return Err(Error::limit(
+                "the XMP file is longer than the cap on one value",
+                cap,
+            ));
+        }
+        Self::read(&bytes, limits)
     }
 
     /// Every property, in the packet's order: the order of the elements
@@ -588,6 +714,7 @@ fn set(properties: &mut Vec<XmpProperty>, property: XmpProperty) {
 mod tests {
     use super::*;
     use crate::namespaces::{DC, RDF, XML, XMP};
+    use crate::options::Options;
 
     #[test]
     fn a_simple_value_gives_its_text_and_nothing_of_another_form() {
@@ -773,6 +900,118 @@ mod tests {
         assert_eq!(xmp.about(), Some("uuid:1"));
         assert!(xmp.is_empty());
         assert_ne!(xmp, Xmp::default());
+    }
+
+    /// A sidecar as darktable writes one: an XML declaration and no packet
+    /// wrapper, with Exiv2's toolkit.
+    const DARKTABLE: &str = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n\
+        <x:xmpmeta xmlns:x=\"adobe:ns:meta/\" x:xmptk=\"XMP Core 4.4.0-Exiv2\">\n\
+         <rdf:RDF xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\">\n\
+          <rdf:Description rdf:about=\"\" xmlns:xmp=\"http://ns.adobe.com/xap/1.0/\" xmp:Rating=\"1\"/>\n\
+         </rdf:RDF>\n\
+        </x:xmpmeta>\n";
+
+    /// A path in the temporary folder for this test's file, removed when
+    /// dropped.
+    struct TempFile(std::path::PathBuf);
+
+    impl TempFile {
+        fn new(name: &str, bytes: &[u8]) -> Self {
+            let path =
+                std::env::temp_dir().join(format!("raw-files-{}-{name}", std::process::id()));
+            std::fs::write(&path, bytes).expect("a temporary file");
+            Self(path)
+        }
+    }
+
+    impl Drop for TempFile {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_file(&self.0);
+        }
+    }
+
+    fn with_cap(bytes: u64) -> Options {
+        Options::new().with_limits(Limits::default().with_max_value_bytes(bytes))
+    }
+
+    #[test]
+    fn a_sidecar_with_a_declaration_and_no_wrapper_is_read() {
+        let xmp = Xmp::from_reader(DARKTABLE.as_bytes()).expect("darktable's form");
+        assert_eq!(xmp.toolkit(), Some("XMP Core 4.4.0-Exiv2"));
+        assert_eq!(
+            xmp.property(XMP, "Rating").and_then(XmpValue::text),
+            Some("1")
+        );
+        assert_eq!(
+            Xmp::from_bytes(DARKTABLE.as_bytes()).expect("the same"),
+            xmp
+        );
+    }
+
+    #[test]
+    fn open_reads_a_file_and_fails_on_a_missing_one() {
+        let file = TempFile::new("open.xmp", DARKTABLE.as_bytes());
+        let xmp = Xmp::open(&file.0).expect("the sidecar");
+        assert_eq!(
+            xmp.property(XMP, "Rating").and_then(XmpValue::text),
+            Some("1")
+        );
+        let missing = std::env::temp_dir().join("raw-files-no-such-sidecar.xmp");
+        let err = Xmp::open(missing).expect_err("no such file");
+        assert_eq!(err.kind(), crate::ErrorKind::Io);
+    }
+
+    #[test]
+    fn a_sidecar_is_read_up_to_the_cap_on_one_value_and_no_further() {
+        let len = u64::try_from(DARKTABLE.len()).expect("a short text");
+        let file = TempFile::new("cap.xmp", DARKTABLE.as_bytes());
+        assert!(with_cap(len).xmp_from_reader(DARKTABLE.as_bytes()).is_ok());
+        assert!(with_cap(len).open_xmp(&file.0).is_ok());
+        for err in [
+            with_cap(len - 1).xmp_from_reader(DARKTABLE.as_bytes()),
+            with_cap(len - 1).open_xmp(&file.0),
+        ]
+        .map(|result| result.expect_err("one byte past the cap"))
+        {
+            assert_eq!(err.kind(), crate::ErrorKind::LimitExceeded);
+            assert_eq!(err.offset(), Some(len - 1));
+        }
+        // Bytes in memory are already read: the cap is on reading.
+        assert!(
+            with_cap(len - 1)
+                .xmp_from_bytes(DARKTABLE.as_bytes())
+                .is_ok()
+        );
+    }
+
+    #[test]
+    fn a_reader_that_fails_is_an_io_error() {
+        struct Failing;
+        impl Read for Failing {
+            fn read(&mut self, _: &mut [u8]) -> std::io::Result<usize> {
+                Err(std::io::Error::other("the disk went away"))
+            }
+        }
+        let err = Xmp::from_reader(Failing).expect_err("a failing reader");
+        assert_eq!(err.kind(), crate::ErrorKind::Io);
+    }
+
+    #[test]
+    fn the_options_limits_reach_the_reader() {
+        let options = Options::new().with_limits(Limits::default().with_max_xmp_values(0));
+        let err = options
+            .xmp_from_bytes(DARKTABLE.as_bytes())
+            .expect_err("no value allowed");
+        assert_eq!(err.kind(), crate::ErrorKind::LimitExceeded);
+        let err = options
+            .xmp_from_reader(DARKTABLE.as_bytes())
+            .expect_err("no value allowed");
+        assert_eq!(err.kind(), crate::ErrorKind::LimitExceeded);
+        let shallow = Options::new().with_limits(Limits::default().with_max_xml_depth(2));
+        let err = shallow
+            .xmp_from_bytes(DARKTABLE.as_bytes())
+            .expect_err("three levels");
+        assert_eq!(err.kind(), crate::ErrorKind::LimitExceeded);
     }
 
     #[test]

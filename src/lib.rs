@@ -53,6 +53,33 @@
 //! | The layout of the body's autofocus points | [`Metadata::focus_layout`] | [`FocusLayout`] |
 //! | That layout placed on the picture | [`Metadata::placed_focus_layout`] | [`PlacedFocusLayout`] |
 //!
+//! # XMP sidecars
+//!
+//! An editor writes ratings, keywords and descriptions to an XMP sidecar,
+//! a file beside the picture. [`Xmp::open`] reads one by its path,
+//! [`Xmp::from_bytes`] from memory and [`Xmp::from_reader`] from any
+//! reader. raw-files never looks for a sidecar: the caller names it, and
+//! [`Xmp::open`] shows the two names tools give one. An [`Xmp`] holds
+//! every property of the packet, each an [`XmpValue`] named by its
+//! namespace URI and local name. [`namespaces`] gives the URIs of the
+//! rating's and IPTC Core's namespaces:
+//!
+//! ```no_run
+//! use raw_files::{Xmp, XmpValue, namespaces};
+//!
+//! # fn main() -> raw_files::Result<()> {
+//! let xmp = Xmp::open("DSC_0001.NEF.xmp")?;
+//! if let Some(rating) = xmp.property(namespaces::XMP, "Rating").and_then(XmpValue::text) {
+//!     println!("rated {rating}");
+//! }
+//! if let Some(subject) = xmp.property(namespaces::DC, "subject") {
+//!     let keywords: Vec<&str> = subject.items().iter().filter_map(XmpValue::text).collect();
+//!     println!("keywords: {}", keywords.join(", "));
+//! }
+//! # Ok(())
+//! # }
+//! ```
+//!
 //! The `with_…` methods and the checked constructors, such as
 //! [`Focus::new`], build every metadata value without a file, for a
 //! program's tests. [`Metadata`] shows how. A constructor that refuses its
