@@ -39,6 +39,13 @@ me, Alvaro Kuolas, who maintains raw-files, as
   takes the `tiff_walk/` and `jpeg_segments/` seeds as further corpus
   directories, since a plain TIFF file and a JPEG file are also
   something it must open.
+- `xmp/` seeds the `xmp` target with the XMP packets built in code by
+  [`tests/support/xmp_packets.rs`](../../tests/support/xmp_packets.rs).
+  Five hold one of each form a value takes, simple, structures, arrays
+  and qualifiers, and the XML features the reader reads. Three are in
+  the shapes measured files show, with values written by hand. They are
+  a Nikon Z 9's packet, a darktable sidecar, and a Lightroom packet from
+  a JPEG file.
 
 The files are generated from the fixtures in
 `src/container/tiff/robustness.rs`, the stubs in
@@ -46,11 +53,14 @@ The files are generated from the fixtures in
 code or committed in `tests/fixtures/`, through `tests/fuzz_seeds.rs`,
 never edited by hand, and a test for each folder
 (`the_fuzz_seeds_match_the_fixtures`, `the_jpeg_fuzz_seeds_match_the_stubs`,
-`the_jpeg_segments_fuzz_seeds_match_the_fixtures` and
-`the_open_fuzz_seeds_match_the_fixtures`) fails when a file is missing or
-differs from what it is generated from.
-After changing a fixture or a stub, regenerate them all from the repository
-root:
+`the_jpeg_segments_fuzz_seeds_match_the_fixtures`,
+`the_open_fuzz_seeds_match_the_fixtures` and
+`the_xmp_fuzz_seeds_match_the_packets`) fails when a file is missing or
+differs from what it is generated from. `.gitattributes` keeps Git from
+changing their line ends on checkout, as it does to text files on
+Windows.
+After changing a fixture, a stub or a packet, regenerate them all from the
+repository root:
 
 ```sh
 cargo test write_fuzz_seeds -- --ignored

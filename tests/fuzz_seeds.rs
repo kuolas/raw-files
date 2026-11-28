@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! The seeds of the `open` and `jpeg_segments` fuzz targets, written from
-//! the integration tests' fixtures: the RAW files into `fuzz/seeds/open/`,
-//! the JPEG files into `fuzz/seeds/jpeg_segments/`.
+//! The seeds of the `open`, `jpeg_segments` and `xmp` fuzz targets,
+//! written from the integration tests' fixtures: the RAW files into
+//! `fuzz/seeds/open/`, the JPEG files into `fuzz/seeds/jpeg_segments/`,
+//! the XMP packets into `fuzz/seeds/xmp/`.
 //!
 //! A fuzzer reaches the Nikon or Sony reader only by building a layout that
 //! the format detection accepts, which it does by luck. Likewise, it builds
@@ -21,7 +22,11 @@
 //!   three NEF files and frames 4, 42 and 49 of the D600 session; for
 //!   `jpeg_segments`, the Z 9's four JPEG files and frame 4's JPEG.
 //!
-//! [`open_seeds`] and [`jpeg_segments_seeds`] list them. The `open` target
+//! The `xmp` target starts from the packets of `tests/support/xmp_packets.rs`:
+//! one of each form a value takes, one of the XML features the reader
+//! reads, and three in the shapes measured files show.
+//!
+//! [`open_seeds`], [`jpeg_segments_seeds`] and [`xmp_seeds`] list them. The `open` target
 //! takes the `jpeg_segments` seeds too, as JPEG files are something it
 //! must open, and reaches the Nikon and Sony MakerNote readers through
 //! them.
@@ -29,9 +34,10 @@
 //! The fixtures live in `tests/`, outside the library, so this test writes
 //! and checks the seed files, as the unit tests of the TIFF reader do for
 //! theirs. The ignored test `write_fuzz_seeds` regenerates the files after
-//! a fixture changes, and `the_open_fuzz_seeds_match_the_fixtures` and
-//! `the_jpeg_segments_fuzz_seeds_match_the_fixtures` fail when a file is
-//! missing or has gone stale.
+//! a fixture changes, and `the_open_fuzz_seeds_match_the_fixtures`,
+//! `the_jpeg_segments_fuzz_seeds_match_the_fixtures` and
+//! `the_xmp_fuzz_seeds_match_the_packets` fail when a file is missing or
+//! has gone stale.
 
 mod support;
 
@@ -51,6 +57,7 @@ use support::jpeg_files::{
 };
 use support::nef::{d1h_file, d1h_file_with, d300_file, z6iii_file, z9_file};
 use support::tiff_builder::{ORDERS, Order};
+use support::xmp_packets;
 
 /// A layout built in code, once: the stem and extension of its file names,
 /// and a builder for the fixture in a given byte order.
@@ -165,6 +172,36 @@ fn jpeg_segments_seeds() -> Vec<(String, Vec<u8>)> {
     seeds
 }
 
+/// The XMP packets as starting inputs for the `xmp` target: each file
+/// name with the packet's bytes.
+fn xmp_seeds() -> Vec<(String, Vec<u8>)> {
+    vec![
+        ("simple.xmp".to_owned(), xmp_packets::simple().into_bytes()),
+        (
+            "structures.xmp".to_owned(),
+            xmp_packets::structures().into_bytes(),
+        ),
+        ("arrays.xmp".to_owned(), xmp_packets::arrays().into_bytes()),
+        (
+            "qualifiers.xmp".to_owned(),
+            xmp_packets::qualifiers().into_bytes(),
+        ),
+        (
+            "xml-features.xmp".to_owned(),
+            xmp_packets::xml_features().into_bytes(),
+        ),
+        ("nikon-z9.xmp".to_owned(), xmp_packets::nikon_z9()),
+        (
+            "darktable.xmp".to_owned(),
+            xmp_packets::darktable_sidecar().into_bytes(),
+        ),
+        (
+            "lightroom-jpeg.xmp".to_owned(),
+            xmp_packets::lightroom_jpeg(),
+        ),
+    ]
+}
+
 /// Where the seed files of the fuzz target `target` live, under the
 /// crate's root.
 fn seeds_dir(target: &str) -> PathBuf {
@@ -173,8 +210,9 @@ fn seeds_dir(target: &str) -> PathBuf {
         .join(target)
 }
 
-/// Writes the fixtures to `fuzz/seeds/open/` and the JPEG files to
-/// `fuzz/seeds/jpeg_segments/`, where the fuzz targets start from them.
+/// Writes the fixtures to `fuzz/seeds/open/`, the JPEG files to
+/// `fuzz/seeds/jpeg_segments/` and the XMP packets to `fuzz/seeds/xmp/`,
+/// where the fuzz targets start from them.
 /// Ignored, as it writes to the source tree; run it after changing a
 /// fixture: `cargo test write_fuzz_seeds -- --ignored`, which also writes
 /// the TIFF reader's seeds and the JPEG search's.
@@ -184,6 +222,7 @@ fn write_fuzz_seeds() {
     for (target, seeds) in [
         ("open", open_seeds()),
         ("jpeg_segments", jpeg_segments_seeds()),
+        ("xmp", xmp_seeds()),
     ] {
         let dir = seeds_dir(target);
         std::fs::create_dir_all(&dir).unwrap();
@@ -232,4 +271,81 @@ fn the_open_fuzz_seeds_match_the_fixtures() {
 #[test]
 fn the_jpeg_segments_fuzz_seeds_match_the_fixtures() {
     assert_committed("jpeg_segments", jpeg_segments_seeds());
+}
+
+/// The committed seed files of the `xmp` target hold the packets' bytes,
+/// so that a changed packet cannot leave the fuzzer starting from a stale
+/// file.
+#[test]
+fn the_xmp_fuzz_seeds_match_the_packets() {
+    assert_committed("xmp", xmp_seeds());
+}
+
+/// Every XMP seed reads, with properties, so that the fuzzer starts from
+/// packets the reader accepts rather than from damage.
+#[test]
+fn every_xmp_seed_reads() {
+    for (name, bytes) in xmp_seeds() {
+        let xmp = raw_files::Xmp::from_bytes(&bytes).unwrap_or_else(|err| panic!("{name}: {err}"));
+        assert!(!xmp.is_empty(), "{name}");
+    }
+}
+
+/// The three measured shapes read as their files do: a Z 9's packet its
+/// three values and the 18 defaults, a darktable sidecar its attributes
+/// and arrays, Lightroom's packet its history as structures.
+#[test]
+fn the_measured_shapes_read_as_the_files_hold_them() {
+    use raw_files::{XmpArrayKind, XmpForm, XmpValue, namespaces};
+
+    let z9 = raw_files::Xmp::from_bytes(&xmp_packets::nikon_z9()).expect("a Z 9 packet");
+    assert_eq!(z9.len(), 3 + 18);
+    assert_eq!(z9.toolkit(), None);
+    let rating = z9
+        .property(namespaces::XMP, "Rating")
+        .and_then(XmpValue::text);
+    assert_eq!(rating, Some("0"));
+    let crd = "http://ns.adobe.com/camera-raw-defaults/1.0/";
+    assert_eq!(z9.in_namespace(crd).count(), 18);
+
+    let darktable = raw_files::Xmp::from_bytes(xmp_packets::darktable_sidecar().as_bytes())
+        .expect("a darktable sidecar");
+    assert_eq!(darktable.toolkit(), Some("XMP Core 4.4.0-Exiv2"));
+    let subject = darktable
+        .property(namespaces::DC, "subject")
+        .expect("subject");
+    assert!(
+        matches!(subject.form(), XmpForm::Array { kind: XmpArrayKind::Unordered, items } if items.len() == 3)
+    );
+    let rights = darktable
+        .property(namespaces::DC, "rights")
+        .expect("rights");
+    assert_eq!(rights.items()[0].language(), Some("x-default"));
+    let history = darktable
+        .property("http://darktable.sf.net/", "history")
+        .expect("history");
+    assert!(history.items().is_empty());
+
+    let lightroom =
+        raw_files::Xmp::from_bytes(&xmp_packets::lightroom_jpeg()).expect("a Lightroom packet");
+    let history = lightroom
+        .property("http://ns.adobe.com/xap/1.0/mm/", "History")
+        .expect("History");
+    let actions: Vec<&str> = history
+        .items()
+        .iter()
+        .filter_map(|event| {
+            event.field("http://ns.adobe.com/xap/1.0/sType/ResourceEvent#", "action")
+        })
+        .filter_map(XmpValue::text)
+        .collect();
+    assert_eq!(actions, ["derived", "saved"]);
+    let derived = lightroom
+        .property("http://ns.adobe.com/xap/1.0/mm/", "DerivedFrom")
+        .expect("DerivedFrom");
+    assert_eq!(derived.fields().len(), 2);
+    let description = lightroom
+        .property(namespaces::DC, "description")
+        .expect("description");
+    assert_eq!(description.items()[0].text().map(str::trim), Some(""));
 }
